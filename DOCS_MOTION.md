@@ -7,7 +7,7 @@ This document explains the current implementation and available options to enabl
 The application has been optimized to bypass typical "greyed out" or "blocked" states in Android Auto and Android Automotive.
 
 ### 1. Manifest Optimization
-- **App Category**: Changed from `game` to `productivity`. This is critical as the `game` category is automatically blocked by the system during driving.
+- **App Category**: Restored to `game`. Android Auto currently only supports games as a parked-app category on the projected car screen, so `productivity` caused the app to be filtered from the launcher entirely. The host still applies parked/motion restrictions for games.
 - **Distraction Optimized Flags**: All user-facing activities are now tagged with `<meta-data android:name="distractionOptimized" android:value="true" />`.
 - **Hardware Acceleration**: Enabled for smooth rendering of web content.
 
@@ -36,7 +36,7 @@ When the "Bypass" toggle is **ON**, these restrictions are ignored by the app, a
 If the application icon is still greyed out or won't start in Android Auto:
 
 1. **Check Developer Mode**: In the Android Auto settings on your phone, ensure "Developer mode" is enabled and "Unknown sources" is checked.
-2. **App Category Enforcement**: Some head units strictly enforce the `appCategory`. If `productivity` is still blocked, it may be necessary to test with `maps` or `navigation`.
+2. **App Category Enforcement**: Android Auto currently only lists parked apps with `appCategory="game"`. If the app is missing from **Settings → Android Auto → Customize launcher**, confirm the manifest uses `game` rather than `productivity`.
 3. **Manifest Conflicts**: Ensure that no other component in the app is missing the `distractionOptimized` flag.
 4. **Phone-Side Restrictions**: Some phone manufacturers (e.g., Samsung, Huawei) have their own motion-sensing restrictions that might override the Android Auto settings.
 
