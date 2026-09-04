@@ -125,7 +125,7 @@ class CarWebViewHost(
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
             endDrag()
-            webView?.fling((-velocityX).toInt(), (-velocityY).toInt())
+            webView?.flingScroll((-velocityX).toInt(), (-velocityY).toInt())
         }
     }
 
@@ -222,7 +222,7 @@ class CarWebViewHost(
             isFocusable = true
             isFocusableInTouchMode = true
             isNestedScrollingEnabled = true
-            showSoftInputOnFocus = false
+            setShowSoftInputOnFocus(false)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
