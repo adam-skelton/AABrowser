@@ -116,6 +116,12 @@
     <string name="error_generic_message">An unexpected error occurred.</string>
     <string name="error_open_download">Unable to open download. Please try again on your phone.</string>
     <string name="error_open_external">Unable to open the link externally.</string>
+    <string name="car_action_back">Back</string>
+    <string name="car_action_reload">Reload</string>
+    <string name="car_action_keyboard">Keyboard</string>
+    <string name="car_keyboard_hint">Type to insert into the page</string>
+    <string name="car_keyboard_empty">Text is inserted into the focused field on the page.</string>
+
     <string name="media_notification_channel_name">Media playback</string>
     <string name="media_notification_channel_description">Controls media playback in web pages</string>
     <string name="media_notification_content_text">Playing media in WebView</string>
