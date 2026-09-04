@@ -1,0 +1,32 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #111;
+  color: #eee;
+}
+
+main {
+  padding: 32px;
+  max-width: 720px;
+}
+
+h1 {
+  font-size: 28px;
+  margin: 0 0 16px;
+}
+
+.status {
+  font-size: 22px;
+}
+
+#coords {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin-top: 32px;
+  color: #aaa;
+  font-size: 16px;
+  line-height: 1.4;
+}

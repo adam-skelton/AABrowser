@@ -1,7 +1,9 @@
 package com.kododake.aabrowser.car
 
+import android.Manifest
 import android.app.Presentation
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -20,8 +22,10 @@ import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
+import androidx.core.content.ContextCompat
 import com.kododake.aabrowser.R
 import com.kododake.aabrowser.web.BrowserCallbacks
+import com.kododake.aabrowser.web.LocalWebContent
 import com.kododake.aabrowser.web.configureWebView
 import com.kododake.aabrowser.web.releaseCompletely
 import org.json.JSONObject
@@ -65,6 +69,38 @@ class CarWebViewHost(
 
     fun reload() {
         onMain { webView?.reload() }
+    }
+
+    private fun hasLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            carContext,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                carContext,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestLocationPermission(done: (Boolean) -> Unit) {
+        if (hasLocationPermission()) {
+            done(true)
+            return
+        }
+        carContext.requestPermissions(
+            listOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        ) { granted, _ ->
+            onMain {
+                done(
+                    granted.contains(Manifest.permission.ACCESS_FINE_LOCATION) ||
+                        granted.contains(Manifest.permission.ACCESS_COARSE_LOCATION) ||
+                        hasLocationPermission()
+                )
+            }
+        }
     }
 
     fun readFocusedInputValue(callback: (String) -> Unit) {
@@ -231,14 +267,17 @@ class CarWebViewHost(
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
-                    onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) }
+                    onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) },
+                    onGeolocationPermission = { _, decide ->
+                        requestLocationPermission { decide(it) }
+                    }
                 ),
                 useDesktopMode = false
             )
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
             addJavascriptInterface(jsBridge, BRIDGE_NAME)
-            loadUrl(START_URL)
+            loadUrl(LocalWebContent.startUrl(context))
         }
     }
 
@@ -357,7 +396,6 @@ class CarWebViewHost(
     companion object {
         private const val TAG = "AABrowserCar"
         private const val VIRTUAL_DISPLAY_NAME = "aa-browser-map"
-        const val START_URL = "https://www.google.co.nz/"
         const val BRIDGE_NAME = "Car"
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L

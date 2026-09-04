@@ -132,7 +132,13 @@ object BrowserPreferences {
     fun defaultUrl(): String = DEFAULT_URL
 
     fun isHostAllowedCleartext(context: Context, host: String?): Boolean {
+        if (isLoopbackHost(host)) return true
         return isHostAllowed(context, KEY_ALLOWED_CLEAR_HOSTS, host)
+    }
+
+    fun isLoopbackHost(host: String?): Boolean {
+        val value = host?.trim()?.lowercase()?.removePrefix("[")?.removeSuffix("]") ?: return false
+        return value == "localhost" || value == "127.0.0.1" || value == "::1" || value == "10.0.2.2"
     }
 
     fun addAllowedCleartextHost(context: Context, host: String) {
