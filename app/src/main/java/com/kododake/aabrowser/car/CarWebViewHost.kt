@@ -130,7 +130,13 @@ class CarWebViewHost(
     }
 
     override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {
-        onMain { webView?.zoomBy(scaleFactor) }
+        onMain {
+            val view = webView ?: return@onMain
+            when {
+                scaleFactor > 1.01f -> view.zoomIn()
+                scaleFactor < 0.99f -> view.zoomOut()
+            }
+        }
     }
 
     private fun attachSurface(surfaceContainer: SurfaceContainer) {
@@ -221,8 +227,7 @@ class CarWebViewHost(
             setBackgroundColor(Color.WHITE)
             isFocusable = true
             isFocusableInTouchMode = true
-            isNestedScrollingEnabled = true
-            setShowSoftInputOnFocus(false)
+            setNestedScrollingEnabled(true)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
