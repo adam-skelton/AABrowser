@@ -11,8 +11,10 @@
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#routeCard {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch}
-    #searchHost {min-width:0; min-height:46px; border-radius:12px; background:rgba(255,255,255,.97); box-shadow:0 2px 12px rgba(0,0,0,.28); overflow:visible}
-    #searchHost gmp-place-autocomplete {width:100%; min-height:46px; display:block}
+    #searchHost {min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
+    #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
+    #searchHost gmp-place-autocomplete::part(input),
+    #searchHost gmp-place-autocomplete::part(search) {border:0; border-radius:12px; background:transparent; min-height:44px}
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
@@ -23,7 +25,7 @@
     #routeTitle {font-weight:750; margin-bottom:3px}
     #routeStats {font-size:15px}
     #routeSub {margin-top:3px; font-size:12px; opacity:.82}
-    #status {position:absolute; z-index:20; left:10px; right:10px; bottom:max(10px,env(safe-area-inset-bottom)); padding:9px 11px; border-radius:12px; background:rgba(0,0,0,.72); color:white; font-size:13px; line-height:1.35; pointer-events:none; backdrop-filter:blur(6px)}
+    #status {display:none}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
     #speed {font-weight:750}
@@ -41,9 +43,8 @@
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
-      <button id="labelsBtn" type="button">Labels: ON</button>
+      <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
-      <button id="fullscreenBtn" type="button">Full screen</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
         <option value="drive" selected>Driving view</option>
@@ -79,7 +80,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = true, demoTimer = null;
+  let watchId = null, following = true, labelsOn = false, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
 
@@ -105,21 +106,20 @@
 
       map3d = new maps3d.Map3DElement({
         center: AUCKLAND,
-        range: 650,
-        tilt: 68,
+        range: 260,
+        tilt: 72,
         heading: 0,
-        mode: "HYBRID",
+        mode: "SATELLITE",
         gestureHandling: "GREEDY",
-        description: "Photorealistic 3D routing map of Auckland"
+        description: "Photorealistic 3D routing map"
       });
       document.getElementById("map").append(map3d);
 
-      userMarker = new Marker3DElement({ position: TEST_ORIGIN, label: "Start", sizePreserved: true });
+      userMarker = new Marker3DElement({ position: AUCKLAND, label: "You", sizePreserved: true });
       map3d.append(userMarker);
 
       setupAutocomplete(places.PlaceAutocompleteElement);
-      setMessage("3D map ready. Loading a real Auckland test route...");
-      await calculateRoute(TEST_ORIGIN, TEST_DESTINATIONS[0], TEST_DESTINATIONS[0].name);
+      startGps();
     } catch (err) {
       console.error(err);
       setMessage("Initialisation failed. Check API key, billing, and that Maps JavaScript, Routes, and Places API (New) are enabled.");
@@ -132,6 +132,10 @@
     placeAutocomplete.includedRegionCodes = ["nz"];
     placeAutocomplete.locationBias = { radius: 50000, center: AUCKLAND };
     document.getElementById("searchHost").append(placeAutocomplete);
+    document.getElementById("searchHost").addEventListener("click", () => {
+      const value = (placeAutocomplete && placeAutocomplete.value != null) ? String(placeAutocomplete.value) : "";
+      try { if (window.Car && typeof Car.onInputFocused === "function") Car.onInputFocused(value); } catch (err) {}
+    });
 
     placeAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
       try {
@@ -148,6 +152,55 @@
       }
     });
   }
+
+  function setAutocompleteValue(text){
+    const ac = placeAutocomplete || document.querySelector("gmp-place-autocomplete");
+    if (!ac) return;
+    const value = String(text || "");
+    try { ac.value = value; } catch (err) {}
+    const inner = ac.shadowRoot && ac.shadowRoot.querySelector("input, textarea, [contenteditable='true']");
+    if (inner) {
+      if (inner.isContentEditable) inner.textContent = value;
+      else inner.value = value;
+      inner.dispatchEvent(new Event("input", { bubbles:true }));
+      inner.dispatchEvent(new Event("change", { bubbles:true }));
+    }
+    ac.dispatchEvent(new Event("input", { bubbles:true }));
+    ac.dispatchEvent(new Event("change", { bubbles:true }));
+  }
+
+  async function searchDestinationFromQuery(query){
+    const q = String(query || "").trim();
+    setAutocompleteValue(q);
+    if (!q) return;
+    setMessage("Searching for " + q + "...");
+    try {
+      const { AutocompleteSuggestion } = await google.maps.importLibrary("places");
+      const center = currentGpsPoint || AUCKLAND;
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: q,
+        includedRegionCodes: ["nz"],
+        locationBias: { radius: 50000, center }
+      });
+      const prediction = suggestions && suggestions[0] && suggestions[0].placePrediction;
+      if (!prediction) {
+        setMessage("No destinations found for that search.");
+        return;
+      }
+      const place = prediction.toPlace();
+      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+      if (!place.location) throw new Error("Selected place has no location.");
+      const destination = { lat: place.location.lat(), lng: place.location.lng() };
+      const name = place.displayName || place.formattedAddress || q;
+      await calculateRoute(getRouteOrigin(), destination, name);
+    } catch (err) {
+      console.error(err);
+      setMessage("Could not search that destination.");
+    }
+  }
+
+  window.__aaSetSearchText = setAutocompleteValue;
+  window.__aaSubmitSearch = searchDestinationFromQuery;
 
   async function calculateRoute(origin, destination, destinationName){
     stopDemo();
@@ -250,14 +303,20 @@
   function startGps(){
     stopDemo();
     if (!navigator.geolocation) { setMessage("This browser does not support geolocation."); return; }
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId); watchId = null;
-      document.getElementById("gpsBtn").textContent = "Start GPS";
-      setMessage("GPS stopped."); return;
-    }
+    if (watchId !== null) return;
     setMessage("Requesting precise location permission...");
-    watchId = navigator.geolocation.watchPosition(handlePosition, handleGpsError, { enableHighAccuracy:true, maximumAge:500, timeout:15000 });
+    watchId = navigator.geolocation.watchPosition(handlePosition, handleGpsError, { enableHighAccuracy:true, maximumAge:500, timeout:20000 });
     document.getElementById("gpsBtn").textContent = "Stop GPS";
+  }
+
+  function stopGps(){
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    document.getElementById("gpsBtn").textContent = "Start GPS";
+  }
+
+  function toggleGps(){
+    if (watchId !== null) { stopGps(); setMessage("GPS stopped."); }
+    else startGps();
   }
 
   function handlePosition(position){
@@ -270,6 +329,9 @@
     if (heading === null) heading = Number.isFinite(map3d.heading) ? map3d.heading : 0;
     updateCar(fix, heading);
     previousFix = fix;
+    if (placeAutocomplete) {
+      placeAutocomplete.locationBias = { radius: 50000, center: { lat: fix.lat, lng: fix.lng } };
+    }
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
@@ -319,7 +381,7 @@
   function startRouteDemo(){
     if (!activeRoutePath || activeRoutePath.length < 2) { setMessage("Load a route first."); return; }
     if (demoTimer !== null) { stopDemo(); setMessage("Route demo stopped."); return; }
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; document.getElementById("gpsBtn").textContent = "Start GPS"; }
+    if (watchId !== null) { stopGps(); }
 
     following = true;
     document.getElementById("followBtn").textContent = "Following: ON";
@@ -373,42 +435,16 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
-  document.getElementById("gpsBtn").addEventListener("click",startGps);
+  document.getElementById("gpsBtn").addEventListener("click",toggleGps);
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
-  document.getElementById("fullscreenBtn").addEventListener("click",toggleFullscreen);
   document.getElementById("viewSelect").addEventListener("change",event=>setView(event.target.value));
 
   const CHROME_HIDE_MS = 3500;
   let chromeHideTimer = null;
   let chromeLocked = false;
-
-  function isFullscreen(){
-    return !!(document.fullscreenElement || document.webkitFullscreenElement);
-  }
-
-  function updateFullscreenButton(){
-    document.getElementById("fullscreenBtn").textContent = isFullscreen() ? "Exit full screen" : "Full screen";
-  }
-
-  async function toggleFullscreen(){
-    try {
-      if (isFullscreen()) {
-        if (document.exitFullscreen) await document.exitFullscreen();
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      } else {
-        const root = document.documentElement;
-        if (root.requestFullscreen) await root.requestFullscreen();
-        else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
-        else throw new Error("Fullscreen API unavailable");
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage("Fullscreen is not available in this browser.");
-    }
-  }
 
   function showChrome(){
     document.body.classList.remove("chrome-hidden");
@@ -470,8 +506,6 @@
     showChrome();
   });
 
-  document.addEventListener("fullscreenchange", updateFullscreenButton);
-  document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
   scheduleChromeHide();
 
   function loadGoogleMaps(){

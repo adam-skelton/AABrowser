@@ -125,7 +125,7 @@ class CarWebViewHost(
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
             endDrag()
-            webView?.flingScroll((-velocityX).toInt(), (-velocityY).toInt())
+            webView?.flingScroll(velocityX.toInt(), velocityY.toInt())
         }
     }
 
@@ -286,8 +286,8 @@ class CarWebViewHost(
             dragDownTime = SystemClock.uptimeMillis()
             dispatchTouch(view, MotionEvent.ACTION_DOWN, dragX, dragY, dragDownTime, dragDownTime)
         }
-        dragX = (dragX + distanceX).coerceIn(0f, surfaceWidth.toFloat().coerceAtLeast(1f))
-        dragY = (dragY + distanceY).coerceIn(0f, surfaceHeight.toFloat().coerceAtLeast(1f))
+        dragX = (dragX - distanceX).coerceIn(0f, surfaceWidth.toFloat().coerceAtLeast(1f))
+        dragY = (dragY - distanceY).coerceIn(0f, surfaceHeight.toFloat().coerceAtLeast(1f))
         dispatchTouch(view, MotionEvent.ACTION_MOVE, dragX, dragY, dragDownTime, SystemClock.uptimeMillis())
         mainHandler.postDelayed(endDragRunnable, DRAG_END_DELAY_MS)
     }
@@ -371,8 +371,10 @@ class CarWebViewHost(
               window.__aaBrowserInputHook = true;
               function isTextEntry(el) {
                 if (!el || el === document.body || el === document.documentElement) return false;
-                if (el.isContentEditable) return true;
+                if (el.closest && el.closest('#searchHost')) return true;
                 var tag = (el.tagName || '').toLowerCase();
+                if (tag === 'gmp-place-autocomplete') return true;
+                if (el.isContentEditable) return true;
                 if (tag === 'textarea') return true;
                 if (tag === 'input') {
                   var type = (el.getAttribute('type') || 'text').toLowerCase();
@@ -381,11 +383,20 @@ class CarWebViewHost(
                 var role = (el.getAttribute('role') || '').toLowerCase();
                 return role === 'combobox' || role === 'searchbox' || role === 'textbox';
               }
+              function searchValue(el) {
+                var ac = document.querySelector('gmp-place-autocomplete');
+                if (ac && ac.value != null) return String(ac.value);
+                return (el && el.value != null) ? String(el.value) : '';
+              }
               document.addEventListener('focusin', function(e) {
                 var el = e.target;
                 if (!isTextEntry(el)) return;
-                var value = (el.value != null) ? el.value : (el.textContent || '');
-                try { Car.onInputFocused(String(value)); } catch (err) {}
+                try { Car.onInputFocused(searchValue(el)); } catch (err) {}
+              }, true);
+              document.addEventListener('click', function(e) {
+                var el = e.target;
+                if (!el || !el.closest || !el.closest('#searchHost')) return;
+                try { Car.onInputFocused(searchValue(el)); } catch (err) {}
               }, true);
             })();
         """
@@ -394,8 +405,10 @@ class CarWebViewHost(
             (function() {
               function isTextEntry(el) {
                 if (!el || el === document.body || el === document.documentElement) return false;
-                if (el.isContentEditable) return true;
+                if (el.closest && el.closest('#searchHost')) return true;
                 var tag = (el.tagName || '').toLowerCase();
+                if (tag === 'gmp-place-autocomplete') return true;
+                if (el.isContentEditable) return true;
                 if (tag === 'textarea') return true;
                 if (tag === 'input') {
                   var type = (el.getAttribute('type') || 'text').toLowerCase();
@@ -406,7 +419,8 @@ class CarWebViewHost(
               }
               var el = document.activeElement;
               if (!isTextEntry(el)) return {focused:false, value:''};
-              var value = (el.value != null) ? el.value : (el.textContent || '');
+              var ac = document.querySelector('gmp-place-autocomplete');
+              var value = (ac && ac.value != null) ? ac.value : ((el.value != null) ? el.value : (el.textContent || ''));
               return {focused:true, value:String(value)};
             })();
         """
@@ -415,6 +429,13 @@ class CarWebViewHost(
             (function() {
               var text = TEXT_PLACEHOLDER;
               var submit = SUBMIT_PLACEHOLDER;
+              if (typeof window.__aaSetSearchText === 'function') {
+                window.__aaSetSearchText(text);
+                if (submit && typeof window.__aaSubmitSearch === 'function') {
+                  window.__aaSubmitSearch(text);
+                }
+                return true;
+              }
               function isTextEntry(el) {
                 if (!el || el === document.body || el === document.documentElement) return false;
                 if (el.isContentEditable) return true;
