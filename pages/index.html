@@ -458,10 +458,49 @@
   }
   window.__aaRestoreMap = restoreMapRenderer;
 
+  window.__aaSetViewport = function(width, height){
+    width = Math.round(Number(width) || 0);
+    height = Math.round(Number(height) || 0);
+    if (width < 16 || height < 16) return;
+    const host = document.getElementById("map");
+    if (host) {
+      host.style.left = "0";
+      host.style.top = "0";
+      host.style.right = "auto";
+      host.style.bottom = "auto";
+      host.style.width = width + "px";
+      host.style.height = height + "px";
+    }
+    if (map3d) {
+      map3d.style.width = width + "px";
+      map3d.style.height = height + "px";
+    }
+    restoreMapRenderer();
+  };
+
   function scheduleMapRestore(){
     restoreMapRenderer();
     setTimeout(restoreMapRenderer, 120);
     setTimeout(restoreMapRenderer, 400);
+  }
+
+  if (window.ResizeObserver) {
+    const mapHost = document.getElementById("map");
+    if (mapHost) {
+      let lastW = 0, lastH = 0;
+      new ResizeObserver(entries => {
+        const rect = entries[0] && entries[0].contentRect;
+        if (!rect) return;
+        const w = Math.round(rect.width), h = Math.round(rect.height);
+        if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+        lastW = w; lastH = h;
+        if (map3d) {
+          map3d.style.width = w + "px";
+          map3d.style.height = h + "px";
+        }
+        scheduleMapRestore();
+      }).observe(mapHost);
+    }
   }
 
   document.addEventListener("visibilitychange", () => {

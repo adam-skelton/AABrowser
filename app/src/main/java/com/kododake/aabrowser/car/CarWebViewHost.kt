@@ -3,7 +3,21 @@ package com.kododake.aabrowser.car
 import android.app.Presentation
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
+import android.view.InputDevice
+import android.view.MotionEvent
+import android.view.Surface
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.WebView
+import android.widget.FrameLayout
 import android.hardware.display.VirtualDisplay
 import android.os.Handler
 import android.os.Looper
@@ -46,6 +60,7 @@ class CarWebViewHost(
     private var webView: WebView? = null
     private var surfaceWidth: Int = 0
     private var surfaceHeight: Int = 0
+    private val visibleArea = Rect()
 
     private var dragging = false
     private var dragX = 0f
@@ -116,8 +131,19 @@ class CarWebViewHost(
         onMain { tearDownSurface(destroyWebView = false) }
     }
 
-    override fun onVisibleAreaChanged(visibleArea: android.graphics.Rect) {
-        // The WebView fills the map surface; host chrome overlays the edges.
+    override fun onVisibleAreaChanged(visibleArea: Rect) {
+        onMain { applyVisibleArea(visibleArea) }
+    }
+
+    override fun onStableAreaChanged(stableArea: Rect) {
+        onMain {
+            if (this.visibleArea.width() <= 0 || this.visibleArea.height() <= 0) {
+                applyVisibleArea(stableArea)
+            } else {
+                notifyPageViewport()
+                scheduleMapRestore()
+            }
+        }
     }
 
     override fun onClick(x: Float, y: Float) {
@@ -177,9 +203,9 @@ class CarWebViewHost(
         (hosted.parent as? ViewGroup)?.removeView(hosted)
         container.addView(
             hosted,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
 
@@ -192,6 +218,12 @@ class CarWebViewHost(
                 hosted.evaluateJavascript(script, null)
                 pendingJs = null
             }
+            if (visibleArea.width() <= 0 || visibleArea.height() <= 0 ||
+                visibleArea.right > width || visibleArea.bottom > height
+            ) {
+                visibleArea.set(0, 0, width, height)
+            }
+            applyVisibleArea(visibleArea)
             scheduleMapRestore()
         } catch (error: Exception) {
             Log.e(TAG, "Failed to show presentation", error)
@@ -270,6 +302,7 @@ class CarWebViewHost(
             hosted.removeJavascriptInterface(BRIDGE_NAME)
             hosted.releaseCompletely()
             webView = null
+            visibleArea.setEmpty()
         }
     }
 
@@ -277,6 +310,51 @@ class CarWebViewHost(
         mainHandler.removeCallbacks(restoreMapRunnable)
         restoreAttempt = 0
         mainHandler.post(restoreMapRunnable)
+    }
+
+    private fun applyVisibleArea(area: Rect) {
+        if (area.width() < 16 || area.height() < 16) return
+        val changed =
+            kotlin.math.abs(area.left - visibleArea.left) > 1 ||
+                kotlin.math.abs(area.top - visibleArea.top) > 1 ||
+                kotlin.math.abs(area.width() - visibleArea.width()) > 1 ||
+                kotlin.math.abs(area.height() - visibleArea.height()) > 1
+        visibleArea.set(area)
+        val hosted = webView ?: return
+        val params = (hosted.layoutParams as? FrameLayout.LayoutParams)
+            ?: FrameLayout.LayoutParams(area.width(), area.height())
+        params.width = area.width()
+        params.height = area.height()
+        params.leftMargin = area.left
+        params.topMargin = area.top
+        params.rightMargin = 0
+        params.bottomMargin = 0
+        hosted.layoutParams = params
+        hosted.requestLayout()
+        Log.d(TAG, "Visible area ${area.left},${area.top} ${area.width()}x${area.height()}")
+        if (changed) {
+            hosted.post {
+                notifyPageViewport()
+                scheduleMapRestore()
+            }
+        }
+    }
+
+    private fun contentWidth(): Int =
+        if (visibleArea.width() > 0) visibleArea.width() else surfaceWidth
+
+    private fun contentHeight(): Int =
+        if (visibleArea.height() > 0) visibleArea.height() else surfaceHeight
+
+    private fun toLocalX(x: Float): Float = x - visibleArea.left
+
+    private fun toLocalY(y: Float): Float = y - visibleArea.top
+
+    private fun notifyPageViewport() {
+        val width = contentWidth()
+        val height = contentHeight()
+        if (width <= 0 || height <= 0) return
+        evaluateOrQueue("window.__aaSetViewport && window.__aaSetViewport($width,$height);")
     }
 
     private fun restoreMapRenderer() {
@@ -297,6 +375,7 @@ class CarWebViewHost(
         }
         view.scrollBy(0, 1)
         view.scrollBy(0, -1)
+        notifyPageViewport()
         view.evaluateJavascript(RESTORE_MAP_JS, null)
 
         restoreAttempt += 1
@@ -311,8 +390,8 @@ class CarWebViewHost(
         endDrag()
         view.requestFocus()
         val downTime = SystemClock.uptimeMillis()
-        dispatchTouch(view, MotionEvent.ACTION_DOWN, x, y, downTime, downTime)
-        dispatchTouch(view, MotionEvent.ACTION_UP, x, y, downTime, downTime + CLICK_DURATION_MS)
+        dispatchTouch(view, MotionEvent.ACTION_DOWN, toLocalX(x), toLocalY(y), downTime, downTime)
+        dispatchTouch(view, MotionEvent.ACTION_UP, toLocalX(x), toLocalY(y), downTime, downTime + CLICK_DURATION_MS)
         mainHandler.postDelayed({
             view.evaluateJavascript(CHECK_FOCUS_JS) { result ->
                 val value = parseFocusValue(result, requireFocused = true) ?: return@evaluateJavascript
@@ -326,13 +405,13 @@ class CarWebViewHost(
         mainHandler.removeCallbacks(endDragRunnable)
         if (!dragging) {
             dragging = true
-            dragX = (surfaceWidth / 2).toFloat().coerceAtLeast(1f)
-            dragY = (surfaceHeight / 2).toFloat().coerceAtLeast(1f)
+            dragX = (contentWidth() / 2).toFloat().coerceAtLeast(1f)
+            dragY = (contentHeight() / 2).toFloat().coerceAtLeast(1f)
             dragDownTime = SystemClock.uptimeMillis()
             dispatchTouch(view, MotionEvent.ACTION_DOWN, dragX, dragY, dragDownTime, dragDownTime)
         }
-        dragX = (dragX - distanceX).coerceIn(0f, surfaceWidth.toFloat().coerceAtLeast(1f))
-        dragY = (dragY - distanceY).coerceIn(0f, surfaceHeight.toFloat().coerceAtLeast(1f))
+        dragX = (dragX - distanceX).coerceIn(0f, contentWidth().toFloat().coerceAtLeast(1f))
+        dragY = (dragY - distanceY).coerceIn(0f, contentHeight().toFloat().coerceAtLeast(1f))
         dispatchTouch(view, MotionEvent.ACTION_MOVE, dragX, dragY, dragDownTime, SystemClock.uptimeMillis())
         mainHandler.postDelayed(endDragRunnable, DRAG_END_DELAY_MS)
     }
