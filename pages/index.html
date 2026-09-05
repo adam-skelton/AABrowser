@@ -63,9 +63,8 @@
   </div>
 
 <script>
-  // Paste your browser API key here.
-  // Enable: Maps JavaScript API, Routes API, Places API (New).
-  const GOOGLE_MAPS_API_KEY = "AIzaSyAFBYhaNgWCHyaPUt-kjKKkS5583N0k4qo";
+  // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
+  const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
@@ -476,8 +475,8 @@
   scheduleChromeHide();
 
   function loadGoogleMaps(){
-    if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "PASTE_YOUR_API_KEY_HERE") {
-      setMessage("Paste your API key into GOOGLE_MAPS_API_KEY near the top of the script."); return;
+    if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "__GOOGLE_MAPS_API_KEY__") {
+      setMessage("Maps API key was not injected at deploy time."); return;
     }
     const script=document.createElement("script");
     script.async=true;
