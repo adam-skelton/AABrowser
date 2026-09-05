@@ -435,6 +435,42 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
+  function restoreMapRenderer(){
+    window.dispatchEvent(new Event("resize"));
+    const host = document.getElementById("map");
+    if (host) {
+      const previous = host.style.width;
+      host.style.width = (host.offsetWidth - 1) + "px";
+      void host.offsetHeight;
+      host.style.width = previous;
+    }
+    if (!map3d) return;
+    const range = Number(map3d.range);
+    if (Number.isFinite(range)) {
+      map3d.range = range + 1;
+      requestAnimationFrame(() => { map3d.range = range; });
+    }
+    const heading = Number(map3d.heading);
+    if (Number.isFinite(heading)) {
+      map3d.heading = heading + 0.01;
+      requestAnimationFrame(() => { map3d.heading = heading; });
+    }
+  }
+  window.__aaRestoreMap = restoreMapRenderer;
+
+  function scheduleMapRestore(){
+    restoreMapRenderer();
+    setTimeout(restoreMapRenderer, 120);
+    setTimeout(restoreMapRenderer, 400);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") scheduleMapRestore();
+  });
+  window.addEventListener("pageshow", scheduleMapRestore);
+  window.addEventListener("focus", scheduleMapRestore);
+  document.addEventListener("webglcontextrestored", scheduleMapRestore, true);
+
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);

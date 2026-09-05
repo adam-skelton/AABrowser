@@ -54,6 +54,8 @@ class CarWebViewHost(
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
+    private var restoreAttempt = 0
+    private val restoreMapRunnable = Runnable { restoreMapRenderer() }
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -100,6 +102,10 @@ class CarWebViewHost(
             }
             tearDownSurface(destroyWebView = true)
         }
+    }
+
+    fun onForegrounded() {
+        onMain { scheduleMapRestore() }
     }
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
@@ -181,10 +187,12 @@ class CarWebViewHost(
             carPresentation.setContentView(container)
             carPresentation.show()
             hosted.onResume()
+            hosted.resumeTimers()
             pendingJs?.let { script ->
                 hosted.evaluateJavascript(script, null)
                 pendingJs = null
             }
+            scheduleMapRestore()
         } catch (error: Exception) {
             Log.e(TAG, "Failed to show presentation", error)
             tearDownSurface(destroyWebView = false)
@@ -244,10 +252,14 @@ class CarWebViewHost(
 
     private fun tearDownSurface(destroyWebView: Boolean) {
         mainHandler.removeCallbacks(endDragRunnable)
+        mainHandler.removeCallbacks(restoreMapRunnable)
+        restoreAttempt = 0
         endDrag()
         val hosted = webView
         if (hosted != null) {
-            hosted.onPause()
+            if (destroyWebView) {
+                hosted.onPause()
+            }
             (hosted.parent as? ViewGroup)?.removeView(hosted)
         }
         runCatching { presentation?.dismiss() }
@@ -258,6 +270,39 @@ class CarWebViewHost(
             hosted.removeJavascriptInterface(BRIDGE_NAME)
             hosted.releaseCompletely()
             webView = null
+        }
+    }
+
+    private fun scheduleMapRestore() {
+        mainHandler.removeCallbacks(restoreMapRunnable)
+        restoreAttempt = 0
+        mainHandler.post(restoreMapRunnable)
+    }
+
+    private fun restoreMapRenderer() {
+        val view = webView ?: return
+        if (!view.isAttachedToWindow) {
+            return
+        }
+        view.resumeTimers()
+        view.onResume()
+        view.requestLayout()
+        view.invalidate()
+        if (restoreAttempt == 0) {
+            if (view.zoomIn()) {
+                mainHandler.post { view.zoomOut() }
+            } else if (view.zoomOut()) {
+                mainHandler.post { view.zoomIn() }
+            }
+        }
+        view.scrollBy(0, 1)
+        view.scrollBy(0, -1)
+        view.evaluateJavascript(RESTORE_MAP_JS, null)
+
+        restoreAttempt += 1
+        if (restoreAttempt < 4) {
+            val delay = if (restoreAttempt == 1) 80L else 250L
+            mainHandler.postDelayed(restoreMapRunnable, delay)
         }
     }
 
@@ -364,6 +409,15 @@ class CarWebViewHost(
         private const val DRAG_END_DELAY_MS = 90L
         private const val INPUT_NOTIFY_DEBOUNCE_MS = 600L
         private const val SUBMIT_FOCUS_SUPPRESS_MS = 1500L
+
+        private const val RESTORE_MAP_JS = """
+            (function() {
+              try {
+                window.dispatchEvent(new Event('resize'));
+                if (typeof window.__aaRestoreMap === 'function') window.__aaRestoreMap();
+              } catch (err) {}
+            })();
+        """
 
         private const val FOCUS_HOOK_JS = """
             (function() {

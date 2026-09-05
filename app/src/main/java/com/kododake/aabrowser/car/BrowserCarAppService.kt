@@ -34,6 +34,10 @@ class BrowserCarSession : Session() {
         webHost.register()
         requestLocationIfNeeded()
         lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onResume(owner: LifecycleOwner) {
+                webHost.onForegrounded()
+            }
+
             override fun onDestroy(owner: LifecycleOwner) {
                 webHost.destroy()
             }
