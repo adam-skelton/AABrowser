@@ -1,0 +1,65 @@
+# Builds the debug APK on app/Gradle changes. Same approach as
+# https://github.com/adam-skelton/apk-builder-action
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+    inputs:
+      taskName:
+        description: "Gradle task"
+        required: false
+        default: "assembleDebug"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          TASK_NAME="${{ github.event.inputs.taskName }}"
+          if [ -z "$TASK_NAME" ]; then
+            TASK_NAME="assembleDebug"
+          fi
+          ./gradlew "$TASK_NAME" --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-archive
+          path: app/build/outputs/apk/**/*.apk
+          retention-days: 1
+          if-no-files-found: error
