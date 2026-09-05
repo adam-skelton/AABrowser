@@ -120,17 +120,24 @@ class CarWebViewHost(
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
-        onMain { applyVisibleArea(visibleArea) }
+        val copy = Rect(visibleArea)
+        onMain {
+            runCatching { applyVisibleArea(copy) }
+                .onFailure { Log.e(TAG, "onVisibleAreaChanged failed", it) }
+        }
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
+        val copy = Rect(stableArea)
         onMain {
-            if (this.visibleArea.width() <= 0 || this.visibleArea.height() <= 0) {
-                applyVisibleArea(stableArea)
-            } else {
-                notifyPageViewport()
-                scheduleMapRestore()
-            }
+            runCatching {
+                if (this.visibleArea.width() <= 0 || this.visibleArea.height() <= 0) {
+                    applyVisibleArea(copy)
+                } else {
+                    notifyPageViewport()
+                    scheduleMapRestore()
+                }
+            }.onFailure { Log.e(TAG, "onStableAreaChanged failed", it) }
         }
     }
 

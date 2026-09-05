@@ -16,6 +16,10 @@ on:
       - ".github/workflows/build-apk.yml"
   workflow_dispatch:
     inputs:
+      gitRef:
+        description: "Branch, tag, or commit SHA to build (leave blank for current main)"
+        required: false
+        default: ""
       taskName:
         description: "Gradle task"
         required: false
@@ -34,6 +38,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.gitRef || github.sha }}
+          fetch-depth: 0
+
+      - name: Show commit
+        run: git log -1 --oneline
 
       - name: Setup JDK
         uses: actions/setup-java@v5
