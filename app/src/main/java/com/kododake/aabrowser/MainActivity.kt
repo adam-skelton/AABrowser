@@ -111,7 +111,6 @@ class MainActivity : AppCompatActivity() {
         setupUi()
         setupBackPressHandling()
         ensureNotificationPermissionIfNeeded()
-        ensureLocationPermissionIfNeeded()
         showFreeDroidWarnOnUpgradeMaterial()
         setupCarRestrictions()
     }
@@ -191,17 +190,6 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
         ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_POST_NOTIFICATIONS)
-    }
-
-    private fun ensureLocationPermissionIfNeeded() {
-        val needed = listOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ).filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needed.isEmpty()) return
-        ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_CODE_LOCATION)
     }
 
     private fun grantableWebPermissionResources(request: android.webkit.PermissionRequest): Array<String> {
@@ -1120,6 +1108,5 @@ class MainActivity : AppCompatActivity() {
         private const val FREE_DROID_WARN_VERSION_KEY = "versionCodeWarn"
         private const val REQUEST_CODE_POST_NOTIFICATIONS = 1101
         private const val REQUEST_CODE_RECORD_AUDIO = 1102
-        private const val REQUEST_CODE_LOCATION = 1103
     }
 }

@@ -1,7 +1,5 @@
 package com.kododake.aabrowser.web
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -11,7 +9,6 @@ import android.os.Message
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
-import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
@@ -21,7 +18,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.kododake.aabrowser.R
 import com.kododake.aabrowser.model.UserAgentProfile
@@ -40,10 +36,7 @@ data class BrowserCallbacks(
     ) -> Unit = { _, _, _, cancel -> cancel() },
     val onEnterFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit = { _, _ -> },
     val onExitFullscreen: () -> Unit = {},
-    val onPermissionRequest: (PermissionRequest) -> Unit = { it.deny() },
-    val onGeolocationPermission: (origin: String, decide: (Boolean) -> Unit) -> Unit = { _, decide ->
-        decide(true)
-    }
+    val onPermissionRequest: (PermissionRequest) -> Unit = { it.deny() }
 )
 
 fun configureWebView(
@@ -98,17 +91,7 @@ fun configureWebView(
 
         //setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-        val localLoader = LocalWebContent.assetLoader(context)
-
         webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: WebResourceRequest
-            ): WebResourceResponse? {
-                return localLoader.shouldInterceptRequest(request.url)
-                    ?: super.shouldInterceptRequest(view, request)
-            }
-
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (handleCleartextIfNeeded(view, uri, callbacks, onPageStart = false)) return true
@@ -258,16 +241,6 @@ fun configureWebView(
                 }
             }
 
-            override fun onGeolocationPermissionsShowPrompt(
-                origin: String?,
-                callback: GeolocationPermissions.Callback?
-            ) {
-                val ctx = this@with.context
-                callbacks.onGeolocationPermission(origin.orEmpty()) { allow ->
-                    callback?.invoke(origin, allow && hasLocationPermission(ctx), false)
-                }
-            }
-
             override fun onCreateWindow(
                 view: WebView?,
                 isDialog: Boolean,
@@ -336,17 +309,6 @@ fun WebView.releaseCompletely() {
     webChromeClient = WebChromeClient()
     webViewClient = WebViewClient()
     destroy()
-}
-
-private fun hasLocationPermission(context: android.content.Context): Boolean {
-    return ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.ACCESS_FINE_LOCATION
-    ) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
 }
 
 private fun WebView.applyUserAgent(profile: UserAgentProfile, desktop: Boolean) {
