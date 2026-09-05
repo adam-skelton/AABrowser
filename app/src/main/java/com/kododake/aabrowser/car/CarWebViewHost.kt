@@ -357,7 +357,7 @@ class CarWebViewHost(
     companion object {
         private const val TAG = "AABrowserCar"
         private const val VIRTUAL_DISPLAY_NAME = "aa-browser-map"
-        const val START_URL = "https://www.google.co.nz/"
+        const val START_URL = "https://adam-skelton.github.io/AABrowser/"
         const val BRIDGE_NAME = "Car"
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L
