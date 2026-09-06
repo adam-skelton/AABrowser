@@ -4,6 +4,7 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
@@ -32,17 +33,7 @@ class BrowserCarScreen(
         return NavigationTemplate.Builder()
             .setActionStrip(
                 ActionStrip.Builder()
-                    .addAction(
-                        Action.Builder()
-                            .setTitle("Recenter")
-                            .setIcon(
-                                CarIcon.Builder(
-                                    IconCompat.createWithResource(carContext, R.drawable.car_recenter_24)
-                                ).build()
-                            )
-                            .setOnClickListener { webHost.recenterOnUser() }
-                            .build()
-                    )
+                    .addAction(hiddenRequiredAction())
                     .build()
             )
             .setMapActionStrip(
@@ -51,6 +42,18 @@ class BrowserCarScreen(
                     .build()
             )
             .setPanModeListener { _ -> }
+            .build()
+    }
+
+    private fun hiddenRequiredAction(): Action {
+        val invisible = CarColor.createCustom(0x00000000, 0x00000000)
+        return Action.Builder()
+            .setIcon(
+                CarIcon.Builder(
+                    IconCompat.createWithResource(carContext, R.drawable.car_hidden_action)
+                ).setTint(invisible).build()
+            )
+            .setOnClickListener { webHost.recenterOnUser() }
             .build()
     }
 
