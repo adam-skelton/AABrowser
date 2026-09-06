@@ -49,6 +49,10 @@ class CarWebViewHost(
     private var webView: WebView? = null
     private var surfaceWidth: Int = 0
     private var surfaceHeight: Int = 0
+    private var surfaceDpi: Int = 0
+    private var surfaceBound = false
+    private var boundSurface: Surface? = null
+    private val wakeRendererRunnable = Runnable { wakeRenderer() }
 
     private var dragging = false
     private var dragX = 0f
@@ -101,7 +105,7 @@ class CarWebViewHost(
             runCatching {
                 carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
             }
-            tearDownSurface(destroyWebView = true)
+            releaseDisplay(destroyWebView = true)
         }
     }
 
@@ -116,19 +120,16 @@ class CarWebViewHost(
 
     fun onForegrounded() {
         onMain {
-            val view = webView ?: return@onMain
-            if (!view.isAttachedToWindow) return@onMain
-            view.resumeTimers()
-            view.onResume()
+            if (surfaceBound) resumeRenderer()
         }
     }
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
-        onMain { attachSurface(surfaceContainer) }
+        onMain { bindCarSurface(surfaceContainer) }
     }
 
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
-        onMain { tearDownSurface(destroyWebView = false) }
+        onMain { unbindCarSurface(surfaceContainer.surface) }
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
@@ -167,7 +168,7 @@ class CarWebViewHost(
         }
     }
 
-    private fun attachSurface(surfaceContainer: SurfaceContainer) {
+    private fun bindCarSurface(surfaceContainer: SurfaceContainer) {
         val surface = surfaceContainer.surface
         val width = surfaceContainer.width
         val height = surfaceContainer.height
@@ -177,9 +178,41 @@ class CarWebViewHost(
             return
         }
 
-        tearDownSurface(destroyWebView = false)
+        if (virtualDisplay != null && presentation != null && webView != null) {
+            if (rebindExistingDisplay(surface, width, height, dpi)) {
+                return
+            }
+            Log.w(TAG, "Rebind failed; recreating virtual display")
+            releaseDisplay(destroyWebView = false)
+        }
+
+        createDisplay(surface, width, height, dpi)
+    }
+
+    private fun rebindExistingDisplay(surface: Surface, width: Int, height: Int, dpi: Int): Boolean {
+        val display = virtualDisplay ?: return false
+        return try {
+            if (width != surfaceWidth || height != surfaceHeight || dpi != surfaceDpi) {
+                display.resize(width, height, dpi)
+                surfaceWidth = width
+                surfaceHeight = height
+                surfaceDpi = dpi
+            }
+            display.setSurface(surface)
+            boundSurface = surface
+            surfaceBound = true
+            resumeRenderer()
+            true
+        } catch (error: Exception) {
+            Log.w(TAG, "Could not rebind car surface", error)
+            false
+        }
+    }
+
+    private fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int) {
         surfaceWidth = width
         surfaceHeight = height
+        surfaceDpi = dpi
 
         val displayManager = carContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val createdDisplay = createVirtualDisplay(displayManager, width, height, dpi, surface)
@@ -212,15 +245,16 @@ class CarWebViewHost(
         try {
             carPresentation.setContentView(container)
             carPresentation.show()
-            hosted.onResume()
-            hosted.resumeTimers()
+            boundSurface = surface
+            surfaceBound = true
+            resumeRenderer()
             pendingJs?.let { script ->
                 hosted.evaluateJavascript(script, null)
                 pendingJs = null
             }
         } catch (error: Exception) {
             Log.e(TAG, "Failed to show presentation", error)
-            tearDownSurface(destroyWebView = false)
+            releaseDisplay(destroyWebView = false)
         }
     }
 
@@ -257,11 +291,11 @@ class CarWebViewHost(
 
     private fun createWebView(context: Context): WebView {
         return WebView(context).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.rgb(0x11, 0x11, 0x11))
             isFocusable = true
             isFocusableInTouchMode = true
             setNestedScrollingEnabled(true)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            setLayerType(View.LAYER_TYPE_NONE, null)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
@@ -269,6 +303,8 @@ class CarWebViewHost(
                 ),
                 useDesktopMode = true
             )
+            setBackgroundColor(Color.rgb(0x11, 0x11, 0x11))
+            setLayerType(View.LAYER_TYPE_NONE, null)
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = false
             settings.setSupportZoom(false)
@@ -279,14 +315,51 @@ class CarWebViewHost(
         }
     }
 
-    private fun tearDownSurface(destroyWebView: Boolean) {
+    private fun unbindCarSurface(dying: Surface?) {
+        if (boundSurface != null && dying != null && dying !== boundSurface) {
+            Log.d(TAG, "Ignoring destroy of a stale car surface")
+            return
+        }
+        surfaceBound = false
+        boundSurface = null
+        mainHandler.removeCallbacks(wakeRendererRunnable)
+        endDrag()
+        webView?.onPause()
+        runCatching { virtualDisplay?.setSurface(null) }
+            .onFailure { error ->
+                Log.w(TAG, "Could not unbind car surface", error)
+                releaseDisplay(destroyWebView = false)
+            }
+    }
+
+    private fun resumeRenderer() {
+        val view = webView ?: return
+        view.resumeTimers()
+        view.onResume()
+        view.requestLayout()
+        view.invalidate()
+        mainHandler.removeCallbacks(wakeRendererRunnable)
+        mainHandler.post(wakeRendererRunnable)
+        mainHandler.postDelayed(wakeRendererRunnable, 120L)
+        mainHandler.postDelayed(wakeRendererRunnable, 400L)
+    }
+
+    private fun wakeRenderer() {
+        val view = webView ?: return
+        if (!surfaceBound || !view.isAttachedToWindow) return
+        view.invalidate()
+        view.evaluateJavascript(WAKE_MAP_JS, null)
+    }
+
+    private fun releaseDisplay(destroyWebView: Boolean) {
         mainHandler.removeCallbacks(endDragRunnable)
+        mainHandler.removeCallbacks(wakeRendererRunnable)
+        surfaceBound = false
+        boundSurface = null
         endDrag()
         val hosted = webView
         if (hosted != null) {
-            if (destroyWebView) {
-                hosted.onPause()
-            }
+            hosted.onPause()
             (hosted.parent as? ViewGroup)?.removeView(hosted)
         }
         runCatching { presentation?.dismiss() }
@@ -403,6 +476,14 @@ class CarWebViewHost(
         private const val DRAG_END_DELAY_MS = 90L
         private const val INPUT_NOTIFY_DEBOUNCE_MS = 600L
         private const val SUBMIT_FOCUS_SUPPRESS_MS = 1500L
+        private const val WAKE_MAP_JS = """
+            (function() {
+              try {
+                window.dispatchEvent(new Event('resize'));
+                if (typeof window.__aaWakeMap === 'function') window.__aaWakeMap();
+              } catch (err) {}
+            })();
+        """
 
         private const val FOCUS_HOOK_JS = """
             (function() {

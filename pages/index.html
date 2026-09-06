@@ -32,7 +32,7 @@
     @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr)}#randomBtn{justify-self:start}button,select{font-size:14px}}
   </style>
 </head>
-<body>
+<body class="chrome-hidden">
   <div id="map"></div>
   <div id="chromeWake" aria-hidden="true"></div>
   <div id="topPanel">
@@ -43,7 +43,7 @@
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
-      <button id="labelsBtn" type="button">Labels: ON</button>
+      <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
@@ -80,7 +80,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = true, demoTimer = null;
+  let watchId = null, following = true, labelsOn = false, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
 
@@ -109,8 +109,9 @@
         range: 650,
         tilt: 67,
         heading: 0,
-        mode: "HYBRID",
+        mode: "SATELLITE",
         gestureHandling: "GREEDY",
+        defaultUIHidden: true,
         description: "Photorealistic 3D routing map"
       });
       map3d.style.width = "100%";
@@ -449,6 +450,14 @@
     document.getElementById("followBtn").textContent = "Following: ON";
     if (currentGpsPoint) updateCar(currentGpsPoint, Number(map3d && map3d.heading) || 0);
   };
+  window.__aaWakeMap = function(){
+    window.dispatchEvent(new Event("resize"));
+    if (!map3d) return;
+    const heading = Number(map3d.heading);
+    if (Number.isFinite(heading)) {
+      map3d.heading = heading;
+    }
+  };
 
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
@@ -506,6 +515,10 @@
     hideChrome();
   }, { capture:true, passive:true });
 
+  window.addEventListener("click", () => {
+    if (document.body.classList.contains("chrome-hidden")) showChrome();
+  }, true);
+
   const topPanel = document.getElementById("topPanel");
   topPanel.addEventListener("pointerdown", () => {
     if (!document.body.classList.contains("chrome-hidden")) showChrome();
@@ -520,8 +533,6 @@
     event.preventDefault();
     showChrome();
   });
-
-  scheduleChromeHide();
 
   function showMapFailure(text){
     setMessage(text);
