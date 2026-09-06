@@ -105,7 +105,7 @@ class CarWebViewHost(
                 suppressFocusUntil = SystemClock.uptimeMillis() + SUBMIT_FOCUS_SUPPRESS_MS
             }
             val quoted = JSONObject.quote(text)
-            evaluateOrQueue(
+            evaluateSearchJs(
                 SET_INPUT_JS.replace("TEXT_PLACEHOLDER", quoted)
                     .replace("SUBMIT_PLACEHOLDER", submit.toString())
             )
@@ -503,6 +503,20 @@ class CarWebViewHost(
     private fun evaluateOrQueue(js: String) {
         val view = webView
         if (view != null && view.isAttachedToWindow) {
+            view.evaluateJavascript(js, null)
+        } else {
+            pendingJs = js
+        }
+    }
+
+    private fun evaluateSearchJs(js: String) {
+        val view = webView
+        if (view == null) {
+            pendingJs = js
+            return
+        }
+        view.resumeTimers()
+        if (view.isAttachedToWindow) {
             view.evaluateJavascript(js, null)
         } else {
             pendingJs = js

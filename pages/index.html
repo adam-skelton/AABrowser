@@ -18,8 +18,13 @@
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
-    #searchRow,#buttonRow,#routeCard,#status {transition:opacity .4s ease, transform .4s ease}
-    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #routeCard {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    #searchRow,#buttonRow,#routeCard,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
+    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #routeCard,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    #searchResults {display:none; pointer-events:auto; justify-self:stretch; max-width:min(640px,100%); max-height:min(46vh,340px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
+    #searchResults.open {display:block}
+    #searchResults button {display:block; width:100%; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
+    #searchResults button + button {border-top:1px solid rgba(0,0,0,.08)}
+    #searchResults .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
     #routeCard {justify-self:start; max-width:min(520px,calc(100vw - 20px)); padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.76); color:white; box-shadow:0 2px 12px rgba(0,0,0,.25); backdrop-filter:blur(7px)}
     #routeTitle {font-weight:750; margin-bottom:3px}
@@ -40,6 +45,7 @@
       <div id="searchHost"></div>
       <button id="randomBtn" type="button">Random route</button>
     </div>
+    <div id="searchResults" hidden></div>
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
@@ -136,7 +142,8 @@
     placeAutocomplete.includedRegionCodes = ["nz"];
     placeAutocomplete.locationBias = { radius: 50000, center: AUCKLAND };
     document.getElementById("searchHost").append(placeAutocomplete);
-    document.getElementById("searchHost").addEventListener("click", () => {
+    document.getElementById("searchHost").addEventListener("click", event => {
+      if (event.target && event.target.closest && event.target.closest("#searchResults")) return;
       const value = (placeAutocomplete && placeAutocomplete.value != null) ? String(placeAutocomplete.value) : "";
       try { if (window.Car && typeof Car.onInputFocused === "function") Car.onInputFocused(value); } catch (err) {}
     });
@@ -187,11 +194,57 @@
   }
 
   function pushSearchSuggestions(query, items){
+    renderSearchDropdown(items);
     try {
       if (window.Car && typeof Car.onSearchSuggestions === "function") {
         Car.onSearchSuggestions(JSON.stringify({ query: String(query || ""), items: items || [] }));
       }
     } catch (err) {}
+  }
+
+  function renderSearchDropdown(items){
+    const box = document.getElementById("searchResults");
+    if (!box) return;
+    const hits = Array.isArray(items) ? items : [];
+    box.innerHTML = "";
+    if (!hits.length) {
+      box.hidden = true;
+      box.classList.remove("open");
+      chromeLocked = false;
+      return;
+    }
+    hits.forEach(item => {
+      const button = document.createElement("button");
+      button.type = "button";
+      const title = document.createElement("span");
+      title.textContent = item.title || item.placeId || "Result";
+      button.append(title);
+      if (item.subtitle) {
+        const sub = document.createElement("span");
+        sub.className = "sub";
+        sub.textContent = item.subtitle;
+        button.append(sub);
+      }
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        pickSearchResult(item.placeId, item.title);
+      });
+      box.append(button);
+    });
+    box.hidden = false;
+    box.classList.add("open");
+    showChrome();
+    chromeLocked = true;
+  }
+
+  function hideSearchDropdown(){
+    const box = document.getElementById("searchResults");
+    if (!box) return;
+    box.hidden = true;
+    box.classList.remove("open");
+    box.innerHTML = "";
+    chromeLocked = false;
   }
 
   async function previewSearchSuggestions(query){
@@ -211,10 +264,11 @@
       const items = (suggestions || []).slice(0, 6).map(entry => {
         const prediction = entry.placePrediction || {};
         const structured = prediction.structuredFormat || {};
+        const place = (typeof prediction.toPlace === "function") ? prediction.toPlace() : null;
         const title = predictionText(structured.mainText || prediction.mainText) || predictionText(prediction.text);
         const subtitle = predictionText(structured.secondaryText || prediction.secondaryText);
         return {
-          placeId: prediction.placeId || "",
+          placeId: prediction.placeId || (place && (place.id || place.placeId)) || "",
           title: title || q,
           subtitle
         };
@@ -240,6 +294,7 @@
     const id = String(placeId || "").trim();
     const label = String(fallbackName || "").trim();
     setAutocompleteValue(label);
+    hideSearchDropdown();
     showChrome();
     if (!id) return;
     try {
@@ -550,6 +605,7 @@
     if (chromeLocked) return;
     document.body.classList.add("chrome-hidden");
     clearTimeout(chromeHideTimer);
+    hideSearchDropdown();
   }
 
   function scheduleChromeHide(){
@@ -558,7 +614,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults"));
   }
 
   let mapDragStart = null;

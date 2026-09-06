@@ -50,8 +50,8 @@ class CarKeyboardScreen(
             }
 
             override fun onSearchSubmitted(searchText: String) {
+                typedText = searchText
                 onSubmitted(searchText)
-                screenManager.pop()
             }
         }
 

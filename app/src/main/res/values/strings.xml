@@ -120,7 +120,7 @@
     <string name="car_action_reload">Reload</string>
     <string name="car_action_keyboard">Keyboard</string>
     <string name="car_keyboard_hint">Search destination</string>
-    <string name="car_keyboard_empty">Suggestions appear as you type. Search keeps the text without opening the first match.</string>
+    <string name="car_keyboard_empty">Tap Search to list matching places, then choose one.</string>
 
     <string name="media_notification_channel_name">Media playback</string>
     <string name="media_notification_channel_description">Controls media playback in web pages</string>
