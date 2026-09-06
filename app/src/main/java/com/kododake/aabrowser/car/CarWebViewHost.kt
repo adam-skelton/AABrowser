@@ -3,7 +3,6 @@ package com.kododake.aabrowser.car
 import android.app.Presentation
 import android.content.Context
 import android.graphics.Color
-import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -57,8 +56,6 @@ class CarWebViewHost(
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
-    private var restoreAttempt = 0
-    private val restoreMapRunnable = Runnable { restoreMapRenderer() }
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -117,7 +114,12 @@ class CarWebViewHost(
     }
 
     fun onForegrounded() {
-        onMain { scheduleMapRestore() }
+        onMain {
+            val view = webView ?: return@onMain
+            if (!view.isAttachedToWindow) return@onMain
+            view.resumeTimers()
+            view.onResume()
+        }
     }
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
@@ -129,11 +131,12 @@ class CarWebViewHost(
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
-        onMain { webView?.invalidate() }
+        // Host chrome overlays the map surface; do not resize the WebView to this inset.
+        // Shrinking it (and kicking WebGL) is what blacked the 3D canvas.
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
-        onMain { webView?.invalidate() }
+        // Same as visible area: leave the WebView filling the surface.
     }
 
     override fun onClick(x: Float, y: Float) {
@@ -189,11 +192,7 @@ class CarWebViewHost(
             android.R.style.Theme_Black_NoTitleBar_Fullscreen
         )
         presentation = carPresentation
-        carPresentation.window?.apply {
-            setFormat(PixelFormat.RGBA_8888)
-            addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
-            addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        carPresentation.window?.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
 
         val container = carPresentation.layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
         val hosted = webView ?: createWebView(carContext).also { webView = it }
@@ -215,7 +214,6 @@ class CarWebViewHost(
                 hosted.evaluateJavascript(script, null)
                 pendingJs = null
             }
-            scheduleMapRestore()
         } catch (error: Exception) {
             Log.e(TAG, "Failed to show presentation", error)
             tearDownSurface(destroyWebView = false)
@@ -230,9 +228,9 @@ class CarWebViewHost(
         surface: Surface
     ): VirtualDisplay? {
         val flagSets = intArrayOf(
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
             0
         )
         for (flags in flagSets) {
@@ -255,23 +253,19 @@ class CarWebViewHost(
 
     private fun createWebView(context: Context): WebView {
         return WebView(context).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.WHITE)
             isFocusable = true
             isFocusableInTouchMode = true
             setNestedScrollingEnabled(true)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
                     onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) }
                 ),
-                useDesktopMode = true
+                useDesktopMode = false
             )
             settings.useWideViewPort = true
-            settings.loadWithOverviewMode = false
-            settings.setSupportZoom(false)
-            settings.builtInZoomControls = false
-            setInitialScale(100)
+            settings.loadWithOverviewMode = true
             addJavascriptInterface(jsBridge, BRIDGE_NAME)
             loadUrl(START_URL)
         }
@@ -279,14 +273,10 @@ class CarWebViewHost(
 
     private fun tearDownSurface(destroyWebView: Boolean) {
         mainHandler.removeCallbacks(endDragRunnable)
-        mainHandler.removeCallbacks(restoreMapRunnable)
-        restoreAttempt = 0
         endDrag()
         val hosted = webView
         if (hosted != null) {
-            if (destroyWebView) {
-                hosted.onPause()
-            }
+            hosted.onPause()
             (hosted.parent as? ViewGroup)?.removeView(hosted)
         }
         runCatching { presentation?.dismiss() }
@@ -297,30 +287,6 @@ class CarWebViewHost(
             hosted.removeJavascriptInterface(BRIDGE_NAME)
             hosted.releaseCompletely()
             webView = null
-        }
-    }
-
-    private fun scheduleMapRestore() {
-        mainHandler.removeCallbacks(restoreMapRunnable)
-        restoreAttempt = 0
-        mainHandler.post(restoreMapRunnable)
-    }
-
-    private fun restoreMapRenderer() {
-        val view = webView ?: return
-        if (!view.isAttachedToWindow) {
-            return
-        }
-        view.resumeTimers()
-        view.onResume()
-        view.requestLayout()
-        view.invalidate()
-        view.evaluateJavascript(RESTORE_MAP_JS, null)
-
-        restoreAttempt += 1
-        if (restoreAttempt < 4) {
-            val delay = if (restoreAttempt == 1) 80L else 250L
-            mainHandler.postDelayed(restoreMapRunnable, delay)
         }
     }
 
@@ -427,15 +393,6 @@ class CarWebViewHost(
         private const val DRAG_END_DELAY_MS = 90L
         private const val INPUT_NOTIFY_DEBOUNCE_MS = 600L
         private const val SUBMIT_FOCUS_SUPPRESS_MS = 1500L
-
-        private const val RESTORE_MAP_JS = """
-            (function() {
-              try {
-                window.dispatchEvent(new Event('resize'));
-                if (typeof window.__aaRestoreMap === 'function') window.__aaRestoreMap();
-              } catch (err) {}
-            })();
-        """
 
         private const val FOCUS_HOOK_JS = """
             (function() {

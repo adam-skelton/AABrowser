@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auckland 3D Route Demo</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#111; overflow:hidden}
-    #map {position:absolute; inset:0; width:100%; height:100%}
-    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block}
+    html, body {height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#111; overflow:hidden}
+    #map {position:absolute; inset:0}
+    gmp-map-3d {width:100%; height:100%; display:block}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#routeCard {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch}
@@ -43,7 +43,7 @@
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
-      <button id="labelsBtn" type="button">Labels: ON</button>
+      <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
@@ -80,7 +80,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = true, demoTimer = null;
+  let watchId = null, following = true, labelsOn = false, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
 
@@ -106,15 +106,13 @@
 
       map3d = new maps3d.Map3DElement({
         center: AUCKLAND,
-        range: 650,
-        tilt: 67,
+        range: 260,
+        tilt: 72,
         heading: 0,
-        mode: "HYBRID",
+        mode: "SATELLITE",
         gestureHandling: "GREEDY",
         description: "Photorealistic 3D routing map"
       });
-      map3d.style.width = "100%";
-      map3d.style.height = "100%";
       document.getElementById("map").append(map3d);
 
       userMarker = new Marker3DElement({ position: AUCKLAND, label: "You", sizePreserved: true });
@@ -440,30 +438,6 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
-  function restoreMapRenderer(){
-    const host = document.getElementById("map");
-    if (host) {
-      host.style.left = "0";
-      host.style.top = "0";
-      host.style.right = "0";
-      host.style.bottom = "0";
-      host.style.width = "";
-      host.style.height = "";
-    }
-    if (map3d) {
-      map3d.style.width = "100%";
-      map3d.style.height = "100%";
-    }
-    window.dispatchEvent(new Event("resize"));
-    if (!map3d) return;
-    const range = Number(map3d.range);
-    if (Number.isFinite(range)) {
-      map3d.range = range + 1;
-      requestAnimationFrame(() => { map3d.range = range; });
-    }
-  }
-  window.__aaRestoreMap = restoreMapRenderer;
-  window.__aaSetViewport = function(){ restoreMapRenderer(); };
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
     const range = Number(map3d.range) || 260;
@@ -474,21 +448,7 @@
     following = true;
     document.getElementById("followBtn").textContent = "Following: ON";
     if (currentGpsPoint) updateCar(currentGpsPoint, Number(map3d && map3d.heading) || 0);
-    restoreMapRenderer();
   };
-
-  function scheduleMapRestore(){
-    restoreMapRenderer();
-    setTimeout(restoreMapRenderer, 120);
-    setTimeout(restoreMapRenderer, 400);
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") scheduleMapRestore();
-  });
-  window.addEventListener("pageshow", scheduleMapRestore);
-  window.addEventListener("focus", scheduleMapRestore);
-  document.addEventListener("webglcontextrestored", scheduleMapRestore, true);
 
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
