@@ -3,6 +3,7 @@ package com.kododake.aabrowser.car
 import android.app.Presentation
 import android.content.Context
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -131,12 +132,11 @@ class CarWebViewHost(
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
-        // Host chrome overlays the map surface; do not resize the WebView to this inset.
-        // Shrinking it (and kicking WebGL) is what blacked the 3D canvas.
+        onMain { webView?.invalidate() }
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
-        // Same as visible area: leave the WebView filling the surface.
+        onMain { webView?.invalidate() }
     }
 
     override fun onClick(x: Float, y: Float) {
@@ -192,7 +192,11 @@ class CarWebViewHost(
             android.R.style.Theme_Black_NoTitleBar_Fullscreen
         )
         presentation = carPresentation
-        carPresentation.window?.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+        carPresentation.window?.apply {
+            setFormat(PixelFormat.RGBA_8888)
+            addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+            addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
 
         val container = carPresentation.layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
         val hosted = webView ?: createWebView(carContext).also { webView = it }
@@ -228,9 +232,9 @@ class CarWebViewHost(
         surface: Surface
     ): VirtualDisplay? {
         val flagSets = intArrayOf(
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
             0
         )
         for (flags in flagSets) {
@@ -253,19 +257,23 @@ class CarWebViewHost(
 
     private fun createWebView(context: Context): WebView {
         return WebView(context).apply {
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.BLACK)
             isFocusable = true
             isFocusableInTouchMode = true
             setNestedScrollingEnabled(true)
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
                     onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) }
                 ),
-                useDesktopMode = false
+                useDesktopMode = true
             )
             settings.useWideViewPort = true
-            settings.loadWithOverviewMode = true
+            settings.loadWithOverviewMode = false
+            settings.setSupportZoom(false)
+            settings.builtInZoomControls = false
+            setInitialScale(100)
             addJavascriptInterface(jsBridge, BRIDGE_NAME)
             loadUrl(START_URL)
         }
@@ -276,7 +284,9 @@ class CarWebViewHost(
         endDrag()
         val hosted = webView
         if (hosted != null) {
-            hosted.onPause()
+            if (destroyWebView) {
+                hosted.onPause()
+            }
             (hosted.parent as? ViewGroup)?.removeView(hosted)
         }
         runCatching { presentation?.dismiss() }
