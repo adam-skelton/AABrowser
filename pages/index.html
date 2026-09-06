@@ -43,7 +43,7 @@
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
-      <button id="labelsBtn" type="button">Labels: OFF</button>
+      <button id="labelsBtn" type="button">Labels: ON</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
@@ -80,7 +80,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = false, demoTimer = null;
+  let watchId = null, following = true, labelsOn = true, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
 
@@ -105,13 +105,18 @@
       RouteClass = routes.Route;
 
       map3d = new maps3d.Map3DElement({
-        center: AUCKLAND,
+        center: { lat: AUCKLAND.lat, lng: AUCKLAND.lng, altitude: 0 },
         range: 260,
         tilt: 72,
         heading: 0,
-        mode: "SATELLITE",
+        mode: "HYBRID",
         gestureHandling: "GREEDY",
+        defaultUIHidden: true,
         description: "Photorealistic 3D routing map"
+      });
+      map3d.addEventListener("gmp-error", event => {
+        const detail = (event && (event.errorMessage || event.message)) || "gmp-error";
+        showMapFailure("3D map error: " + detail);
       });
       document.getElementById("map").append(map3d);
 
@@ -123,9 +128,7 @@
     } catch (err) {
       console.error(err);
       const detail = (err && err.message) ? err.message : String(err);
-      setMessage("Initialisation failed. " + detail);
-      routeTitleEl.textContent = "Map failed to load";
-      routeStatsEl.textContent = detail;
+      showMapFailure("Initialisation failed. " + detail);
     }
   };
 
@@ -523,14 +526,28 @@
 
   scheduleChromeHide();
 
+  function showMapFailure(text){
+    setMessage(text);
+    routeTitleEl.textContent = "Map failed to load";
+    routeStatsEl.textContent = text;
+  }
+
+  function mapsKeyIsMissing(key){
+    // Do not compare against the deploy placeholder string: GitHub Pages
+    // replaces every copy of that token, which used to make this check
+    // always true and skipped loading Maps entirely.
+    return !key || key.indexOf("AIza") !== 0 || key.length < 20;
+  }
+
   function loadGoogleMaps(){
-    if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "__GOOGLE_MAPS_API_KEY__") {
-      setMessage("Maps API key was not injected at deploy time."); return;
+    if (mapsKeyIsMissing(GOOGLE_MAPS_API_KEY)) {
+      showMapFailure("Maps API key was not injected at deploy time.");
+      return;
     }
     const script=document.createElement("script");
     script.async=true;
     script.src="https://maps.googleapis.com/maps/api/js?key="+encodeURIComponent(GOOGLE_MAPS_API_KEY)+"&v=weekly&loading=async&callback=initMap";
-    script.onerror=()=>setMessage("Could not load Google Maps JavaScript API.");
+    script.onerror=()=>showMapFailure("Could not load Google Maps JavaScript API.");
     document.head.append(script);
   }
 

@@ -42,11 +42,15 @@ jobs:
           import os
           from pathlib import Path
           path = Path("pages/index.html")
-          token = "__GOOGLE_MAPS_API_KEY__"
+          marker = 'const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";'
           text = path.read_text(encoding="utf-8")
-          if token not in text:
-              raise SystemExit("Placeholder not found in pages/index.html")
-          path.write_text(text.replace(token, os.environ["GOOGLE_MAPS_API_KEY"]), encoding="utf-8")
+          if marker not in text:
+              raise SystemExit("API key assignment placeholder not found in pages/index.html")
+          key = os.environ["GOOGLE_MAPS_API_KEY"].strip()
+          if not key.startswith("AIza"):
+              raise SystemExit("GOOGLE_MAPS_API_KEY secret does not look like a Maps key")
+          assignment = f'const GOOGLE_MAPS_API_KEY = "{key}";'
+          path.write_text(text.replace(marker, assignment, 1), encoding="utf-8")
           PY
 
       - name: Setup Pages
