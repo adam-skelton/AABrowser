@@ -173,11 +173,33 @@
     ac.dispatchEvent(new Event("change", { bubbles:true }));
   }
 
-  async function searchDestinationFromQuery(query){
+  function predictionText(value){
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (typeof value.text === "string") return value.text;
+    try { return String(value); } catch (err) { return ""; }
+  }
+
+  let suggestTimer = null;
+  function scheduleSearchSuggestions(query){
+    clearTimeout(suggestTimer);
+    suggestTimer = setTimeout(() => previewSearchSuggestions(query), 180);
+  }
+
+  function pushSearchSuggestions(query, items){
+    try {
+      if (window.Car && typeof Car.onSearchSuggestions === "function") {
+        Car.onSearchSuggestions(JSON.stringify({ query: String(query || ""), items: items || [] }));
+      }
+    } catch (err) {}
+  }
+
+  async function previewSearchSuggestions(query){
     const q = String(query || "").trim();
-    setAutocompleteValue(q);
-    if (!q) return;
-    setMessage("Searching for " + q + "...");
+    if (!q) {
+      pushSearchSuggestions("", []);
+      return;
+    }
     try {
       const { AutocompleteSuggestion } = await google.maps.importLibrary("places");
       const center = currentGpsPoint || AUCKLAND;
@@ -186,25 +208,60 @@
         includedRegionCodes: ["nz"],
         locationBias: { radius: 50000, center }
       });
-      const prediction = suggestions && suggestions[0] && suggestions[0].placePrediction;
-      if (!prediction) {
-        setMessage("No destinations found for that search.");
-        return;
-      }
-      const place = prediction.toPlace();
-      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
-      if (!place.location) throw new Error("Selected place has no location.");
-      const destination = { lat: place.location.lat(), lng: place.location.lng() };
-      const name = place.displayName || place.formattedAddress || q;
-      await calculateRoute(getRouteOrigin(), destination, name);
+      const items = (suggestions || []).slice(0, 6).map(entry => {
+        const prediction = entry.placePrediction || {};
+        const structured = prediction.structuredFormat || {};
+        const title = predictionText(structured.mainText || prediction.mainText) || predictionText(prediction.text);
+        const subtitle = predictionText(structured.secondaryText || prediction.secondaryText);
+        return {
+          placeId: prediction.placeId || "",
+          title: title || q,
+          subtitle
+        };
+      }).filter(item => item.placeId || item.title);
+      pushSearchSuggestions(q, items);
     } catch (err) {
       console.error(err);
-      setMessage("Could not search that destination.");
     }
   }
 
-  window.__aaSetSearchText = setAutocompleteValue;
+  async function searchDestinationFromQuery(query){
+    const q = String(query || "").trim();
+    setAutocompleteValue(q);
+    showChrome();
+    if (!q) {
+      pushSearchSuggestions("", []);
+      return;
+    }
+    await previewSearchSuggestions(q);
+  }
+
+  async function pickSearchResult(placeId, fallbackName){
+    const id = String(placeId || "").trim();
+    const label = String(fallbackName || "").trim();
+    setAutocompleteValue(label);
+    showChrome();
+    if (!id) return;
+    try {
+      const { Place } = await google.maps.importLibrary("places");
+      const place = new Place({ id });
+      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+      if (!place.location) throw new Error("Selected place has no location.");
+      const destination = { lat: place.location.lat(), lng: place.location.lng() };
+      const name = place.displayName || place.formattedAddress || label || "Selected destination";
+      await calculateRoute(getRouteOrigin(), destination, name);
+    } catch (err) {
+      console.error(err);
+      setMessage("Could not route to that destination.");
+    }
+  }
+
+  window.__aaSetSearchText = function(text){
+    setAutocompleteValue(text);
+    scheduleSearchSuggestions(text);
+  };
   window.__aaSubmitSearch = searchDestinationFromQuery;
+  window.__aaPickSearchResult = pickSearchResult;
 
   async function calculateRoute(origin, destination, destinationName){
     stopDemo();
@@ -355,6 +412,7 @@
     console.error(err);
     const messages = {1:"Location permission denied. HTTPS or localhost is required.",2:"Location is currently unavailable.",3:"Location request timed out."};
     setMessage(messages[err.code] || `GPS error: ${err.message}`);
+    if (err.code === 1 || err.code === 2) stopGps();
   }
 
   function toggleFollow(){
@@ -448,7 +506,20 @@
   window.__aaRecenter = function(){
     following = true;
     document.getElementById("followBtn").textContent = "Following: ON";
-    if (currentGpsPoint) updateCar(currentGpsPoint, Number(map3d && map3d.heading) || 0);
+    startGps();
+    if (currentGpsPoint && map3d) updateCar(currentGpsPoint, Number(map3d.heading) || 0);
+  };
+  window.__aaInjectGps = function(fix){
+    if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;
+    handlePosition({
+      coords: {
+        latitude: Number(fix.lat),
+        longitude: Number(fix.lng),
+        speed: Number.isFinite(Number(fix.speed)) ? Number(fix.speed) : 0,
+        heading: Number.isFinite(Number(fix.heading)) ? Number(fix.heading) : null,
+        accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0
+      }
+    });
   };
   window.__aaWakeMap = function(){
     window.dispatchEvent(new Event("resize"));

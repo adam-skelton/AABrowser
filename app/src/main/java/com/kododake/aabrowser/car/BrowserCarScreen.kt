@@ -61,6 +61,7 @@ class BrowserCarScreen(
         val keyboardScreen = CarKeyboardScreen(
             carContext = carContext,
             initialText = initialText,
+            webHost = webHost,
             onTextChanged = { text -> webHost.setInputText(text, submit = false) },
             onSubmitted = { text -> webHost.setInputText(text, submit = true) }
         )

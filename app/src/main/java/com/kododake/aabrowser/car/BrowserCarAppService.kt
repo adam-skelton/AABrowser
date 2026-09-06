@@ -49,8 +49,13 @@ class BrowserCarSession : Session() {
         val needed = LOCATION_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(carContext, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (needed.isEmpty()) return
-        carContext.requestPermissions(needed) { _, _ -> }
+        if (needed.isEmpty()) {
+            webHost.startAndroidLocation()
+            return
+        }
+        carContext.requestPermissions(needed) { _, _ ->
+            webHost.startAndroidLocation()
+        }
     }
 
     private companion object {

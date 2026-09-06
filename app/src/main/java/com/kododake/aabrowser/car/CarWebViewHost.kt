@@ -1,12 +1,17 @@
 package com.kododake.aabrowser.car
 
+import android.Manifest
 import android.app.Presentation
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -23,6 +28,7 @@ import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
+import androidx.core.content.ContextCompat
 import com.kododake.aabrowser.R
 import com.kododake.aabrowser.web.BrowserCallbacks
 import com.kododake.aabrowser.web.configureWebView
@@ -34,12 +40,16 @@ class CarWebViewHost(
 ) : SurfaceCallback {
 
     var inputFocusListener: ((String) -> Unit)? = null
+    var searchSuggestionsListener: ((String, List<SearchSuggestion>) -> Unit)? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endDragRunnable = Runnable { endDrag() }
     private val jsBridge = CarJsBridge(
         onMain = ::onMain,
         notifyInputFocused = { value -> notifyInputFocused(value) },
+        notifySearchSuggestions = { query, items ->
+            searchSuggestionsListener?.invoke(query, items)
+        },
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() }
     )
@@ -52,7 +62,9 @@ class CarWebViewHost(
     private var surfaceDpi: Int = 0
     private var surfaceBound = false
     private var boundSurface: Surface? = null
+    private var locationStarted = false
     private val wakeRendererRunnable = Runnable { wakeRenderer() }
+    private val locationListener = LocationListener { location -> injectAndroidLocation(location) }
 
     private var dragging = false
     private var dragX = 0f
@@ -105,12 +117,14 @@ class CarWebViewHost(
             runCatching {
                 carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
             }
+            stopAndroidLocation()
             releaseDisplay(destroyWebView = true)
         }
     }
 
     fun recenterOnUser() {
         onMain {
+            startAndroidLocation()
             webView?.evaluateJavascript(
                 "window.__aaRecenter && window.__aaRecenter();",
                 null
@@ -118,8 +132,23 @@ class CarWebViewHost(
         }
     }
 
+    fun chooseSearchSuggestion(placeId: String, title: String) {
+        onMain {
+            val quotedId = JSONObject.quote(placeId)
+            val quotedTitle = JSONObject.quote(title)
+            evaluateOrQueue(
+                "window.__aaPickSearchResult && window.__aaPickSearchResult($quotedId,$quotedTitle);"
+            )
+        }
+    }
+
+    fun startAndroidLocation() {
+        onMain { ensureAndroidLocation() }
+    }
+
     fun onForegrounded() {
         onMain {
+            ensureAndroidLocation()
             if (surfaceBound) resumeRenderer()
         }
     }
@@ -349,6 +378,50 @@ class CarWebViewHost(
         if (!surfaceBound || !view.isAttachedToWindow) return
         view.invalidate()
         view.evaluateJavascript(WAKE_MAP_JS, null)
+    }
+
+    private fun ensureAndroidLocation() {
+        if (locationStarted) return
+        val fine = ContextCompat.checkSelfPermission(
+            carContext,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            carContext,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) return
+
+        val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val provider = when {
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            manager.isProviderEnabled(LocationManager.FUSED_PROVIDER) -> LocationManager.FUSED_PROVIDER
+            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> manager.getProviders(true).firstOrNull()
+        } ?: return
+
+        runCatching {
+            manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            locationStarted = true
+            manager.getLastKnownLocation(provider)?.let(::injectAndroidLocation)
+        }.onFailure { error ->
+            Log.w(TAG, "Android location failed", error)
+        }
+    }
+
+    private fun stopAndroidLocation() {
+        if (!locationStarted) return
+        val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        runCatching { manager.removeUpdates(locationListener) }
+        locationStarted = false
+    }
+
+    private fun injectAndroidLocation(location: Location) {
+        val heading = if (location.hasBearing()) location.bearing.toString() else "null"
+        val speed = if (location.hasSpeed()) location.speed.toString() else "0"
+        evaluateOrQueue(
+            "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
+        )
     }
 
     private fun releaseDisplay(destroyWebView: Boolean) {
