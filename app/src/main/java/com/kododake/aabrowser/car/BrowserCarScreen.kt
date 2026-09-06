@@ -34,12 +34,13 @@ class BrowserCarScreen(
                 ActionStrip.Builder()
                     .addAction(
                         Action.Builder()
+                            .setTitle("Recenter")
                             .setIcon(
                                 CarIcon.Builder(
-                                    IconCompat.createWithResource(carContext, R.mipmap.ic_launcher)
+                                    IconCompat.createWithResource(carContext, R.drawable.car_recenter_24)
                                 ).build()
                             )
-                            .setOnClickListener { }
+                            .setOnClickListener { webHost.recenterOnUser() }
                             .build()
                     )
                     .build()

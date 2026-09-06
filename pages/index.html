@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auckland 3D Route Demo</title>
   <style>
-    html, body {height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#111; overflow:hidden}
-    #map {position:absolute; inset:0}
-    gmp-map-3d {width:100%; height:100%; display:block}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#111; overflow:hidden}
+    #map {position:absolute; inset:0; width:100%; height:100%}
+    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#routeCard {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch}
@@ -43,7 +43,7 @@
     <div id="buttonRow">
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
-      <button id="labelsBtn" type="button">Labels: OFF</button>
+      <button id="labelsBtn" type="button">Labels: ON</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
@@ -80,7 +80,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = false, demoTimer = null;
+  let watchId = null, following = true, labelsOn = true, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
 
@@ -106,13 +106,15 @@
 
       map3d = new maps3d.Map3DElement({
         center: AUCKLAND,
-        range: 260,
-        tilt: 72,
+        range: 650,
+        tilt: 67,
         heading: 0,
-        mode: "SATELLITE",
+        mode: "HYBRID",
         gestureHandling: "GREEDY",
         description: "Photorealistic 3D routing map"
       });
+      map3d.style.width = "100%";
+      map3d.style.height = "100%";
       document.getElementById("map").append(map3d);
 
       userMarker = new Marker3DElement({ position: AUCKLAND, label: "You", sizePreserved: true });
@@ -122,7 +124,10 @@
       startGps();
     } catch (err) {
       console.error(err);
-      setMessage("Initialisation failed. Check API key, billing, and that Maps JavaScript, Routes, and Places API (New) are enabled.");
+      const detail = (err && err.message) ? err.message : String(err);
+      setMessage("Initialisation failed. " + detail);
+      routeTitleEl.textContent = "Map failed to load";
+      routeStatsEl.textContent = detail;
     }
   };
 
@@ -464,6 +469,12 @@
     const range = Number(map3d.range) || 260;
     const next = range / (Number(factor) || 1);
     map3d.range = clamp(next, 80, 20000);
+  };
+  window.__aaRecenter = function(){
+    following = true;
+    document.getElementById("followBtn").textContent = "Following: ON";
+    if (currentGpsPoint) updateCar(currentGpsPoint, Number(map3d && map3d.heading) || 0);
+    restoreMapRenderer();
   };
 
   function scheduleMapRestore(){

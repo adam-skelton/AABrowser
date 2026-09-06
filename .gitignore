@@ -14,3 +14,4 @@ local.properties
 *.log
 icon.png
 /test
+list.txt

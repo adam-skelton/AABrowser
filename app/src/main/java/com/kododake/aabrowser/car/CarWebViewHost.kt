@@ -3,6 +3,7 @@ package com.kododake.aabrowser.car
 import android.app.Presentation
 import android.content.Context
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -106,6 +107,15 @@ class CarWebViewHost(
         }
     }
 
+    fun recenterOnUser() {
+        onMain {
+            webView?.evaluateJavascript(
+                "window.__aaRecenter && window.__aaRecenter();",
+                null
+            )
+        }
+    }
+
     fun onForegrounded() {
         onMain { scheduleMapRestore() }
     }
@@ -119,11 +129,11 @@ class CarWebViewHost(
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
-        onMain { scheduleMapRestore() }
+        onMain { webView?.invalidate() }
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
-        onMain { scheduleMapRestore() }
+        onMain { webView?.invalidate() }
     }
 
     override fun onClick(x: Float, y: Float) {
@@ -179,7 +189,11 @@ class CarWebViewHost(
             android.R.style.Theme_Black_NoTitleBar_Fullscreen
         )
         presentation = carPresentation
-        carPresentation.window?.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+        carPresentation.window?.apply {
+            setFormat(PixelFormat.RGBA_8888)
+            addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+            addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
 
         val container = carPresentation.layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
         val hosted = webView ?: createWebView(carContext).also { webView = it }
@@ -216,9 +230,9 @@ class CarWebViewHost(
         surface: Surface
     ): VirtualDisplay? {
         val flagSets = intArrayOf(
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
             0
         )
         for (flags in flagSets) {
@@ -245,12 +259,13 @@ class CarWebViewHost(
             isFocusable = true
             isFocusableInTouchMode = true
             setNestedScrollingEnabled(true)
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
                     onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) }
                 ),
-                useDesktopMode = false
+                useDesktopMode = true
             )
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = false
