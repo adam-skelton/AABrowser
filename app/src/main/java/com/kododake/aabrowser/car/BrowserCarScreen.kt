@@ -18,6 +18,7 @@ class BrowserCarScreen(
 ) : Screen(carContext) {
 
     private var keyboardVisible = false
+    private var debugOverlayVisible = false
 
     init {
         webHost.inputFocusListener = { value -> openKeyboard(value) }
@@ -32,7 +33,8 @@ class BrowserCarScreen(
         return NavigationTemplate.Builder()
             .setActionStrip(
                 ActionStrip.Builder()
-                    .addAction(recenterAction())
+                    .addAction(searchAction())
+                    .addAction(debugAction())
                     .build()
             )
             .setMapActionStrip(
@@ -44,14 +46,30 @@ class BrowserCarScreen(
             .build()
     }
 
-    private fun recenterAction(): Action {
+    private fun searchAction(): Action {
         return Action.Builder()
             .setIcon(
                 CarIcon.Builder(
-                    IconCompat.createWithResource(carContext, R.drawable.car_recenter_24)
+                    IconCompat.createWithResource(carContext, R.drawable.car_search_24)
                 ).build()
             )
-            .setOnClickListener { webHost.recenterOnUser() }
+            .setTitle(carContext.getString(R.string.car_action_search))
+            .setOnClickListener { openKeyboard("") }
+            .build()
+    }
+
+    private fun debugAction(): Action {
+        return Action.Builder()
+            .setIcon(
+                CarIcon.Builder(
+                    IconCompat.createWithResource(carContext, R.drawable.car_debug_24)
+                ).build()
+            )
+            .setTitle(carContext.getString(R.string.car_action_debug))
+            .setOnClickListener {
+                debugOverlayVisible = !debugOverlayVisible
+                webHost.setDebugOverlay(debugOverlayVisible)
+            }
             .build()
     }
 

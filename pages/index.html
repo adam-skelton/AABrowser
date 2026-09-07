@@ -26,6 +26,15 @@
     #searchResults button + button {border-top:1px solid rgba(0,0,0,.08)}
     #searchResults .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
+    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:30; display:none; min-height:44px; padding:0 16px; border-radius:22px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
+    #recenterBtn.visible {display:block}
+    html.aa-car #searchRow,body.aa-car #searchRow {display:none}
+    html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
+    html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
+    html.aa-car:not(.debug-open) #buttonRow,html.aa-car:not(.debug-open) #routeCard,
+    body.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #routeCard {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    html.aa-car.debug-open #buttonRow,html.aa-car.debug-open #routeCard,
+    body.aa-car.debug-open #buttonRow,body.aa-car.debug-open #routeCard {opacity:1; pointer-events:auto; transform:none}
     #routeCard {justify-self:start; max-width:min(520px,calc(100vw - 20px)); padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.76); color:white; box-shadow:0 2px 12px rgba(0,0,0,.25); backdrop-filter:blur(7px)}
     #routeTitle {font-weight:750; margin-bottom:3px}
     #routeStats {font-size:15px}
@@ -34,7 +43,7 @@
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
     #speed {font-weight:750}
-    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr)}#randomBtn{justify-self:start}button,select{font-size:14px}}
+    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr)}button,select{font-size:14px}}
   </style>
 </head>
 <body class="chrome-hidden">
@@ -43,7 +52,6 @@
   <div id="topPanel">
     <div id="searchRow">
       <div id="searchHost"></div>
-      <button id="randomBtn" type="button">Random route</button>
     </div>
     <div id="searchResults" hidden></div>
     <div id="buttonRow">
@@ -51,6 +59,7 @@
       <button id="followBtn" type="button">Following: ON</button>
       <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
+      <button id="randomBtn" type="button">Random route</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
         <option value="drive" selected>Driving view</option>
@@ -68,6 +77,7 @@
     <div id="message">Loading Google 3D map...</div>
     <div><span id="speed">0 km/h</span> · <span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
   </div>
+  <button id="recenterBtn" type="button">Recenter</button>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -126,6 +136,10 @@
 
       userMarker = new Marker3DElement({ position: AUCKLAND, label: "You", sizePreserved: true });
       map3d.append(userMarker);
+
+      map3d.addEventListener("gmp-centerchange", () => {
+        if (!following) updateRecenterButton();
+      });
 
       setupAutocomplete(places.PlaceAutocompleteElement);
       startGps();
@@ -234,8 +248,10 @@
     });
     box.hidden = false;
     box.classList.add("open");
-    showChrome();
-    chromeLocked = true;
+    if (!isAndroidAuto()) {
+      showChrome();
+      chromeLocked = true;
+    }
   }
 
   function hideSearchDropdown(){
@@ -458,6 +474,7 @@
       map3d.center = { lat:point.lat, lng:point.lng };
       map3d.heading = normaliseHeading(heading);
     }
+    updateRecenterButton();
     speedEl.textContent = `${Math.round((point.speed || 0) * 3.6)} km/h`;
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
     headingEl.textContent = `${Math.round(normaliseHeading(heading))}°`;
@@ -473,6 +490,7 @@
   function toggleFollow(){
     following = !following;
     document.getElementById("followBtn").textContent = `Following: ${following ? "ON" : "OFF"}`;
+    updateRecenterButton();
     setMessage(following ? "Camera will follow the next GPS/demo position." : "Camera unlocked. Drag around the photorealistic map.");
   }
 
@@ -563,7 +581,32 @@
     document.getElementById("followBtn").textContent = "Following: ON";
     startGps();
     if (currentGpsPoint && map3d) updateCar(currentGpsPoint, Number(map3d.heading) || 0);
+    updateRecenterButton();
   };
+  window.__aaUserPanned = markUserPanned;
+  window.__aaSetDebugOverlay = function(on){
+    document.documentElement.classList.toggle("debug-open", !!on);
+    document.body.classList.toggle("debug-open", !!on);
+  };
+
+  function isAndroidAuto(){
+    return document.documentElement.classList.contains("aa-car") || document.body.classList.contains("aa-car");
+  }
+
+  function markUserPanned(){
+    if (following) {
+      following = false;
+      const followBtn = document.getElementById("followBtn");
+      if (followBtn) followBtn.textContent = "Following: OFF";
+    }
+    updateRecenterButton();
+  }
+
+  function updateRecenterButton(){
+    const btn = document.getElementById("recenterBtn");
+    if (!btn) return;
+    btn.classList.toggle("visible", !following && !!currentGpsPoint);
+  }
   window.__aaInjectGps = function(fix){
     if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;
     handlePosition({
@@ -591,18 +634,24 @@
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
   document.getElementById("viewSelect").addEventListener("change",event=>setView(event.target.value));
+  document.getElementById("recenterBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    window.__aaRecenter();
+  });
 
   const CHROME_HIDE_MS = 3500;
   let chromeHideTimer = null;
   let chromeLocked = false;
 
   function showChrome(){
+    if (isAndroidAuto()) return;
     document.body.classList.remove("chrome-hidden");
     scheduleChromeHide();
   }
 
   function hideChrome(){
-    if (chromeLocked) return;
+    if (isAndroidAuto() || chromeLocked) return;
     document.body.classList.add("chrome-hidden");
     clearTimeout(chromeHideTimer);
     hideSearchDropdown();
@@ -614,7 +663,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn"));
   }
 
   let mapDragStart = null;
@@ -632,6 +681,7 @@
     if (dx * dx + dy * dy < 64) return;
     chromeLocked = false;
     hideChrome();
+    markUserPanned();
     mapDragStart = null;
   }, { capture:true, passive:true });
   window.addEventListener("pointerup", () => { mapDragStart = null; }, { capture:true, passive:true });
@@ -640,9 +690,11 @@
     if (isChromeUiTarget(event.target)) return;
     chromeLocked = false;
     hideChrome();
+    markUserPanned();
   }, { capture:true, passive:true });
 
   window.addEventListener("click", () => {
+    if (isAndroidAuto()) return;
     if (document.body.classList.contains("chrome-hidden")) showChrome();
   }, true);
 

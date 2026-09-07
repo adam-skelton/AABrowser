@@ -63,6 +63,7 @@ class CarWebViewHost(
     private var surfaceBound = false
     private var boundSurface: Surface? = null
     private var locationStarted = false
+    private var debugOverlayVisible = false
     private val wakeRendererRunnable = Runnable { wakeRenderer() }
     private val locationListener = LocationListener { location -> injectAndroidLocation(location) }
 
@@ -129,6 +130,13 @@ class CarWebViewHost(
                 "window.__aaRecenter && window.__aaRecenter();",
                 null
             )
+        }
+    }
+
+    fun setDebugOverlay(visible: Boolean) {
+        onMain {
+            debugOverlayVisible = visible
+            evaluateOrQueue("window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(${visible});")
         }
     }
 
@@ -378,6 +386,12 @@ class CarWebViewHost(
         if (!surfaceBound || !view.isAttachedToWindow) return
         view.invalidate()
         view.evaluateJavascript(WAKE_MAP_JS, null)
+        if (debugOverlayVisible) {
+            view.evaluateJavascript(
+                "window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(true);",
+                null
+            )
+        }
     }
 
     private fun ensureAndroidLocation() {
@@ -470,6 +484,10 @@ class CarWebViewHost(
             dragY = (surfaceHeight / 2).toFloat().coerceAtLeast(1f)
             dragDownTime = SystemClock.uptimeMillis()
             dispatchTouch(view, MotionEvent.ACTION_DOWN, dragX, dragY, dragDownTime, dragDownTime)
+            view.evaluateJavascript(
+                "window.__aaUserPanned && window.__aaUserPanned();",
+                null
+            )
         }
         dragX = (dragX - distanceX).coerceIn(0f, surfaceWidth.toFloat().coerceAtLeast(1f))
         dragY = (dragY - distanceY).coerceIn(0f, surfaceHeight.toFloat().coerceAtLeast(1f))
@@ -566,6 +584,8 @@ class CarWebViewHost(
         private const val WAKE_MAP_JS = """
             (function() {
               try {
+                document.documentElement.classList.add('aa-car');
+                if (document.body) document.body.classList.add('aa-car');
                 window.dispatchEvent(new Event('resize'));
                 if (typeof window.__aaWakeMap === 'function') window.__aaWakeMap();
               } catch (err) {}
@@ -576,6 +596,10 @@ class CarWebViewHost(
             (function() {
               if (window.__aaBrowserInputHook) return;
               window.__aaBrowserInputHook = true;
+              try {
+                document.documentElement.classList.add('aa-car');
+                if (document.body) document.body.classList.add('aa-car');
+              } catch (err) {}
               function isTextEntry(el) {
                 if (!el || el === document.body || el === document.documentElement) return false;
                 if (el.closest && el.closest('#searchHost')) return true;
