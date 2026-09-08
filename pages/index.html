@@ -9,7 +9,7 @@
     #map {position:absolute; inset:0; width:100%; height:100%}
     gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
-    #searchRow,#buttonRow,#routeCard {pointer-events:auto}
+    #searchRow,#buttonRow,#routeCard,#carSearchBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch}
     #searchHost {min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
     #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
@@ -18,28 +18,40 @@
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
-    #searchRow,#buttonRow,#routeCard,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
-    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #routeCard,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    #searchRow,#buttonRow,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
+    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
     #searchResults {display:none; pointer-events:auto; justify-self:stretch; max-width:min(640px,100%); max-height:min(46vh,340px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
     #searchResults.open {display:block}
     #searchResults button {display:block; width:100%; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
     #searchResults button + button {border-top:1px solid rgba(0,0,0,.08)}
     #searchResults .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
-    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:30; display:none; min-height:44px; padding:0 16px; border-radius:22px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
+    #carSearchBtn {display:none; position:absolute; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:32; width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
+    #carSearchBtn svg {width:22px; height:22px; fill:currentColor}
+    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; display:none; min-height:44px; padding:0 16px; border-radius:22px; font:inherit; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #recenterBtn.visible {display:block}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
-    html.aa-car:not(.debug-open) #buttonRow,html.aa-car:not(.debug-open) #routeCard,
-    body.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #routeCard {opacity:0; pointer-events:none; transform:translateY(-10px)}
-    html.aa-car.debug-open #buttonRow,html.aa-car.debug-open #routeCard,
-    body.aa-car.debug-open #buttonRow,body.aa-car.debug-open #routeCard {opacity:1; pointer-events:auto; transform:none}
-    #routeCard {justify-self:start; max-width:min(520px,calc(100vw - 20px)); padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.76); color:white; box-shadow:0 2px 12px rgba(0,0,0,.25); backdrop-filter:blur(7px)}
-    #routeTitle {font-weight:750; margin-bottom:3px}
-    #routeStats {font-size:15px}
-    #routeSub {margin-top:3px; font-size:12px; opacity:.82}
+    html.aa-car #carSearchBtn,body.aa-car #carSearchBtn {display:flex}
+    html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:max(108px,calc(env(safe-area-inset-left) + 96px)); right:148px; bottom:max(16px,env(safe-area-inset-bottom)); top:auto; z-index:30; max-height:28vh; overflow:auto}
+    html.aa-car #buttonRow button,html.aa-car #buttonRow select,
+    body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
+    html.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #buttonRow {opacity:0; pointer-events:none}
+    html.aa-car.debug-open #buttonRow,body.aa-car.debug-open #buttonRow {opacity:1; pointer-events:auto; transform:none}
+    #routeCard {display:none; position:absolute; z-index:31; top:max(66px,calc(env(safe-area-inset-top) + 56px)); left:max(10px,env(safe-area-inset-left)); width:min(280px,calc(100vw - 180px)); padding:14px 48px 14px 16px; border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.4); pointer-events:auto}
+    html.aa-car #routeCard,body.aa-car #routeCard {top:max(72px,calc(env(safe-area-inset-top) + 60px))}
+    body.has-route #routeCard {display:block}
+    #routeClose {position:absolute; top:10px; right:10px; width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:22px; line-height:1; font-weight:500}
+    #routeTime {font-size:32px; font-weight:750; letter-spacing:-.6px; line-height:1.1}
+    #routeStats {margin-top:4px; font-size:16px; font-weight:550; opacity:.92}
+    #routeSub {margin-top:4px; font-size:14px; font-weight:600; color:rgba(255,255,255,.62)}
+    #routeSub.traffic-delay {color:#FFB74D}
+    #routeTitle {margin-top:10px; font-size:15px; font-weight:600; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #status {display:none}
+    #speedHud {position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:33; min-width:76px; padding:8px 12px 7px; border-radius:16px; background:#1C1C1E; color:#fff; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
+    #speedValue {display:block; font-size:28px; font-weight:750; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-.4px}
+    #speedUnit {display:block; margin-top:3px; font-size:12px; font-weight:700; opacity:.78; letter-spacing:.2px}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
     #speed {font-weight:750}
@@ -67,17 +79,26 @@
         <option value="top">Top-down</option>
       </select>
     </div>
-    <div id="routeCard">
-      <div id="routeTitle">No route yet</div>
-      <div id="routeStats">Choose a suggestion or tap Random route.</div>
-      <div id="routeSub">Origin uses live GPS when available, otherwise central Auckland.</div>
-    </div>
+  </div>
+  <button id="carSearchBtn" type="button" aria-label="Search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+  </button>
+  <div id="routeCard">
+    <button id="routeClose" type="button" aria-label="Stop navigation">&times;</button>
+    <div id="routeTime">--</div>
+    <div id="routeStats"></div>
+    <div id="routeSub"></div>
+    <div id="routeTitle"></div>
   </div>
   <div id="status">
     <div id="message">Loading Google 3D map...</div>
     <div><span id="speed">0 km/h</span> · <span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
   </div>
   <button id="recenterBtn" type="button">Recenter</button>
+  <div id="speedHud" aria-live="polite">
+    <span id="speedValue">0</span>
+    <span id="speedUnit">km/h</span>
+  </div>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -94,19 +115,22 @@
     { name: "Wynyard Quarter", lat: -36.841990, lng: 174.757200 }
   ];
 
-  let map3d, Polyline3DElement, Marker3DElement, RouteClass, placeAutocomplete;
+  let map3d, Polyline3DElement, Marker3DElement, Model3DElement, RouteClass, placeAutocomplete;
   let userMarker, destinationMarker, routeLine;
   let watchId = null, following = true, labelsOn = false, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
+  let lastGpsAt = 0;
 
   const messageEl = document.getElementById("message");
   const speedEl = document.getElementById("speed");
+  const speedValueEl = document.getElementById("speedValue");
   const coordsEl = document.getElementById("coords");
   const headingEl = document.getElementById("heading");
   const routeTitleEl = document.getElementById("routeTitle");
   const routeStatsEl = document.getElementById("routeStats");
   const routeSubEl = document.getElementById("routeSub");
+  const routeTimeEl = document.getElementById("routeTime");
 
   function setMessage(text){ messageEl.textContent = text; }
 
@@ -118,6 +142,7 @@
 
       Polyline3DElement = maps3d.Polyline3DElement;
       Marker3DElement = maps3d.Marker3DElement;
+      Model3DElement = maps3d.Model3DElement;
       RouteClass = routes.Route;
 
       map3d = new maps3d.Map3DElement({
@@ -134,7 +159,18 @@
       map3d.style.height = "100%";
       document.getElementById("map").append(map3d);
 
-      userMarker = new Marker3DElement({ position: AUCKLAND, label: "You", sizePreserved: true });
+      try {
+        userMarker = new Model3DElement({
+          src: new URL("kia-cerato-2021.glb", document.baseURI).href,
+          position: { lat: AUCKLAND.lat, lng: AUCKLAND.lng },
+          orientation: { heading: 0, tilt: 0, roll: 0 },
+          scale: 1,
+          altitudeMode: "CLAMP_TO_GROUND"
+        });
+      } catch (err) {
+        console.error(err);
+        userMarker = new Marker3DElement({ position: AUCKLAND, sizePreserved: true });
+      }
       map3d.append(userMarker);
 
       map3d.addEventListener("gmp-centerchange", () => {
@@ -368,8 +404,6 @@
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
-      routeTitleEl.textContent = "Route failed";
-      routeStatsEl.textContent = "See browser console for the API error.";
     }
   }
 
@@ -398,20 +432,59 @@
     map3d.append(destinationMarker);
   }
 
+  function formatDuration(ms){
+    const mins = Math.max(1, Math.round(ms / 60000));
+    if (mins < 60) return `${mins} min`;
+    const hours = Math.floor(mins / 60);
+    const remain = mins % 60;
+    return remain ? `${hours} hr ${remain} min` : `${hours} hr`;
+  }
+
+  function formatDistance(meters){
+    const km = meters / 1000;
+    if (km < 10) return `${km.toFixed(1)} km`;
+    return `${Math.round(km)} km`;
+  }
+
   function updateRouteInfo(route, destinationName){
-    const km = (route.distanceMeters / 1000).toFixed(route.distanceMeters < 10000 ? 1 : 0);
     const mins = Math.max(1, Math.round(route.durationMillis / 60000));
     const eta = new Date(Date.now() + route.durationMillis);
+    routeTimeEl.textContent = formatDuration(route.durationMillis);
+    routeStatsEl.textContent = `${formatDistance(route.distanceMeters)} · ${formatTime(eta)}`;
     routeTitleEl.textContent = destinationName;
-    routeStatsEl.textContent = `${mins} min · ${km} km · ETA ${formatTime(eta)}`;
 
     if (Number.isFinite(route.staticDurationMillis) && route.staticDurationMillis > 0) {
       const staticMins = Math.round(route.staticDurationMillis / 60000);
       const trafficDifference = mins - staticMins;
-      routeSubEl.textContent = trafficDifference > 1 ? `Live traffic adds about ${trafficDifference} min` : "Traffic-aware Google route";
+      if (trafficDifference > 1) {
+        routeSubEl.textContent = `+${trafficDifference} min traffic`;
+        routeSubEl.className = "traffic-delay";
+      } else {
+        routeSubEl.textContent = "Usual traffic";
+        routeSubEl.className = "";
+      }
     } else {
-      routeSubEl.textContent = "Traffic-aware Google route";
+      routeSubEl.textContent = "Traffic-aware route";
+      routeSubEl.className = "";
     }
+    document.body.classList.add("has-route");
+    document.documentElement.classList.add("has-route");
+  }
+
+  function clearNavigation(){
+    stopDemo();
+    if (routeLine) { routeLine.remove(); routeLine = null; }
+    if (destinationMarker) { destinationMarker.remove(); destinationMarker = null; }
+    activeRoute = null;
+    activeDestination = null;
+    activeRoutePath = [];
+    document.body.classList.remove("has-route");
+    document.documentElement.classList.remove("has-route");
+    routeTimeEl.textContent = "--";
+    routeStatsEl.textContent = "";
+    routeSubEl.textContent = "";
+    routeTitleEl.textContent = "";
+    setMessage("Navigation ended.");
   }
 
   function showRouteOverview(origin, destination, distanceMeters){
@@ -454,30 +527,55 @@
   function handlePosition(position){
     if (!map3d || !userMarker) return;
     const c = position.coords;
-    const fix = { lat:c.latitude, lng:c.longitude, speed:Number.isFinite(c.speed) ? c.speed : 0, heading:Number.isFinite(c.heading) ? c.heading : null };
+    const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
+    fix.speed = resolveSpeed(c.speed, fix);
     currentGpsPoint = fix;
     let heading = fix.heading;
     if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) heading = bearingDegrees(previousFix, fix);
     if (heading === null) heading = Number.isFinite(map3d.heading) ? map3d.heading : 0;
     updateCar(fix, heading);
     previousFix = fix;
+    lastGpsAt = Date.now();
     if (placeAutocomplete) {
       placeAutocomplete.locationBias = { radius: 50000, center: { lat: fix.lat, lng: fix.lng } };
     }
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
+  function resolveSpeed(reported, fix){
+    const now = Date.now();
+    const gpsSpeed = Number(reported);
+    if (Number.isFinite(gpsSpeed) && gpsSpeed >= 0.4) return gpsSpeed;
+    if (previousFix && lastGpsAt) {
+      const dt = (now - lastGpsAt) / 1000;
+      if (dt > 0.25 && dt < 5) {
+        const derived = distanceMetres(previousFix, fix) / dt;
+        if (derived >= 0.4 && derived < 55) return derived;
+      }
+    }
+    return Number.isFinite(gpsSpeed) && gpsSpeed >= 0 ? gpsSpeed : 0;
+  }
+
+  function updateSpeedHud(speedMs){
+    const kmh = Math.max(0, Math.round((Number(speedMs) || 0) * 3.6));
+    if (speedValueEl) speedValueEl.textContent = String(kmh);
+    if (speedEl) speedEl.textContent = `${kmh} km/h`;
+  }
+
   function updateCar(point, heading){
-    userMarker.position = { lat:point.lat, lng:point.lng };
-    userMarker.label = "You";
+    const pos = { lat: point.lat, lng: point.lng };
+    const h = normaliseHeading(heading);
+    userMarker.position = pos;
+    try { userMarker.orientation = { heading: h, tilt: 0, roll: 0 }; } catch (err) {}
     if (following) {
-      map3d.center = { lat:point.lat, lng:point.lng };
-      map3d.heading = normaliseHeading(heading);
+      map3d.center = pos;
+      map3d.heading = h;
     }
     updateRecenterButton();
-    speedEl.textContent = `${Math.round((point.speed || 0) * 3.6)} km/h`;
+    updateSpeedHud(point.speed);
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
-    headingEl.textContent = `${Math.round(normaliseHeading(heading))}°`;
+    coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+    headingEl.textContent = `${Math.round(h)}°`;
   }
 
   function handleGpsError(err){
@@ -525,20 +623,41 @@
     document.getElementById("demoBtn").textContent = "Stop drive demo";
     setMessage("Driving along Google's returned road path.");
 
-    const path = downsamplePath(activeRoutePath, 220);
-    let index = 0, progress = 0;
-    const stepsPerSegment = 8;
+    const path = activeRoutePath;
+    const DEMO_SPEED = 10;
+    const TICK_MS = 50;
+    let index = 0;
+    let distIntoSeg = 0;
 
     demoTimer = setInterval(() => {
-      progress += 1 / stepsPerSegment;
-      if (progress >= 1) {
-        progress = 0; index++;
-        if (index >= path.length - 1) { stopDemo(); setMessage("Demo arrived at destination."); return; }
+      let remaining = DEMO_SPEED * (TICK_MS / 1000);
+      while (remaining > 0) {
+        if (index >= path.length - 1) {
+          const last = path[path.length - 1];
+          updateCar({ lat: last.lat, lng: last.lng, speed: 0 }, Number(map3d.heading) || 0);
+          stopDemo();
+          setMessage("Demo arrived at destination.");
+          return;
+        }
+        const p1 = path[index];
+        const p2 = path[index + 1];
+        const segLen = Math.max(distanceMetres(p1, p2), 0.05);
+        const left = segLen - distIntoSeg;
+        if (remaining >= left) {
+          remaining -= left;
+          index += 1;
+          distIntoSeg = 0;
+          continue;
+        }
+        distIntoSeg += remaining;
+        remaining = 0;
+        const t = distIntoSeg / segLen;
+        updateCar(
+          { lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t), speed: DEMO_SPEED },
+          bearingDegrees(p1, p2)
+        );
       }
-      const p1 = path[index], p2 = path[index + 1];
-      const point = { lat:lerp(p1.lat,p2.lat,progress), lng:lerp(p1.lng,p2.lng,progress), speed:12 };
-      updateCar(point, bearingDegrees(p1,p2));
-    }, 100);
+    }, TICK_MS);
   }
 
   function stopDemo(){
@@ -613,7 +732,7 @@
       coords: {
         latitude: Number(fix.lat),
         longitude: Number(fix.lng),
-        speed: Number.isFinite(Number(fix.speed)) ? Number(fix.speed) : 0,
+        speed: (fix.speed == null || !Number.isFinite(Number(fix.speed))) ? NaN : Number(fix.speed),
         heading: Number.isFinite(Number(fix.heading)) ? Number(fix.heading) : null,
         accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0
       }
@@ -639,6 +758,19 @@
     event.stopPropagation();
     window.__aaRecenter();
   });
+  document.getElementById("carSearchBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      if (window.Car && typeof Car.openKeyboard === "function") Car.openKeyboard();
+      else if (window.Car && typeof Car.onInputFocused === "function") Car.onInputFocused("");
+    } catch (err) {}
+  });
+  document.getElementById("routeClose").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearNavigation();
+  });
 
   const CHROME_HIDE_MS = 3500;
   let chromeHideTimer = null;
@@ -663,7 +795,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carSearchBtn, #routeCard"));
   }
 
   let mapDragStart = null;
@@ -715,8 +847,6 @@
 
   function showMapFailure(text){
     setMessage(text);
-    routeTitleEl.textContent = "Map failed to load";
-    routeStatsEl.textContent = text;
   }
 
   function mapsKeyIsMissing(key){

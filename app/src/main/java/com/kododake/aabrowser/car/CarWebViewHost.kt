@@ -432,7 +432,7 @@ class CarWebViewHost(
 
     private fun injectAndroidLocation(location: Location) {
         val heading = if (location.hasBearing()) location.bearing.toString() else "null"
-        val speed = if (location.hasSpeed()) location.speed.toString() else "0"
+        val speed = if (location.hasSpeed()) location.speed.toString() else "null"
         evaluateOrQueue(
             "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
         )

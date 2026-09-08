@@ -33,7 +33,6 @@ class BrowserCarScreen(
         return NavigationTemplate.Builder()
             .setActionStrip(
                 ActionStrip.Builder()
-                    .addAction(searchAction())
                     .addAction(debugAction())
                     .build()
             )
@@ -43,18 +42,6 @@ class BrowserCarScreen(
                     .build()
             )
             .setPanModeListener { _ -> }
-            .build()
-    }
-
-    private fun searchAction(): Action {
-        return Action.Builder()
-            .setIcon(
-                CarIcon.Builder(
-                    IconCompat.createWithResource(carContext, R.drawable.car_search_24)
-                ).build()
-            )
-            .setTitle(carContext.getString(R.string.car_action_search))
-            .setOnClickListener { openKeyboard("") }
             .build()
     }
 
