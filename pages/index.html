@@ -95,6 +95,14 @@
     html.aa-car:not(.debug-open) #carApiHud,body.aa-car:not(.debug-open) #carApiHud {display:none !important}
     #carApiHud .car-api-label {font-size:13px; font-weight:650; opacity:.72}
     #carApiHud .car-api-value {font-size:42px; font-weight:750; line-height:1.1; font-variant-numeric:tabular-nums}
+    #carModelOverlay {display:none; position:absolute; inset:0; z-index:47; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto}
+    #carModelOverlay.open {display:flex}
+    html.aa-car:not(.debug-open) #carModelOverlay,body.aa-car:not(.debug-open) #carModelOverlay {display:none !important}
+    #carModelCard {position:relative; width:min(78vw,760px); height:min(78vh,520px); border-radius:20px; background:#1C1C1E; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden; display:flex; flex-direction:column}
+    #carModelHost {flex:1; min-height:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; background:radial-gradient(ellipse at 50% 70%, #3a3e44 0%, #1C1C1E 70%)}
+    #carModelHost model-viewer {width:100%; height:100%; --poster-color:transparent; touch-action:none}
+    #carModelHint {padding:8px 14px; font-size:13px; font-weight:600; color:rgba(255,255,255,.7); text-align:center}
+    #carModelClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
     @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr)}button,select{font-size:14px}}
   </style>
 </head>
@@ -124,6 +132,7 @@
       <button id="randomBtn" type="button">Random route</button>
       <button id="viewSpecBtn" type="button">View specs</button>
       <button id="carApiBtn" type="button">API level</button>
+      <button id="carModelBtn" type="button">Car model</button>
       <div id="viewPicker">
         <button id="viewSelectBtn" type="button" aria-haspopup="listbox" aria-expanded="false">Driving view</button>
         <div id="viewSelectMenu" hidden role="listbox">
@@ -172,6 +181,13 @@
       <button type="button" data-spec="fov" data-dir="+" aria-label="Increase field of view">+</button>
     </div>
   </div>
+  <div id="carModelOverlay" hidden>
+    <div id="carModelCard">
+      <button id="carModelClose" type="button" aria-label="Close model viewer">&times;</button>
+      <div id="carModelHost"></div>
+      <div id="carModelHint">Kia Cerato 2021 · drag to rotate · pinch to zoom</div>
+    </div>
+  </div>
   <div id="carApiHud" hidden>
     <div class="car-api-label">Car API</div>
     <div class="car-api-value" id="carApiValue">—</div>
@@ -202,6 +218,8 @@
   const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
+  // Bump the version when the GLB is regenerated so cached copies are replaced.
+  const CAR_MODEL_URL = new URL("kia-cerato-2021.glb?v=3", document.baseURI).href;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -278,7 +296,7 @@
       map3d.append(userMarker);
       try {
         userCar = new Model3DElement({
-          src: new URL("kia-cerato-2021.glb", document.baseURI).href,
+          src: CAR_MODEL_URL,
           position: { lat: AUCKLAND.lat, lng: AUCKLAND.lng, altitude: 0.4 },
           orientation: carOrientation(0),
           scale: 2.4,
@@ -934,6 +952,63 @@
     return Number.isFinite(injected) ? injected : null;
   }
 
+  let modelViewerLoading = null;
+  function ensureModelViewer(){
+    if (window.customElements && customElements.get("model-viewer")) return Promise.resolve();
+    if (!modelViewerLoading) {
+      modelViewerLoading = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js";
+        script.onload = () => resolve();
+        script.onerror = () => {
+          modelViewerLoading = null;
+          reject(new Error("model-viewer failed to load"));
+        };
+        document.head.append(script);
+      });
+    }
+    return modelViewerLoading;
+  }
+
+  async function openCarModelViewer(){
+    const overlay = document.getElementById("carModelOverlay");
+    const host = document.getElementById("carModelHost");
+    if (!overlay || !host) return;
+    overlay.hidden = false;
+    overlay.classList.add("open");
+    if (host.querySelector("model-viewer")) return;
+    host.textContent = "Loading 3D model…";
+    try {
+      await ensureModelViewer();
+    } catch (err) {
+      host.textContent = "Could not load the 3D viewer (no network?).";
+      return;
+    }
+    host.textContent = "";
+    const viewer = document.createElement("model-viewer");
+    viewer.setAttribute("src", CAR_MODEL_URL);
+    viewer.setAttribute("alt", "Kia Cerato 2021 3D model");
+    viewer.setAttribute("camera-controls", "");
+    viewer.setAttribute("auto-rotate", "");
+    viewer.setAttribute("auto-rotate-delay", "1500");
+    viewer.setAttribute("interaction-prompt", "none");
+    viewer.setAttribute("shadow-intensity", "1");
+    viewer.setAttribute("exposure", "1.05");
+    viewer.setAttribute("camera-orbit", "35deg 74deg 8m");
+    viewer.setAttribute("min-camera-orbit", "auto 40deg 4m");
+    viewer.setAttribute("max-camera-orbit", "auto 92deg 14m");
+    viewer.setAttribute("field-of-view", "32deg");
+    host.append(viewer);
+  }
+
+  function closeCarModelViewer(){
+    const overlay = document.getElementById("carModelOverlay");
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove("open");
+  }
+
   function hideCarApiHud(){
     const hud = document.getElementById("carApiHud");
     const btn = document.getElementById("carApiBtn");
@@ -1065,6 +1140,7 @@
       hideViewSpecs();
       hideCarApiHud();
       closeViewSelectMenu();
+      closeCarModelViewer();
     }
     try {
       if (window.Car && typeof Car.setDebugOverlay === "function") Car.setDebugOverlay(!!on);
@@ -1133,6 +1209,19 @@
     event.stopPropagation();
     toggleCarApiHud();
   });
+  document.getElementById("carModelBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openCarModelViewer();
+  });
+  document.getElementById("carModelClose").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCarModelViewer();
+  });
+  document.getElementById("carModelOverlay").addEventListener("click", event => {
+    if (event.target === event.currentTarget) closeCarModelViewer();
+  });
   document.getElementById("specZoomIn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -1194,7 +1283,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay"));
   }
 
   let mapDragStart = null;
