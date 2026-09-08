@@ -44,6 +44,7 @@ class CarWebViewHost(
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endDragRunnable = Runnable { endDrag() }
+    private var debugOverlayVisible = false
     private val jsBridge = CarJsBridge(
         onMain = ::onMain,
         notifyInputFocused = { value -> notifyInputFocused(value) },
@@ -51,7 +52,8 @@ class CarWebViewHost(
             searchSuggestionsListener?.invoke(query, items)
         },
         requestOpenKeyboard = { notifyInputFocused("") },
-        requestGoBack = { goBack() }
+        requestGoBack = { goBack() },
+        notifyDebugOverlay = { visible -> debugOverlayVisible = visible }
     )
 
     private var virtualDisplay: VirtualDisplay? = null
@@ -63,7 +65,6 @@ class CarWebViewHost(
     private var surfaceBound = false
     private var boundSurface: Surface? = null
     private var locationStarted = false
-    private var debugOverlayVisible = false
     private val wakeRendererRunnable = Runnable { wakeRenderer() }
     private val locationListener = LocationListener { location -> injectAndroidLocation(location) }
 

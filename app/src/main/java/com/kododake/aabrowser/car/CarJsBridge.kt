@@ -7,7 +7,8 @@ class CarJsBridge(
     private val notifyInputFocused: (value: String) -> Unit,
     private val notifySearchSuggestions: (query: String, items: List<SearchSuggestion>) -> Unit,
     private val requestOpenKeyboard: () -> Unit,
-    private val requestGoBack: () -> Unit
+    private val requestGoBack: () -> Unit,
+    private val notifyDebugOverlay: (Boolean) -> Unit
 ) {
     @JavascriptInterface
     fun onInputFocused(value: String?) {
@@ -30,5 +31,10 @@ class CarJsBridge(
     @JavascriptInterface
     fun goBack() {
         onMain { requestGoBack() }
+    }
+
+    @JavascriptInterface
+    fun setDebugOverlay(visible: Boolean) {
+        onMain { notifyDebugOverlay(visible) }
     }
 }
