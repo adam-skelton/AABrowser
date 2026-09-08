@@ -46,12 +46,18 @@
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
     html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex}
-    html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:max(140px,calc(env(safe-area-inset-left) + 128px)); right:148px; bottom:max(16px,env(safe-area-inset-bottom)); top:auto; z-index:30; max-height:28vh; overflow:auto}
+    html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:max(140px,calc(env(safe-area-inset-left) + 128px)); right:148px; bottom:max(16px,env(safe-area-inset-bottom)); top:auto; z-index:30; overflow:visible}
     html.aa-car #buttonRow button,html.aa-car #buttonRow select,
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
     html.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #buttonRow {opacity:0; pointer-events:none}
     html.aa-car.debug-open #buttonRow,body.aa-car.debug-open #buttonRow {opacity:1; pointer-events:auto; transform:none}
     html:not(.aa-car) #carApiBtn,body:not(.aa-car) #carApiBtn {display:none}
+    #viewPicker {position:relative; display:inline-flex}
+    #viewSelectBtn {white-space:nowrap}
+    #viewSelectMenu {display:none; position:absolute; left:0; top:calc(100% + 6px); min-width:max(100%,180px); z-index:46; padding:6px; border-radius:12px; background:#1C1C1E; box-shadow:0 8px 24px rgba(0,0,0,.4)}
+    #viewSelectMenu.open {display:grid; gap:4px}
+    #viewSelectMenu button {min-height:44px; width:100%; white-space:nowrap; text-align:left; background:#2E3134; color:#fff; box-shadow:none}
+    html.aa-car #viewSelectMenu,body.aa-car #viewSelectMenu {top:auto; bottom:calc(100% + 6px)}
     #viewSpecPanel {display:none; position:absolute; z-index:31; top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(10px,env(safe-area-inset-left)); width:176px; padding:6px; border-radius:12px; background:#1C1C1E; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.4); pointer-events:auto; gap:2px}
     body.view-specs #viewSpecPanel {display:grid}
     html.aa-car #viewSpecPanel,body.aa-car #viewSpecPanel {top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(12px,env(safe-area-inset-left)); right:auto; width:168px; bottom:auto}
@@ -75,7 +81,7 @@
     #routeTitle {margin-top:10px; font-size:15px; font-weight:600; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #routeGo {margin-top:12px; width:100%; min-height:44px; background:#1A73E8; color:#fff; box-shadow:none}
     #status {display:none}
-    #speedHud {position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(10px,calc(env(safe-area-inset-bottom) - 2px)); z-index:33; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px; min-height:44px; min-width:118px; padding:0 20px; border-radius:22px; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; font:inherit; font-weight:650}
+    #speedHud {position:absolute; left:max(8px,calc(env(safe-area-inset-left) - 4px)); bottom:max(10px,calc(env(safe-area-inset-bottom) - 2px)); z-index:33; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:4px; min-height:44px; min-width:0; width:max-content; padding:0 12px; border-radius:22px; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; font:inherit; font-weight:650; white-space:nowrap}
     #speedValue,#speedUnit {display:inline; font-size:inherit; font-weight:650; line-height:1; letter-spacing:0}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
@@ -118,12 +124,15 @@
       <button id="randomBtn" type="button">Random route</button>
       <button id="viewSpecBtn" type="button">View specs</button>
       <button id="carApiBtn" type="button">API level</button>
-      <select id="viewSelect" aria-label="Camera view">
-        <option value="overview">Route overview</option>
-        <option value="drive" selected>Driving view</option>
-        <option value="high">Higher view</option>
-        <option value="top">Top-down</option>
-      </select>
+      <div id="viewPicker">
+        <button id="viewSelectBtn" type="button" aria-haspopup="listbox" aria-expanded="false">Driving view</button>
+        <div id="viewSelectMenu" hidden role="listbox">
+          <button type="button" role="option" data-view="overview">Route overview</button>
+          <button type="button" role="option" data-view="drive">Driving view</button>
+          <button type="button" role="option" data-view="high">Higher view</button>
+          <button type="button" role="option" data-view="top">Top-down</button>
+        </div>
+      </div>
     </div>
   </div>
   <div id="viewSpecPanel" hidden>
@@ -601,7 +610,6 @@
     document.documentElement.classList.add("navigating");
     following = true;
     document.getElementById("followBtn").textContent = "Following: ON";
-    document.getElementById("viewSelect").value = "drive";
     setView("drive");
     const here = currentGpsPoint || getRouteOrigin();
     const heading = Number(map3d.heading) || 0;
@@ -632,7 +640,7 @@
     map3d.tilt = 58;
     const routeDistance = Number.isFinite(distanceMeters) ? distanceMeters : distanceMetres(origin, destination);
     map3d.range = clamp(routeDistance * 0.75, 1200, 18000);
-    document.getElementById("viewSelect").value = "overview";
+    setViewSelectValue("overview");
   }
 
   function getRouteOrigin(){
@@ -731,7 +739,7 @@
   }
 
   function carOrientation(heading){
-    return { heading: normaliseHeading(heading), tilt: 270, roll: 90 };
+    return { heading: normaliseHeading(heading + 90), tilt: 270, roll: 90 };
   }
 
   function updateCar(point, heading){
@@ -783,7 +791,41 @@
     } else {
       map3d.tilt = 0; map3d.range = 1300; map3d.heading = 0; map3d.fov = 35;
     }
+    setViewSelectValue(mode);
     refreshViewSpecs();
+  }
+
+  const VIEW_LABELS = {
+    overview: "Route overview",
+    drive: "Driving view",
+    high: "Higher view",
+    top: "Top-down"
+  };
+
+  function setViewSelectValue(mode){
+    const btn = document.getElementById("viewSelectBtn");
+    if (btn) btn.textContent = VIEW_LABELS[mode] || VIEW_LABELS.drive;
+    closeViewSelectMenu();
+  }
+
+  function closeViewSelectMenu(){
+    const menu = document.getElementById("viewSelectMenu");
+    const btn = document.getElementById("viewSelectBtn");
+    if (menu) {
+      menu.hidden = true;
+      menu.classList.remove("open");
+    }
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleViewSelectMenu(){
+    const menu = document.getElementById("viewSelectMenu");
+    const btn = document.getElementById("viewSelectBtn");
+    if (!menu) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    menu.classList.toggle("open", open);
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
   let viewSpecTimer = null;
@@ -1022,6 +1064,7 @@
     if (!on) {
       hideViewSpecs();
       hideCarApiHud();
+      closeViewSelectMenu();
     }
     try {
       if (window.Car && typeof Car.setDebugOverlay === "function") Car.setDebugOverlay(!!on);
@@ -1072,7 +1115,18 @@
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
-  document.getElementById("viewSelect").addEventListener("change",event=>setView(event.target.value));
+  document.getElementById("viewSelectBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleViewSelectMenu();
+  });
+  document.getElementById("viewSelectMenu").addEventListener("click", event => {
+    const btn = event.target.closest("button[data-view]");
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setView(btn.dataset.view);
+  });
   document.getElementById("viewSpecBtn").addEventListener("click", toggleViewSpecs);
   document.getElementById("carApiBtn").addEventListener("click", event => {
     event.preventDefault();
@@ -1140,11 +1194,12 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker"));
   }
 
   let mapDragStart = null;
   window.addEventListener("pointerdown", event => {
+    if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
     if (isChromeUiTarget(event.target)) {
       mapDragStart = null;
       return;
