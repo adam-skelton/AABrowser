@@ -51,6 +51,7 @@
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
     html.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #buttonRow {opacity:0; pointer-events:none}
     html.aa-car.debug-open #buttonRow,body.aa-car.debug-open #buttonRow {opacity:1; pointer-events:auto; transform:none}
+    html:not(.aa-car) #carApiBtn,body:not(.aa-car) #carApiBtn {display:none}
     #viewSpecPanel {display:none; position:absolute; z-index:31; top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(10px,env(safe-area-inset-left)); width:176px; padding:6px; border-radius:12px; background:#1C1C1E; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.4); pointer-events:auto; gap:2px}
     body.view-specs #viewSpecPanel {display:grid}
     html.aa-car #viewSpecPanel,body.aa-car #viewSpecPanel {top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(12px,env(safe-area-inset-left)); right:auto; width:168px; bottom:auto}
@@ -83,6 +84,11 @@
     body:not(.map-ready) #carDebugBtn,
     body:not(.map-ready) #recenterBtn,
     body:not(.map-ready) #routeCard {visibility:hidden}
+    #carApiHud {display:none; position:absolute; z-index:45; left:50%; top:50%; transform:translate(-50%,-50%); min-width:140px; padding:14px 22px; border-radius:18px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.45); text-align:center; pointer-events:none}
+    #carApiHud.visible {display:grid; gap:2px}
+    html.aa-car:not(.debug-open) #carApiHud,body.aa-car:not(.debug-open) #carApiHud {display:none !important}
+    #carApiHud .car-api-label {font-size:13px; font-weight:650; opacity:.72}
+    #carApiHud .car-api-value {font-size:42px; font-weight:750; line-height:1.1; font-variant-numeric:tabular-nums}
     @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr)}button,select{font-size:14px}}
   </style>
 </head>
@@ -111,6 +117,7 @@
       <button id="demoBtn" type="button">Drive route demo</button>
       <button id="randomBtn" type="button">Random route</button>
       <button id="viewSpecBtn" type="button">View specs</button>
+      <button id="carApiBtn" type="button">API level</button>
       <select id="viewSelect" aria-label="Camera view">
         <option value="overview">Route overview</option>
         <option value="drive" selected>Driving view</option>
@@ -155,6 +162,10 @@
       <button type="button" data-spec="fov" data-dir="-" aria-label="Decrease field of view">−</button>
       <button type="button" data-spec="fov" data-dir="+" aria-label="Increase field of view">+</button>
     </div>
+  </div>
+  <div id="carApiHud" hidden>
+    <div class="car-api-label">Car API</div>
+    <div class="car-api-value" id="carApiValue">—</div>
   </div>
   <button id="carDebugBtn" type="button" aria-label="Debug">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.57-.2l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.5.5 0 0 0-.48-.38h-4.04a.5.5 0 0 0-.48.38l-.33 1.76c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.57.2L2.67 8.07c-.11.2-.07.46.12.61l2.03 1.58c-.05.3-.08.63-.08.95 0 .31.03.63.08.93l-2.03 1.59c-.18.14-.23.4-.12.6l1.92 3.32c.11.2.36.28.57.2l2.39-.96c.5.38 1.03.7 1.62.94l.33 1.76c.05.22.25.38.48.38h4.04c.23 0 .43-.16.48-.38l.33-1.76c.59-.24 1.13-.56 1.62-.94l2.39.96c.21.08.46 0 .57-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.03-1.59zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
@@ -870,6 +881,44 @@
     viewSpecTimer = null;
   }
 
+  function readCarApiLevel(){
+    try {
+      if (window.Car && typeof Car.getCarAppApiLevel === "function") {
+        const level = Number(Car.getCarAppApiLevel());
+        if (Number.isFinite(level)) return level;
+      }
+    } catch (err) {}
+    const injected = Number(window.__aaCarApiLevel);
+    return Number.isFinite(injected) ? injected : null;
+  }
+
+  function hideCarApiHud(){
+    const hud = document.getElementById("carApiHud");
+    const btn = document.getElementById("carApiBtn");
+    if (hud) {
+      hud.hidden = true;
+      hud.classList.remove("visible");
+    }
+    if (btn) btn.textContent = "API level";
+  }
+
+  function toggleCarApiHud(){
+    const hud = document.getElementById("carApiHud");
+    const valueEl = document.getElementById("carApiValue");
+    const btn = document.getElementById("carApiBtn");
+    if (!hud) return;
+    const open = hud.hidden;
+    if (!open) {
+      hideCarApiHud();
+      return;
+    }
+    const level = readCarApiLevel();
+    if (valueEl) valueEl.textContent = level == null ? "—" : String(level);
+    hud.hidden = false;
+    hud.classList.add("visible");
+    if (btn) btn.textContent = "Hide API";
+  }
+
   async function startRouteDemo(){
     if (demoTimer !== null) { stopDemo(); setMessage("Route demo stopped."); return; }
     if (!activeRoutePath || activeRoutePath.length < 2) {
@@ -970,7 +1019,10 @@
   window.__aaSetDebugOverlay = function(on){
     document.documentElement.classList.toggle("debug-open", !!on);
     document.body.classList.toggle("debug-open", !!on);
-    if (!on) hideViewSpecs();
+    if (!on) {
+      hideViewSpecs();
+      hideCarApiHud();
+    }
     try {
       if (window.Car && typeof Car.setDebugOverlay === "function") Car.setDebugOverlay(!!on);
     } catch (err) {}
@@ -1022,6 +1074,11 @@
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
   document.getElementById("viewSelect").addEventListener("change",event=>setView(event.target.value));
   document.getElementById("viewSpecBtn").addEventListener("click", toggleViewSpecs);
+  document.getElementById("carApiBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleCarApiHud();
+  });
   document.getElementById("specZoomIn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -1083,7 +1140,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud"));
   }
 
   let mapDragStart = null;

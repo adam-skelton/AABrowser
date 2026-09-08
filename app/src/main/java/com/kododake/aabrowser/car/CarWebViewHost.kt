@@ -53,7 +53,8 @@ class CarWebViewHost(
         },
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() },
-        notifyDebugOverlay = { visible -> debugOverlayVisible = visible }
+        notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
+        carApiLevel = carContext.carAppApiLevel
     )
 
     private var virtualDisplay: VirtualDisplay? = null
@@ -387,6 +388,10 @@ class CarWebViewHost(
         if (!surfaceBound || !view.isAttachedToWindow) return
         view.invalidate()
         view.evaluateJavascript(WAKE_MAP_JS, null)
+        view.evaluateJavascript(
+            "window.__aaCarApiLevel=${carContext.carAppApiLevel};",
+            null
+        )
         if (debugOverlayVisible) {
             view.evaluateJavascript(
                 "window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(true);",
