@@ -3,6 +3,11 @@ setlocal
 set "DHU=%~dp0..\Android\extras\google\auto\desktop-head-unit.exe"
 
 echo Installing APK...
+echo If this repo already matches origin, install starts immediately.
+echo If there are unpushed commits, they are pushed first, then the script
+echo waits 4 minutes so GitHub Actions can build the APK.
+echo Uncommitted files are left alone and will not be in this APK.
+echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-apk.ps1" %*
 if errorlevel 1 (
   echo Install failed.

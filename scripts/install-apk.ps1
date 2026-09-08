@@ -242,6 +242,70 @@ function Get-ApkFromArchive([string]$ZipPath) {
     return $apkPath
 }
 
+function Sync-RepoBeforeInstall {
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $git) {
+        Write-Host "git not found; skipping origin sync."
+        return
+    }
+
+    $previousError = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $inside = git -C $RepoRoot rev-parse --is-inside-work-tree 2>$null
+        if ($LASTEXITCODE -ne 0 -or "$inside".Trim() -ne "true") {
+            Write-Host "Not a git repo; skipping origin sync."
+            return
+        }
+
+        $dirty = git -C $RepoRoot status --porcelain
+        if ($dirty) {
+            Write-Host "Uncommitted files are present. They will NOT be committed or included in this APK."
+            Write-Host "Commit them yourself if you want them in the next build."
+        }
+
+        git -C $RepoRoot rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null | Out-Null
+        $hasUpstream = ($LASTEXITCODE -eq 0)
+        $ahead = 0
+        $branch = git -C $RepoRoot rev-parse --abbrev-ref HEAD
+        if ($hasUpstream) {
+            $ahead = [int](git -C $RepoRoot rev-list --count "@{u}..HEAD")
+        } else {
+            git -C $RepoRoot rev-parse --verify "origin/$branch" 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $ahead = [int](git -C $RepoRoot rev-list --count "origin/$branch..HEAD")
+            } else {
+                $ahead = 1
+            }
+        }
+
+        if ($ahead -eq 0) {
+            Write-Host "No unpushed commits. Starting install now."
+            return
+        }
+
+        Write-Host ("Found {0} unpushed commit(s) on {1}." -f $ahead, $branch)
+        Write-Host "Pushing $branch to origin..."
+        git -C $RepoRoot push -u origin HEAD
+        if ($LASTEXITCODE -ne 0) {
+            throw "git push failed. Fix origin auth and try again."
+        }
+    } finally {
+        $ErrorActionPreference = $previousError
+    }
+
+    Write-Host ""
+    Write-Host "Pushed to GitHub. The APK Action needs time to finish."
+    Write-Host "Waiting 4 minutes before downloading the APK..."
+    for ($left = 240; $left -gt 0; $left -= 30) {
+        $mins = [int][Math]::Floor($left / 60)
+        $secs = $left % 60
+        Write-Host ("  {0}:{1:D2} remaining (waiting for GitHub Actions APK build)" -f $mins, $secs)
+        Start-Sleep -Seconds ([Math]::Min(30, $left))
+    }
+    Write-Host "4-minute wait over. Downloading the new APK."
+}
+
 $adb = Find-Adb
 $serial = Get-ConnectedDevice $adb
 Write-Host "Device: $serial"
@@ -259,6 +323,7 @@ if ($Apk) {
         $Apk = $resolved
     }
 } else {
+    Sync-RepoBeforeInstall
     $Apk = Download-ApkFromGitHub
 }
 
