@@ -104,6 +104,9 @@
     #carModelOverlay.open {display:flex}
     html.aa-car:not(.debug-open) #carModelOverlay,body.aa-car:not(.debug-open) #carModelOverlay {display:none !important}
     #carModelCard {position:relative; width:min(78vw,760px); height:min(78vh,520px); border-radius:20px; background:#1C1C1E; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden; display:flex; flex-direction:column}
+    #carModelSwitch {display:flex; gap:6px; padding:12px 48px 0 14px; flex:0 0 auto}
+    #carModelSwitch button {flex:1; min-height:40px; background:#2E3134; color:#fff; box-shadow:none; font-size:14px}
+    #carModelSwitch button.active {background:#1A73E8}
     #carModelHost {flex:1; min-height:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; background:radial-gradient(ellipse at 50% 70%, #3a3e44 0%, #1C1C1E 70%)}
     #carModelHost model-viewer {width:100%; height:100%; --poster-color:transparent; touch-action:none}
     #carModelHint {padding:8px 14px; font-size:13px; font-weight:600; color:rgba(255,255,255,.7); text-align:center}
@@ -189,8 +192,12 @@
   <div id="carModelOverlay" hidden>
     <div id="carModelCard">
       <button id="carModelClose" type="button" aria-label="Close model viewer">&times;</button>
+      <div id="carModelSwitch">
+        <button type="button" data-model="forte">Kia Forte</button>
+        <button type="button" data-model="cerato">Kia Cerato</button>
+      </div>
       <div id="carModelHost"></div>
-      <div id="carModelHint">Kia Cerato 2021 · drag to rotate · pinch to zoom</div>
+      <div id="carModelHint">Kia Forte · drag to rotate · pinch to zoom</div>
     </div>
   </div>
   <div id="carApiHud" hidden>
@@ -225,9 +232,16 @@
   const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
-  // Bump the version when the GLB is regenerated so cached copies are replaced.
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
-  const CAR_MODEL_URL = new URL("cerato.glb", document.baseURI).href;
+  const CAR_MODELS = {
+    forte: { id: "forte", label: "Kia Forte", url: new URL("kia_forte.glb", document.baseURI).href },
+    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href }
+  };
+  let activeCarModelId = "forte";
+  try {
+    const saved = localStorage.getItem("aaCarModel");
+    if (saved && CAR_MODELS[saved]) activeCarModelId = saved;
+  } catch (err) {}
   // Keep a constant on-screen size: ~half a two-lane road at driving range.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.5;
@@ -330,6 +344,57 @@
     }
   };
 
+  function activeCarModel(){
+    return CAR_MODELS[activeCarModelId] || CAR_MODELS.forte;
+  }
+
+  function carModelUrl(){
+    return activeCarModel().url;
+  }
+
+  function currentCarPoint(){
+    if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)) {
+      return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
+    }
+    return { lat: AUCKLAND.lat, lng: AUCKLAND.lng };
+  }
+
+  function currentCarHeading(){
+    const heading = map3d && Number(map3d.heading);
+    return Number.isFinite(heading) ? heading : 0;
+  }
+
+  function syncCarModelSwitch(){
+    document.querySelectorAll("#carModelSwitch [data-model]").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.model === activeCarModelId);
+    });
+    const hint = document.getElementById("carModelHint");
+    if (hint) hint.textContent = activeCarModel().label + " · drag to rotate · pinch to zoom";
+  }
+
+  function setActiveCarModel(id){
+    if (!CAR_MODELS[id]) return;
+    const changed = id !== activeCarModelId;
+    activeCarModelId = id;
+    try { localStorage.setItem("aaCarModel", id); } catch (err) {}
+    syncCarModelSwitch();
+    const viewer = document.querySelector("#carModelHost model-viewer");
+    if (viewer) {
+      viewer.setAttribute("src", carModelUrl());
+      viewer.setAttribute("alt", activeCarModel().label);
+    }
+    if (!changed || !map3d) return;
+    const pos = currentCarPoint();
+    const heading = currentCarHeading();
+    if (userCar) {
+      try { userCar.remove(); } catch (err) {}
+      userCar = null;
+    }
+    carModelReady = false;
+    lastCarScale = 0;
+    attachUserCar(pos, heading);
+  }
+
   function carMapPosition(point){
     return { lat: point.lat, lng: point.lng, altitude: 0.12 };
   }
@@ -362,13 +427,15 @@
     applyCarScale();
   }
 
-  function attachUserCar(position){
+  function attachUserCar(position, heading){
     if (!Model3DElement || !map3d) return;
+    const h = Number.isFinite(heading) ? heading : 0;
+    const src = carModelUrl();
     try {
       userCar = new Model3DElement({
-        src: CAR_MODEL_URL,
+        src,
         position: carMapPosition(position),
-        orientation: carOrientation(0),
+        orientation: carOrientation(h),
         scale: CAR_BASE_SCALE,
         altitudeMode: "RELATIVE_TO_MESH"
       });
@@ -383,7 +450,7 @@
       userCar.addEventListener("gmp-load", revealModel);
       userCar.addEventListener("load", revealModel);
       userCar.addEventListener("gmp-error", () => {
-        console.error("3D car model failed to load", CAR_MODEL_URL);
+        console.error("3D car model failed to load", src);
         if (userCar) {
           userCar.remove();
           userCar = null;
@@ -396,8 +463,8 @@
       });
       map3d.append(userCar);
       // Re-apply after attach: some WebViews drop constructor options.
-      try { userCar.src = CAR_MODEL_URL; } catch (err) {}
-      applyCarPose(position, 0);
+      try { userCar.src = src; } catch (err) {}
+      applyCarPose(position, h);
       lastCarScale = 0;
       applyCarScale();
     } catch (err) {
@@ -1020,7 +1087,13 @@
     if (!overlay || !host) return;
     overlay.hidden = false;
     overlay.classList.add("open");
-    if (host.querySelector("model-viewer")) return;
+    syncCarModelSwitch();
+    const existing = host.querySelector("model-viewer");
+    if (existing) {
+      existing.setAttribute("src", carModelUrl());
+      existing.setAttribute("alt", activeCarModel().label);
+      return;
+    }
     host.textContent = "Loading 3D model…";
     try {
       await ensureModelViewer();
@@ -1030,8 +1103,8 @@
     }
     host.textContent = "";
     const viewer = document.createElement("model-viewer");
-    viewer.setAttribute("src", CAR_MODEL_URL);
-    viewer.setAttribute("alt", "Kia Cerato 2021 3D model");
+    viewer.setAttribute("src", carModelUrl());
+    viewer.setAttribute("alt", activeCarModel().label);
     viewer.setAttribute("camera-controls", "");
     viewer.setAttribute("auto-rotate", "");
     viewer.setAttribute("auto-rotate-delay", "1500");
@@ -1260,6 +1333,13 @@
     event.preventDefault();
     event.stopPropagation();
     openCarModelViewer();
+  });
+  document.getElementById("carModelSwitch").addEventListener("click", event => {
+    const btn = event.target.closest("button[data-model]");
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveCarModel(btn.dataset.model);
   });
   document.getElementById("carModelClose").addEventListener("click", event => {
     event.preventDefault();
