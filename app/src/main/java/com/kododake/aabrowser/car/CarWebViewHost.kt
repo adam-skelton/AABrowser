@@ -37,8 +37,7 @@ import com.kododake.aabrowser.web.releaseCompletely
 import org.json.JSONObject
 
 class CarWebViewHost(
-    private val context: Context,
-    private val carApiLevel: Int = (context as? CarContext)?.carAppApiLevel ?: 0
+    private val carContext: CarContext
 ) : SurfaceCallback {
 
     var inputFocusListener: ((String) -> Unit)? = null
@@ -56,7 +55,7 @@ class CarWebViewHost(
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
-        carApiLevel = carApiLevel
+        carApiLevel = carContext.carAppApiLevel
     )
 
     private var virtualDisplay: VirtualDisplay? = null
@@ -80,39 +79,11 @@ class CarWebViewHost(
     private var pendingJs: String? = null
 
     fun register() {
-        val carContext = context as? CarContext ?: return
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
     }
 
-    fun attachTo(container: ViewGroup) {
-        onMain {
-            val hosted = webView ?: createWebView(context).also { webView = it }
-            (hosted.parent as? ViewGroup)?.removeView(hosted)
-            container.addView(
-                hosted,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-            surfaceBound = true
-            resumeRenderer()
-            pendingJs?.let { script ->
-                hosted.evaluateJavascript(script, null)
-                pendingJs = null
-            }
-        }
-    }
-
-    fun goBack(onEmpty: (() -> Unit)? = null) {
-        onMain {
-            val view = webView
-            if (view != null && view.canGoBack()) {
-                view.goBack()
-            } else {
-                onEmpty?.invoke()
-            }
-        }
+    fun goBack() {
+        onMain { webView?.let { if (it.canGoBack()) it.goBack() } }
     }
 
     fun reload() {
@@ -147,10 +118,8 @@ class CarWebViewHost(
 
     fun destroy() {
         onMain {
-            (context as? CarContext)?.let { carContext ->
-                runCatching {
-                    carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
-                }
+            runCatching {
+                carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
             }
             stopAndroidLocation()
             releaseDisplay(destroyWebView = true)
@@ -285,13 +254,13 @@ class CarWebViewHost(
         surfaceHeight = height
         surfaceDpi = dpi
 
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val displayManager = carContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val createdDisplay = createVirtualDisplay(displayManager, width, height, dpi, surface)
             ?: return
         virtualDisplay = createdDisplay
 
         val carPresentation = Presentation(
-            context,
+            carContext,
             createdDisplay.display,
             android.R.style.Theme_Black_NoTitleBar_Fullscreen
         )
@@ -303,7 +272,7 @@ class CarWebViewHost(
         }
 
         val container = carPresentation.layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
-        val hosted = webView ?: createWebView(context).also { webView = it }
+        val hosted = webView ?: createWebView(carContext).also { webView = it }
         (hosted.parent as? ViewGroup)?.removeView(hosted)
         container.addView(
             hosted,
@@ -421,7 +390,7 @@ class CarWebViewHost(
         view.invalidate()
         view.evaluateJavascript(WAKE_MAP_JS, null)
         view.evaluateJavascript(
-            "window.__aaCarApiLevel=$carApiLevel;",
+            "window.__aaCarApiLevel=${carContext.carAppApiLevel};",
             null
         )
         if (debugOverlayVisible) {
@@ -435,16 +404,16 @@ class CarWebViewHost(
     private fun ensureAndroidLocation() {
         if (locationStarted) return
         val fine = ContextCompat.checkSelfPermission(
-            context,
+            carContext,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(
-            context,
+            carContext,
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) return
 
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val provider = when {
             manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -464,7 +433,7 @@ class CarWebViewHost(
 
     private fun stopAndroidLocation() {
         if (!locationStarted) return
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         runCatching { manager.removeUpdates(locationListener) }
         locationStarted = false
     }

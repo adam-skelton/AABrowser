@@ -58,9 +58,6 @@ import org.woheller69.freeDroidWarn.R as FreeDroidWarnR
 import android.car.Car
 import android.car.drivingstate.CarUxRestrictions
 import android.car.drivingstate.CarUxRestrictionsManager
-import android.content.res.Configuration
-import android.view.Display
-import com.kododake.aabrowser.car.CarWebViewHost
 
 class MainActivity : AppCompatActivity() {
 
@@ -94,14 +91,9 @@ class MainActivity : AppCompatActivity() {
     private var speechBridge: com.kododake.aabrowser.web.SpeechRecognitionBridge? = null
     private var carInstance: Any? = null
     private var uxRestrictionsManagerInstance: Any? = null
-    private var parkedWebHost: CarWebViewHost? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (isRunningOnCarDisplay()) {
-            setupParkedCarWebView()
-            return
-        }
         DynamicColors.applyToActivityIfAvailable(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -126,51 +118,32 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (!::binding.isInitialized) return
         extractBrowsableUrl(intent)?.let { loadUrlFromIntent(it) }
     }
 
     override fun onResume() {
         super.onResume()
-        parkedWebHost?.onForegrounded()
-        if (!::binding.isInitialized) return
         webView?.onResume()
         refreshBookmarks()
         syncUserAgentProfile()
     }
 
     override fun onPause() {
-        if (::binding.isInitialized) {
-            exitFullscreen()
-            webView?.onPause()
-        }
+        exitFullscreen()
+        webView?.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(autoHideMenuFab)
         handler.removeCallbacks(showMenuFabRunnable)
-        parkedWebHost?.destroy()
-        parkedWebHost = null
-        if (::binding.isInitialized) {
-            exitFullscreen()
-            speechBridge?.destroy()
-            speechBridge = null
-            binding.webView.releaseCompletely()
-            webView = null
-            runCatching { (carInstance as? Car)?.disconnect() }
-        }
+        exitFullscreen()
+        speechBridge?.destroy()
+        speechBridge = null
+        binding.webView.releaseCompletely()
+        webView = null
+        runCatching { (carInstance as? Car)?.disconnect() }
         super.onDestroy()
-    }
-
-    private fun isRunningOnCarDisplay(): Boolean {
-        if (intent.hasCategory("android.intent.category.CAR_LAUNCHER")) {
-            return true
-        }
-        val displayId = currentDisplayOrNull()?.displayId ?: Display.DEFAULT_DISPLAY
-        if (displayId != Display.DEFAULT_DISPLAY) return true
-        val uiMode = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
-        return uiMode == Configuration.UI_MODE_TYPE_CAR
     }
 
     @Suppress("DEPRECATION")
@@ -181,46 +154,6 @@ class MainActivity : AppCompatActivity() {
             windowManager.defaultDisplay
         }
     }
-
-    private fun setupParkedCarWebView() {
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
-        val container = layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
-        setContentView(
-            container,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-        WindowInsetsControllerCompat(window, container).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-        val host = CarWebViewHost(this)
-        parkedWebHost = host
-        host.attachTo(container)
-        requestParkedLocationIfNeeded()
-        onBackPressedDispatcher.addCallback(this) {
-            host.goBack(onEmpty = { finish() })
-        }
-    }
-
-    private fun requestParkedLocationIfNeeded() {
-        val needed = arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ).filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needed.isEmpty()) {
-            parkedWebHost?.startAndroidLocation()
-            return
-        }
-        ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_CODE_LOCATION)
-    }
-
     private fun setupCarRestrictions() {
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) return
         try {
@@ -472,10 +405,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_LOCATION) {
-            parkedWebHost?.startAndroidLocation()
-            return
-        }
         if (requestCode == REQUEST_CODE_RECORD_AUDIO) {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
 
@@ -1187,6 +1116,5 @@ class MainActivity : AppCompatActivity() {
         private const val FREE_DROID_WARN_VERSION_KEY = "versionCodeWarn"
         private const val REQUEST_CODE_POST_NOTIFICATIONS = 1101
         private const val REQUEST_CODE_RECORD_AUDIO = 1102
-        private const val REQUEST_CODE_LOCATION = 1103
     }
 }
