@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auckland 3D Route Demo</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#e8eef4; overflow:hidden}
-    #map {position:absolute; top:0; left:0; width:100%; height:105.263%; opacity:0; transition:opacity .7s ease}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:linear-gradient(180deg,#c8e3f8 0%,#eaf3fb 42%,#eef4e8 78%,#e4edd6 100%); overflow:hidden}
+    #map {position:absolute; top:0; left:0; width:100%; height:108.108%; opacity:0; transition:opacity .7s ease}
     body.map-ready #map {opacity:1}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#e8eef4; gap:22px; transition:opacity .6s ease, visibility .6s ease}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(ellipse 80% 55% at 50% 36%, #fff 0%, rgba(255,255,255,.55) 34%, transparent 68%), linear-gradient(180deg,#c8e3f8 0%,#eaf3fb 42%,#eef4e8 78%,#e4edd6 100%); gap:22px; transition:opacity .6s ease, visibility .6s ease}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.4))}
@@ -40,8 +40,9 @@
     #carDebugBtn {display:none; position:absolute; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:32; width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
     #carDebugBtn svg {width:22px; height:22px; fill:currentColor}
     body.debug-open #carDebugBtn {background:#1A73E8}
-    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; display:none; min-height:44px; padding:0 16px; border-radius:22px; font:inherit; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
-    #recenterBtn.visible {display:block}
+    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; display:none; align-items:center; gap:8px; min-height:44px; padding:0 16px 0 12px; border-radius:22px; font:inherit; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #recenterBtn.visible {display:flex}
+    #recenterBtn svg {width:16px; height:22px; display:block; flex:0 0 auto}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
@@ -211,7 +212,13 @@
     <div id="message">Loading Google 3D map...</div>
     <div><span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
   </div>
-  <button id="recenterBtn" type="button">Recenter</button>
+  <button id="recenterBtn" type="button">
+    <svg viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M24 0c11.6 0 21 9.2 21 20.6 0 14.4-21 35.4-21 35.4S3 35 3 20.6C3 9.2 12.4 0 24 0z" fill="#EA4335"/>
+      <circle cx="24" cy="21" r="8.5" fill="#fff"/>
+    </svg>
+    Re-center
+  </button>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -220,7 +227,7 @@
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Bump the version when the GLB is regenerated so cached copies are replaced.
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
-  const CAR_MODEL_URL = new URL("kia-cerato-2021.glb", document.baseURI).href;
+  const CAR_MODEL_URL = new URL("cerato.glb", document.baseURI).href;
   // Keep a constant on-screen size: ~half a two-lane road at driving range.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.5;
@@ -781,8 +788,9 @@
   }
 
   function carOrientation(heading){
-    // glTF Y-up / +Z nose → Maps 3D, matching Google's own model samples.
-    return { heading: normaliseHeading(heading), tilt: 270, roll: 90 };
+    // tilt/roll sits a Y-up glTF on the map; -90 yaw aims +Z (nose) along travel,
+    // not +X (right doors).
+    return { heading: normaliseHeading(heading - 90), tilt: 270, roll: 90 };
   }
 
   function updateCar(point, heading){

@@ -24,18 +24,18 @@ function addMaterial(name, color, metallic, roughness, emissive) {
 }
 
 const M = {
-  body: addMaterial("steel-grey-paint", [0.23, 0.24, 0.26, 1], 0.55, 0.33),
-  dark: addMaterial("black-trim", [0.018, 0.018, 0.02, 1], 0.15, 0.7),
-  glass: addMaterial("tinted-glass", [0.04, 0.055, 0.07, 1], 0.95, 0.05),
-  rubber: addMaterial("tyre", [0.012, 0.012, 0.012, 1], 0.0, 0.92),
-  chrome: addMaterial("chrome", [0.82, 0.83, 0.85, 1], 1.0, 0.12),
-  alloy: addMaterial("alloy-wheel", [0.66, 0.67, 0.69, 1], 0.9, 0.28),
-  lamp: addMaterial("headlamp", [0.86, 0.9, 0.95, 1], 0.7, 0.12, [0.32, 0.35, 0.4]),
-  drl: addMaterial("drl", [0.95, 0.97, 1, 1], 0.2, 0.3, [0.9, 0.92, 1]),
-  fog: addMaterial("fog-lamp", [0.9, 0.6, 0.15, 1], 0.3, 0.3, [0.7, 0.4, 0.05]),
-  tail: addMaterial("tail-lamp", [0.55, 0.02, 0.02, 1], 0.35, 0.25, [0.55, 0.02, 0.02]),
-  plate: addMaterial("number-plate", [0.92, 0.92, 0.9, 1], 0.05, 0.6),
-  indicator: addMaterial("indicator", [0.8, 0.5, 0.1, 1], 0.3, 0.3)
+  body: addMaterial("steel-grey-paint", [0.64, 0.67, 0.72, 1], 0.12, 0.42, [0.16, 0.17, 0.19]),
+  dark: addMaterial("black-trim", [0.16, 0.16, 0.18, 1], 0.04, 0.72, [0.03, 0.03, 0.035]),
+  glass: addMaterial("tinted-glass", [0.28, 0.36, 0.44, 1], 0.08, 0.28, [0.08, 0.1, 0.13]),
+  rubber: addMaterial("tyre", [0.12, 0.12, 0.12, 1], 0.0, 0.9, [0.02, 0.02, 0.02]),
+  chrome: addMaterial("chrome", [0.82, 0.84, 0.86, 1], 0.22, 0.32, [0.18, 0.18, 0.2]),
+  alloy: addMaterial("alloy-wheel", [0.62, 0.64, 0.66, 1], 0.18, 0.4, [0.1, 0.1, 0.11]),
+  lamp: addMaterial("headlamp", [0.92, 0.94, 0.97, 1], 0.15, 0.22, [0.45, 0.48, 0.52]),
+  drl: addMaterial("drl", [0.95, 0.97, 1, 1], 0.08, 0.3, [0.9, 0.92, 1]),
+  fog: addMaterial("fog-lamp", [0.95, 0.72, 0.28, 1], 0.08, 0.3, [0.7, 0.4, 0.05]),
+  tail: addMaterial("tail-lamp", [0.72, 0.12, 0.12, 1], 0.08, 0.28, [0.55, 0.04, 0.04]),
+  plate: addMaterial("number-plate", [0.94, 0.94, 0.9, 1], 0.02, 0.6, [0.12, 0.12, 0.1]),
+  indicator: addMaterial("indicator", [0.95, 0.7, 0.2, 1], 0.08, 0.3, [0.55, 0.32, 0.05])
 };
 
 // ------------------------------------------------------------ vector helpers
@@ -619,7 +619,7 @@ for (const [material, m] of meshes) {
 const bin = Buffer.concat(blobs.map((b) => Buffer.from(b.buffer, b.byteOffset, b.byteLength)));
 
 const jsonText = JSON.stringify({
-  asset: { version: "2.0", generator: "AABrowser Cerato stand-in v2" },
+  asset: { version: "2.0", generator: "AABrowser Cerato stand-in v3" },
   scene: 0,
   scenes: [{ nodes: [0] }],
   nodes,
@@ -644,6 +644,6 @@ binChunkHeader.writeUInt32LE(bin.length, 0);
 binChunkHeader.writeUInt32LE(0x004E4942, 4);
 
 const glb = Buffer.concat([header, jsonChunkHeader, jsonBuf, binChunkHeader, bin]);
-const out = join(dirname(fileURLToPath(import.meta.url)), "..", "pages", "kia-cerato-2021.glb");
+const out = join(dirname(fileURLToPath(import.meta.url)), "..", "pages", "cerato.glb");
 writeFileSync(out, glb);
 console.log(`Wrote ${out} (${glb.length} bytes, ${totalTriangles} triangles, ${gltfMeshes.length} materials)`);
