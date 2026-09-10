@@ -17,6 +17,7 @@ import android.os.Looper
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
+import android.view.Display
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
