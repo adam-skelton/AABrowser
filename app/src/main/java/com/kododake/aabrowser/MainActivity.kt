@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
 
         umamiTracker.trackEvent("app_open")
 
-        val disp = this.display
+        val disp = currentDisplayOrNull()
         val best = disp?.supportedModes?.maxWithOrNull(compareBy({ it.refreshRate }, { it.physicalWidth.toLong() * it.physicalHeight }))
         best?.let { mode ->
             val attrs = window.attributes
@@ -167,10 +167,19 @@ class MainActivity : AppCompatActivity() {
         if (intent.hasCategory("android.intent.category.CAR_LAUNCHER")) {
             return true
         }
-        val displayId = display?.displayId ?: Display.DEFAULT_DISPLAY
+        val displayId = currentDisplayOrNull()?.displayId ?: Display.DEFAULT_DISPLAY
         if (displayId != Display.DEFAULT_DISPLAY) return true
         val uiMode = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
         return uiMode == Configuration.UI_MODE_TYPE_CAR
+    }
+
+    @Suppress("DEPRECATION")
+    private fun currentDisplayOrNull(): Display? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            windowManager.defaultDisplay
+        }
     }
 
     private fun setupParkedCarWebView() {
