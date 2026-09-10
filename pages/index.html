@@ -6,15 +6,15 @@
   <title>Auckland 3D Route Demo</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#111; overflow:hidden}
-    #map {position:absolute; inset:0; width:100%; height:100%; opacity:0; transition:opacity .7s ease}
+    #map {position:absolute; top:0; left:0; width:100%; height:111.111%; opacity:0; transition:opacity .7s ease}
     body.map-ready #map {opacity:1}
-    #mapLoader {position:absolute; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111; gap:18px; transition:opacity .6s ease, visibility .6s ease}
+    #mapLoader {position:absolute; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111; gap:22px; transition:opacity .6s ease, visibility .6s ease}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
-    .gmaps-pin {position:relative; width:48px; height:64px; animation:gmapsBounce 1.1s ease-in-out infinite}
-    .gmaps-pin svg {width:48px; height:64px; display:block; filter:drop-shadow(0 8px 10px rgba(0,0,0,.4))}
-    .gmaps-pin::after {content:""; position:absolute; left:50%; top:34%; width:54px; height:54px; margin:-27px 0 0 -27px; border-radius:50%; background:rgba(234,67,53,.2); animation:gmapsRipple 1.4s ease-out infinite; z-index:-1}
-    .gmaps-shadow {width:28px; height:8px; border-radius:50%; background:rgba(0,0,0,.35); animation:gmapsShadow 1.1s ease-in-out infinite}
-    .gmaps-label {color:#fff; font-weight:650; letter-spacing:.2px; font-size:15px; opacity:.88}
+    .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
+    .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.4))}
+    .gmaps-pin::after {content:""; position:absolute; left:50%; top:34%; width:108px; height:108px; margin:-54px 0 0 -54px; border-radius:50%; background:rgba(234,67,53,.2); animation:gmapsRipple 1.4s ease-out infinite; z-index:-1}
+    .gmaps-shadow {width:48px; height:12px; border-radius:50%; background:rgba(0,0,0,.35); animation:gmapsShadow 1.1s ease-in-out infinite}
+    .gmaps-status {color:#fff; font-weight:650; letter-spacing:.2px; font-size:15px; opacity:.88; max-width:70%; text-align:center}
     @keyframes gmapsBounce {0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
     @keyframes gmapsShadow {0%,100%{transform:scale(1); opacity:.35}50%{transform:scale(.72); opacity:.18}}
     @keyframes gmapsRipple {0%{transform:scale(.5); opacity:.65}100%{transform:scale(1.75); opacity:0}}
@@ -81,12 +81,8 @@
     #routeTitle {margin-top:10px; font-size:15px; font-weight:600; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #routeGo {margin-top:12px; width:100%; min-height:44px; background:#1A73E8; color:#fff; box-shadow:none}
     #status {display:none}
-    #speedHud {position:absolute; left:max(8px,calc(env(safe-area-inset-left) - 4px)); bottom:max(10px,calc(env(safe-area-inset-bottom) - 2px)); z-index:33; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:4px; min-height:44px; min-width:0; width:max-content; padding:0 12px; border-radius:22px; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; font:inherit; font-weight:650; white-space:nowrap}
-    #speedValue,#speedUnit {display:inline; font-size:inherit; font-weight:650; line-height:1; letter-spacing:0}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
-    #speed {font-weight:750}
-    body:not(.map-ready) #speedHud,
     body:not(.map-ready) #carDebugBtn,
     body:not(.map-ready) #recenterBtn,
     body:not(.map-ready) #routeCard {visibility:hidden}
@@ -116,7 +112,7 @@
       </svg>
     </div>
     <div class="gmaps-shadow"></div>
-    <div class="gmaps-label">Google Maps</div>
+    <div class="gmaps-status" id="mapLoaderStatus" hidden></div>
   </div>
   <div id="chromeWake" aria-hidden="true"></div>
   <div id="topPanel">
@@ -205,13 +201,9 @@
   </div>
   <div id="status">
     <div id="message">Loading Google 3D map...</div>
-    <div><span id="speed">0 km/h</span> · <span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
+    <div><span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
   </div>
   <button id="recenterBtn" type="button">Recenter</button>
-  <div id="speedHud" aria-live="polite">
-    <span id="speedValue">0</span>
-    <span id="speedUnit">km/h</span>
-  </div>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -219,7 +211,7 @@
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Bump the version when the GLB is regenerated so cached copies are replaced.
-  const CAR_MODEL_URL = new URL("kia-cerato-2021.glb?v=4", document.baseURI).href;
+  const CAR_MODEL_URL = new URL("kia-cerato-2021.glb?v=5", document.baseURI).href;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -235,13 +227,10 @@
   let watchId = null, following = true, labelsOn = false, demoTimer = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
-  let lastGpsAt = 0;
   let currentView = "high";
   let carModelReady = false;
 
   const messageEl = document.getElementById("message");
-  const speedEl = document.getElementById("speed");
-  const speedValueEl = document.getElementById("speedValue");
   const coordsEl = document.getElementById("coords");
   const headingEl = document.getElementById("heading");
   const routeTitleEl = document.getElementById("routeTitle");
@@ -294,8 +283,6 @@
       map3d.style.height = "100%";
       document.getElementById("map").append(map3d);
 
-      userMarker = createCarPuck(AUCKLAND);
-      map3d.append(userMarker);
       attachUserCar(AUCKLAND);
 
       map3d.addEventListener("gmp-centerchange", () => {
@@ -323,7 +310,7 @@
         src: CAR_MODEL_URL,
         position: { lat: position.lat, lng: position.lng, altitude: 0 },
         orientation: carOrientation(0),
-        scale: 1.8,
+        scale: 1,
         altitudeMode: "CLAMP_TO_GROUND"
       });
       const revealModel = () => {
@@ -343,11 +330,19 @@
           userCar = null;
         }
         carModelReady = false;
+        if (!userMarker && Marker3DElement) {
+          userMarker = createCarPuck(position);
+          map3d.append(userMarker);
+        }
       });
       map3d.append(userCar);
     } catch (err) {
       console.error(err);
       userCar = null;
+      if (!userMarker && Marker3DElement) {
+        userMarker = createCarPuck(position);
+        map3d.append(userMarker);
+      }
     }
   }
 
@@ -654,7 +649,7 @@
     setView("drive");
     const here = currentGpsPoint || getRouteOrigin();
     const heading = Number(map3d.heading) || 0;
-    updateCar({ lat: here.lat, lng: here.lng, speed: currentGpsPoint && currentGpsPoint.speed || 0 }, heading);
+    updateCar({ lat: here.lat, lng: here.lng }, heading);
     updateRecenterButton();
     setMessage("Navigation started.");
   }
@@ -716,71 +711,20 @@
     if (!map3d || (!userMarker && !userCar)) return;
     const c = position.coords;
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
-    fix.speed = resolveSpeed(c.speed, fix);
     currentGpsPoint = fix;
     let heading = fix.heading;
     if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) heading = bearingDegrees(previousFix, fix);
     if (heading === null) heading = Number.isFinite(map3d.heading) ? map3d.heading : 0;
     updateCar(fix, heading);
     previousFix = fix;
-    lastGpsAt = Date.now();
     if (placeAutocomplete) {
       placeAutocomplete.locationBias = { radius: 50000, center: { lat: fix.lat, lng: fix.lng } };
     }
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
-  function resolveSpeed(reported, fix){
-    const now = Date.now();
-    const gpsSpeed = Number(reported);
-    if (Number.isFinite(gpsSpeed) && gpsSpeed >= 0.4) return gpsSpeed;
-    if (previousFix && lastGpsAt) {
-      const dt = (now - lastGpsAt) / 1000;
-      if (dt > 0.25 && dt < 5) {
-        const derived = distanceMetres(previousFix, fix) / dt;
-        if (derived >= 0.4 && derived < 55) return derived;
-      }
-    }
-    return Number.isFinite(gpsSpeed) && gpsSpeed >= 0 ? gpsSpeed : 0;
-  }
-
-  let displayedSpeedKmh = 0;
-  let speedPending = null;
-
-  function smoothDisplayedSpeed(rawMs){
-    const kmh = Math.max(0, (Number(rawMs) || 0) * 3.6);
-    const now = Date.now();
-    if (displayedSpeedKmh < 0.5) {
-      if (kmh >= 8) {
-        if (!speedPending || speedPending.target !== "up") speedPending = { target: "up", since: now };
-        if (now - speedPending.since >= 700) {
-          displayedSpeedKmh = kmh;
-          speedPending = null;
-        }
-      } else {
-        speedPending = null;
-      }
-    } else if (kmh <= 4) {
-      if (!speedPending || speedPending.target !== "down") speedPending = { target: "down", since: now };
-      if (now - speedPending.since >= 700) {
-        displayedSpeedKmh = 0;
-        speedPending = null;
-      }
-    } else {
-      speedPending = null;
-      displayedSpeedKmh = displayedSpeedKmh * 0.7 + kmh * 0.3;
-    }
-    return Math.round(displayedSpeedKmh);
-  }
-
-  function updateSpeedHud(speedMs){
-    const kmh = smoothDisplayedSpeed(speedMs);
-    if (speedValueEl) speedValueEl.textContent = String(kmh);
-    if (speedEl) speedEl.textContent = `${kmh} km/h`;
-  }
-
   function carOrientation(heading){
-    return { heading: normaliseHeading(heading + 90), tilt: 270, roll: 90 };
+    return { heading: normaliseHeading(heading), tilt: 270, roll: 90 };
   }
 
   function updateCar(point, heading){
@@ -800,7 +744,6 @@
       }
     }
     updateRecenterButton();
-    updateSpeedHud(point.speed);
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
     headingEl.textContent = `${Math.round(h)}°`;
   }
@@ -1103,7 +1046,7 @@
       while (remaining > 0) {
         if (index >= path.length - 1) {
           const last = path[path.length - 1];
-          updateCar({ lat: last.lat, lng: last.lng, speed: 0 }, Number(map3d.heading) || 0);
+          updateCar({ lat: last.lat, lng: last.lng }, Number(map3d.heading) || 0);
           stopDemo();
           setMessage("Demo arrived at destination.");
           return;
@@ -1122,7 +1065,7 @@
         remaining = 0;
         const t = distIntoSeg / segLen;
         updateCar(
-          { lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t), speed: DEMO_SPEED },
+          { lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) },
           bearingDegrees(p1, p2)
         );
       }
@@ -1211,7 +1154,6 @@
       coords: {
         latitude: Number(fix.lat),
         longitude: Number(fix.lng),
-        speed: (fix.speed == null || !Number.isFinite(Number(fix.speed))) ? NaN : Number(fix.speed),
         heading: Number.isFinite(Number(fix.heading)) ? Number(fix.heading) : null,
         accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0
       }
@@ -1376,8 +1318,11 @@
 
   function showMapFailure(text){
     setMessage(text);
-    const label = document.querySelector(".gmaps-label");
-    if (label) label.textContent = text;
+    const status = document.getElementById("mapLoaderStatus");
+    if (status) {
+      status.hidden = false;
+      status.textContent = text;
+    }
   }
 
   let mapRevealDone = false;
@@ -1390,7 +1335,7 @@
 
   function armMapReveal(){
     if (!map3d) {
-      window.setTimeout(revealMap, 1200);
+      window.setTimeout(revealMap, 4000);
       return;
     }
     let minTimeDone = false;
@@ -1401,14 +1346,16 @@
     window.setTimeout(() => {
       minTimeDone = true;
       maybeReveal();
-    }, 900);
+    }, 3200);
     const markSettled = () => {
-      cameraSettled = true;
-      maybeReveal();
+      window.setTimeout(() => {
+        cameraSettled = true;
+        maybeReveal();
+      }, 2200);
     };
     map3d.addEventListener("gmp-steadycamerachange", markSettled, { once: true });
-    map3d.addEventListener("gmp-centerchange", () => window.setTimeout(markSettled, 1600), { once: true });
-    window.setTimeout(revealMap, 5000);
+    map3d.addEventListener("gmp-centerchange", () => window.setTimeout(markSettled, 2800), { once: true });
+    window.setTimeout(revealMap, 12000);
   }
 
   function mapsKeyIsMissing(key){
