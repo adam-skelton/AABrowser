@@ -55,7 +55,7 @@ class CarWebViewHost(
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
-        carApiLevel = carContext.carAppApiLevel
+        resolveCarApiLevel = ::resolvedCarApiLevel
     )
 
     private var virtualDisplay: VirtualDisplay? = null
@@ -155,6 +155,10 @@ class CarWebViewHost(
 
     fun startAndroidLocation() {
         onMain { ensureAndroidLocation() }
+    }
+
+    private fun resolvedCarApiLevel(): Int {
+        return runCatching { carContext.carAppApiLevel }.getOrDefault(0)
     }
 
     fun onForegrounded() {
@@ -390,7 +394,7 @@ class CarWebViewHost(
         view.invalidate()
         view.evaluateJavascript(WAKE_MAP_JS, null)
         view.evaluateJavascript(
-            "window.__aaCarApiLevel=${carContext.carAppApiLevel};",
+            "window.__aaCarApiLevel=${resolvedCarApiLevel()};",
             null
         )
         if (debugOverlayVisible) {

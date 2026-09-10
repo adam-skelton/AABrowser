@@ -9,7 +9,7 @@ class CarJsBridge(
     private val requestOpenKeyboard: () -> Unit,
     private val requestGoBack: () -> Unit,
     private val notifyDebugOverlay: (Boolean) -> Unit,
-    private val carApiLevel: Int
+    private val resolveCarApiLevel: () -> Int
 ) {
     @JavascriptInterface
     fun onInputFocused(value: String?) {
@@ -41,6 +41,6 @@ class CarJsBridge(
 
     @JavascriptInterface
     fun getCarAppApiLevel(): Int {
-        return carApiLevel
+        return resolveCarApiLevel().coerceAtLeast(0)
     }
 }
