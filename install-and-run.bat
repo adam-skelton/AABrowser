@@ -33,5 +33,4 @@ if not exist "%DHU%" (
 
 start "" "%DHU%"
 echo DHU launched.
-pause
 exit /b 0
