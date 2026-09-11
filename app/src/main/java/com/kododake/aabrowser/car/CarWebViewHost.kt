@@ -588,6 +588,17 @@ class CarWebViewHost(
         private const val VIRTUAL_DISPLAY_NAME = "aa-browser-map"
         const val START_URL = "https://adam-skelton.github.io/AABrowser/"
         const val BRIDGE_NAME = "Car"
+
+        fun isCarMapUrl(url: String?): Boolean {
+            if (url.isNullOrBlank()) return false
+            return url.startsWith(START_URL, ignoreCase = true) ||
+                url.contains("github.io/AABrowser", ignoreCase = true)
+        }
+
+        fun applyCarChrome(webView: WebView, apiLevel: Int = 0) {
+            webView.evaluateJavascript(WAKE_MAP_JS, null)
+            webView.evaluateJavascript("window.__aaCarApiLevel=$apiLevel;", null)
+        }
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L
         private const val DRAG_END_DELAY_MS = 90L

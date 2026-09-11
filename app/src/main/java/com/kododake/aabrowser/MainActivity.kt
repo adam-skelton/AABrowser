@@ -29,6 +29,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
 import com.kododake.aabrowser.analytics.UmamiTracker
+import com.kododake.aabrowser.car.CarJsBridge
+import com.kododake.aabrowser.car.CarWebViewHost
 import com.google.android.material.color.DynamicColors
 import androidx.activity.addCallback
 import androidx.core.app.ActivityCompat
@@ -112,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         setupUi()
         setupBackPressHandling()
         ensureNotificationPermissionIfNeeded()
+        ensureLocationPermissionIfNeeded()
         showFreeDroidWarnOnUpgradeMaterial()
         setupCarRestrictions()
     }
@@ -193,6 +196,17 @@ class MainActivity : AppCompatActivity() {
         val typedValue = TypedValue()
         theme.resolveAttribute(attrRes, typedValue, true)
         return typedValue.data
+    }
+
+    private fun ensureLocationPermissionIfNeeded() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) return
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+            REQUEST_CODE_LOCATION
+        )
     }
 
     private fun ensureNotificationPermissionIfNeeded() {
@@ -424,6 +438,31 @@ class MainActivity : AppCompatActivity() {
                 speechBridge?.onPermissionResult(granted)
             }
         }
+        if (requestCode == REQUEST_CODE_LOCATION) {
+            val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            if (granted && CarWebViewHost.isCarMapUrl(currentUrl)) {
+                webView?.evaluateJavascript(
+                    "(function(){ try { if (typeof startGps === 'function') startGps(); } catch (err) {} })();",
+                    null
+                )
+            }
+        }
+    }
+
+    private fun applyCarPreviewIfNeeded(url: String?) {
+        if (!CarWebViewHost.isCarMapUrl(url)) return
+        val view = webView ?: return
+        CarWebViewHost.applyCarChrome(view)
+        handler.postDelayed({
+            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
+                webView?.let { CarWebViewHost.applyCarChrome(it) }
+            }
+        }, 120L)
+        handler.postDelayed({
+            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
+                webView?.let { CarWebViewHost.applyCarChrome(it) }
+            }
+        }, 400L)
     }
 
     private fun showFreeDroidWarnOnUpgradeMaterial() {
@@ -468,9 +507,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupUi() {
         val intentUrl = extractBrowsableUrl(intent)
-        val initialUrl = intentUrl ?: BrowserPreferences.resolveInitialUrl(this)
+        val initialUrl = intentUrl ?: CarWebViewHost.START_URL
         currentUrl = initialUrl
-        val desktopMode = BrowserPreferences.shouldUseDesktopMode(this)
+        val desktopMode = if (intentUrl == null) {
+            true
+        } else {
+            BrowserPreferences.shouldUseDesktopMode(this)
+        }
         currentUserAgentProfile = BrowserPreferences.getUserAgentProfile(this)
 
         binding.menuFab.hide()
@@ -486,6 +529,7 @@ class MainActivity : AppCompatActivity() {
                     BrowserPreferences.persistUrl(this, url)
                     updateNavigationButtons()
                     updateConnectionSecurityIcon(url)
+                    applyCarPreviewIfNeeded(url)
                 }
             },
             onTitleChange = { title ->
@@ -562,6 +606,18 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { runCatching { openUriExternally(Uri.parse(url)) } }
                 }
             }, "Android")
+            view.addJavascriptInterface(
+                CarJsBridge(
+                    onMain = { block -> runOnUiThread(block) },
+                    notifyInputFocused = {},
+                    notifySearchSuggestions = { _, _ -> },
+                    requestOpenKeyboard = {},
+                    requestGoBack = { runOnUiThread { webView?.goBack() } },
+                    notifyDebugOverlay = {},
+                    resolveCarApiLevel = { 0 }
+                ),
+                CarWebViewHost.BRIDGE_NAME
+            )
 
             view.setOnTouchListener { _, _ ->
                 showMenuButtonTemporarily()
@@ -1117,5 +1173,6 @@ class MainActivity : AppCompatActivity() {
         private const val FREE_DROID_WARN_VERSION_KEY = "versionCodeWarn"
         private const val REQUEST_CODE_POST_NOTIFICATIONS = 1101
         private const val REQUEST_CODE_RECORD_AUDIO = 1102
+        private const val REQUEST_CODE_LOCATION = 1103
     }
 }
