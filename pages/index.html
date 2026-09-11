@@ -263,6 +263,7 @@
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
+  const MODEL_ALTITUDE_MODE = "CLAMP_TO_GROUND";
   const USE_HEADING_ARROW = false;
   const CAR_ARROW_RANGE = 240;
   const CAR_ARROW_RANGE_IN = 175;
@@ -273,6 +274,7 @@
   let usingArrow = false;
   let lastCarHeading = 0;
   let lastCarPoint = null;
+  let followAlt = null;
   let recenterAnim = 0;
   const RECENTER_MS = 2500;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
@@ -552,7 +554,7 @@
         position: carMapPosition(position),
         orientation: arrowOrientation(Number.isFinite(heading) ? heading : 0),
         scale,
-        altitudeMode: "RELATIVE_TO_MESH"
+        altitudeMode: MODEL_ALTITUDE_MODE
       });
       map3d.append(userArrow);
       try { userArrow.src = HEADING_ARROW_URL; } catch (err) {}
@@ -633,7 +635,7 @@
         position: carMapPosition(position),
         orientation: carOrientation(h),
         scale,
-        altitudeMode: "RELATIVE_TO_MESH"
+        altitudeMode: MODEL_ALTITUDE_MODE
       });
       const revealModel = () => {
         carModelReady = true;
@@ -898,7 +900,7 @@
       outerColor: "#FFFFFF",
       strokeWidth: 9,
       outerWidth: 0.35,
-      altitudeMode: "RELATIVE_TO_MESH",
+      altitudeMode: MODEL_ALTITUDE_MODE,
       drawsOccludedSegments: true,
       zIndex: 20
     });
@@ -1074,6 +1076,7 @@
 
   function updateCar(point, heading){
     const pos = { lat: point.lat, lng: point.lng };
+    if (lastCarPoint && distanceMetres(lastCarPoint, pos) > 250) followAlt = null;
     const h = normaliseHeading(heading);
     if (userMarker) userMarker.position = pos;
     applyCarPose(pos, h);
@@ -1552,13 +1555,30 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
+  function stableFollowAltitude(){
+    const raw = Number(readMapCenter().altitude);
+    if (!Number.isFinite(raw) || raw < 0) return followAlt;
+    if (followAlt == null || !Number.isFinite(followAlt)) {
+      followAlt = raw;
+      return followAlt;
+    }
+    const delta = raw - followAlt;
+    // Photogrammetry cars/buses are sudden 1–4 m spikes; real terrain changes slowly.
+    if (Math.abs(delta) >= 0.9) {
+      followAlt += Math.sign(delta) * 0.04;
+      return followAlt;
+    }
+    followAlt += delta * 0.2;
+    return followAlt;
+  }
+
   function followCenter(point, heading){
     const h = Number.isFinite(heading) ? heading : lastCarHeading;
     const look = (currentView === "drive" || document.body.classList.contains("navigating"))
       ? lookAhead(point, h, 12)
       : { lat: point.lat, lng: point.lng };
-    const alt = readMapCenter().altitude;
     const center = { lat: look.lat, lng: look.lng };
+    const alt = stableFollowAltitude();
     if (Number.isFinite(alt) && alt > 0) center.altitude = alt;
     return center;
   }
@@ -1605,11 +1625,14 @@
       const to = followCenter(point, heading);
       const t = clamp((now - started) / RECENTER_MS, 0, 1);
       const e = easeOutQuart(t);
-      map3d.center = {
+      const nextCenter = {
         lat: lerp(from.lat, to.lat, e),
-        lng: lerp(from.lng, to.lng, e),
-        altitude: lerp(from.altitude || 0, 0, e)
+        lng: lerp(from.lng, to.lng, e)
       };
+      if (Number.isFinite(to.altitude)) {
+        nextCenter.altitude = lerp(from.altitude || to.altitude, to.altitude, e);
+      }
+      map3d.center = nextCenter;
       map3d.heading = lerpHeading(fromHeading, heading, e);
       map3d.range = lerp(fromRange, CAR_REF_RANGE, e);
       map3d.tilt = lerp(fromTilt, CAR_REF_TILT, e);

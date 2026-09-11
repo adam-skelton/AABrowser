@@ -113,6 +113,14 @@ fun configureWebView(
                 return true
             }
 
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest
+            ): WebResourceResponse? {
+                return MapModelAssets.intercept(view.context, request)
+                    ?: super.shouldInterceptRequest(view, request)
+            }
+
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 val stringUrl = url ?: return

@@ -67,6 +67,16 @@ android {
         viewBinding = true
     }
 
+    androidResources {
+        noCompress += "glb"
+    }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(layout.buildDirectory.dir("generated/mapModels"))
+        }
+    }
+
     androidComponents {
         onVariants { variant ->
             val vNameStr = android.defaultConfig.versionName ?: "unknown"
@@ -93,6 +103,17 @@ android {
             }
         }
     }
+}
+
+val copyMapModels by tasks.registering(Copy::class) {
+    from(rootProject.layout.projectDirectory.dir("pages")) {
+        include("forte.glb", "cerato.glb", "forte-preview.glb", "heading-arrow.glb")
+    }
+    into(layout.buildDirectory.dir("generated/mapModels/models"))
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(copyMapModels)
 }
 
 tasks.withType<KotlinJvmCompile>().configureEach {
