@@ -176,6 +176,8 @@ class MainActivity : AppCompatActivity() {
                     currentUrl = url
                     if (CarWebViewHost.isCarMapUrl(url)) {
                         applyCarPreview(url)
+                    } else {
+                        dismissMapBootOverlay()
                     }
                 }
             },
@@ -214,12 +216,23 @@ class MainActivity : AppCompatActivity() {
                     requestOpenKeyboard = {},
                     requestGoBack = { runOnUiThread { webView?.goBack() } },
                     notifyDebugOverlay = {},
+                    notifyMapReady = { dismissMapBootOverlay() },
                     resolveCarApiLevel = { 0 }
                 ),
                 CarWebViewHost.BRIDGE_NAME
             )
             view.loadUrl(initialUrl)
         }
+    }
+
+    private fun dismissMapBootOverlay() {
+        val overlay = binding.mapBootOverlay
+        if (overlay.visibility != View.VISIBLE) return
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(280L)
+            .withEndAction { overlay.visibility = View.GONE }
+            .start()
     }
 
     private fun applyCarPreview(url: String?) {

@@ -9,6 +9,7 @@ class CarJsBridge(
     private val requestOpenKeyboard: () -> Unit,
     private val requestGoBack: () -> Unit,
     private val notifyDebugOverlay: (Boolean) -> Unit,
+    private val notifyMapReady: () -> Unit = {},
     private val resolveCarApiLevel: () -> Int
 ) {
     @JavascriptInterface
@@ -37,6 +38,11 @@ class CarJsBridge(
     @JavascriptInterface
     fun setDebugOverlay(visible: Boolean) {
         onMain { notifyDebugOverlay(visible) }
+    }
+
+    @JavascriptInterface
+    fun mapReady() {
+        onMain { notifyMapReady() }
     }
 
     @JavascriptInterface

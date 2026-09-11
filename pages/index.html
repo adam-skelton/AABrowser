@@ -6,8 +6,8 @@
   <title>Auckland 3D Route Demo</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#000; overflow:hidden}
-    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; gap:22px; transition:opacity .45s ease, visibility .45s ease}
+    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); isolation:isolate}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; opacity:.99; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45))}
@@ -17,7 +17,7 @@
     @keyframes gmapsBounce {0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
     @keyframes gmapsShadow {0%,100%{transform:scale(1); opacity:.35}50%{transform:scale(.72); opacity:.18}}
     @keyframes gmapsRipple {0%{transform:scale(.5); opacity:.65}100%{transform:scale(1.75); opacity:0}}
-    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block}
+    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block; transform:translate3d(0,0,0); will-change:contents}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#routeCard,#carDebugBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch}
@@ -262,7 +262,7 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
-  const CAR_MAX_SCALE = 2.8;
+  const CAR_MAX_SCALE = CAR_BASE_SCALE * 2;
   const USE_HEADING_ARROW = false;
   const CAR_ARROW_RANGE = 240;
   const CAR_ARROW_RANGE_IN = 175;
@@ -1476,7 +1476,7 @@
     clearNavigation();
     following = true;
     document.getElementById("followBtn").textContent = "Following: ON";
-    setView("high");
+    setView("drive");
     demoKind = "free";
     demoActive = true;
     document.getElementById("freeFollowBtn").textContent = "Stop free follow";
@@ -1831,6 +1831,9 @@
       setupAutocomplete(PlaceAutocompleteClass);
     }
     startGps();
+    try {
+      if (window.Car && typeof Car.mapReady === "function") Car.mapReady();
+    } catch (err) {}
   }
 
   function armMapReveal(){
@@ -1838,7 +1841,23 @@
       revealMap();
       return;
     }
-    window.setTimeout(revealMap, 8000);
+    let pokeTimer = 0;
+    const pokeMap = () => {
+      if (mapRevealDone) return;
+      try {
+        window.dispatchEvent(new Event("resize"));
+        if (map3d) {
+          const heading = Number(map3d.heading);
+          if (Number.isFinite(heading)) map3d.heading = heading;
+        }
+      } catch (err) {}
+      pokeTimer = window.setTimeout(pokeMap, 280);
+    };
+    pokeMap();
+    window.setTimeout(() => {
+      window.clearTimeout(pokeTimer);
+      revealMap();
+    }, 8000);
   }
 
   function mapsKeyIsMissing(key){

@@ -13,7 +13,7 @@ from scipy.ndimage import binary_dilation
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "pages" / "forte.glb"
 DST = ROOT / "pages" / "forte.glb"
-BODY_GREY = np.array([46.0, 48.0, 51.0], dtype=np.float32)
+BODY_GREY = np.array([96.0, 100.0, 106.0], dtype=np.float32)
 SILVER = np.array([178.0, 182.0, 188.0], dtype=np.float32)
 
 
@@ -67,10 +67,11 @@ def recolor(png: bytes) -> bytes:
 
     spokes = (luma > 72) & (sat < 0.22) & (np.abs(r - g) < 20) & (np.abs(r - b) < 22)
     wheel = binary_dilation(spokes, iterations=22)
+    glass = (b > r + 10) & (b > g + 6)
 
-    dark_paint = (luma < 24) & (sat < 0.22) & ~wheel
-    t = np.clip((24.0 - luma[dark_paint]) / 24.0, 0.45, 1.0)
-    rgb[dark_paint] = rgb[dark_paint] * (1.0 - t)[..., None] + BODY_GREY * t[..., None]
+    paint = (sat < 0.24) & (luma < 82) & ~wheel & ~glass
+    t = np.clip((82.0 - luma[paint]) / 82.0, 0.58, 0.88)
+    rgb[paint] = rgb[paint] * (1.0 - t)[..., None] + BODY_GREY * t[..., None]
 
     red = (r > 48) & (r > g * 1.08) & (r > b * 1.05) & (g < 170)
     lamp_core = binary_dilation((luma > 155) & (r > 140), iterations=7)

@@ -55,6 +55,7 @@ class CarWebViewHost(
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
+        notifyMapReady = { dismissBootOverlay() },
         resolveCarApiLevel = ::resolvedCarApiLevel
     )
 
@@ -77,6 +78,8 @@ class CarWebViewHost(
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
+    private var bootOverlay: View? = null
+    private var bootOverlayDismissed = false
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -285,6 +288,21 @@ class CarWebViewHost(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+        if (!bootOverlayDismissed) {
+            val overlay = carPresentation.layoutInflater.inflate(
+                R.layout.view_map_boot_overlay,
+                container,
+                false
+            )
+            container.addView(
+                overlay,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+            bootOverlay = overlay
+        }
 
         try {
             carPresentation.setContentView(container)
@@ -388,6 +406,20 @@ class CarWebViewHost(
         mainHandler.postDelayed(wakeRendererRunnable, 400L)
     }
 
+    private fun dismissBootOverlay() {
+        bootOverlayDismissed = true
+        val overlay = bootOverlay ?: return
+        bootOverlay = null
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(280L)
+            .withEndAction {
+                overlay.visibility = View.GONE
+                (overlay.parent as? ViewGroup)?.removeView(overlay)
+            }
+            .start()
+    }
+
     private fun wakeRenderer() {
         val view = webView ?: return
         if (!surfaceBound || !view.isAttachedToWindow) return
@@ -465,7 +497,9 @@ class CarWebViewHost(
             hosted.removeJavascriptInterface(BRIDGE_NAME)
             hosted.releaseCompletely()
             webView = null
+            bootOverlayDismissed = false
         }
+        bootOverlay = null
     }
 
     private fun dispatchClick(x: Float, y: Float) {
