@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auckland 3D Route Demo</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:linear-gradient(180deg,#c8e3f8 0%,#eaf3fb 42%,#eef4e8 78%,#e4edd6 100%); overflow:hidden}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#D7E4EE; overflow:hidden}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(ellipse 80% 55% at 50% 36%, #fff 0%, rgba(255,255,255,.72) 34%, rgba(234,243,251,.96) 68%), linear-gradient(180deg,#c8e3f8 0%,#eaf3fb 42%,#eef4e8 78%,#e4edd6 100%); gap:22px; transition:opacity .45s ease, visibility .45s ease}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background-color:#D7E4EE; gap:22px; transition:opacity .45s ease, visibility .45s ease}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.4))}
@@ -233,9 +233,12 @@
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
+  function modelFileUrl(file){
+    return new URL(file, new URL("./", document.baseURI)).href;
+  }
   const CAR_MODELS = {
-    forte: { id: "forte", label: "Kia Forte", url: new URL("forte.glb", document.baseURI).href, orbit: "0deg 75deg 8m", target: "0m 0.75m 0m", yawOffset: 90 },
-    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href, orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: -90 }
+    forte: { id: "forte", label: "Kia Forte", url: modelFileUrl("forte.glb"), previewUrl: modelFileUrl("forte-preview.glb"), orbit: "0deg 75deg 8m", target: "0m 0.75m 0m", yawOffset: 90 },
+    cerato: { id: "cerato", label: "Kia Cerato 2021", url: modelFileUrl("cerato.glb"), orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: -90 }
   };
   let activeCarModelId = "forte";
   try {
@@ -253,6 +256,8 @@
   let lastCarScale = 0;
   let usingArrow = false;
   let lastCarHeading = 0;
+  let recenterAnim = 0;
+  const RECENTER_MS = 2500;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -412,7 +417,7 @@
   }
 
   function carMapPosition(point){
-    return { lat: point.lat, lng: point.lng, altitude: 0.12 };
+    return { lat: point.lat, lng: point.lng, altitude: 0 };
   }
 
   function carScaleForCamera(){
@@ -776,7 +781,7 @@
       outerColor: "#FFFFFF",
       strokeWidth: 9,
       outerWidth: 0.35,
-      altitudeMode: "CLAMP_TO_GROUND",
+      altitudeMode: "RELATIVE_TO_MESH",
       drawsOccludedSegments: true,
       zIndex: 20
     });
@@ -936,13 +941,9 @@
     applyCarPose(pos, h);
     setArrowRotation(h);
     syncCarLod();
-    if (following) {
+    if (following && !isRecentering()) {
       map3d.heading = h;
-      if (currentView === "drive" || document.body.classList.contains("navigating")) {
-        map3d.center = lookAhead(pos, h, 12);
-      } else {
-        map3d.center = pos;
-      }
+      map3d.center = followCenter(pos, h);
     }
     updateRecenterButton();
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
@@ -1141,10 +1142,13 @@
         const script = document.createElement("script");
         script.type = "module";
         script.src = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js";
-        script.onload = () => resolve();
         script.onerror = () => {
           modelViewerLoading = null;
           reject(new Error("model-viewer failed to load"));
+        };
+        script.onload = () => {
+          if (customElements.get("model-viewer")) resolve();
+          else customElements.whenDefined("model-viewer").then(resolve, reject);
         };
         document.head.append(script);
       });
@@ -1152,9 +1156,10 @@
     return modelViewerLoading;
   }
 
-  function applyViewerModel(viewer){
+  function applyViewerModel(viewer, usePreview){
     const model = activeCarModel();
-    viewer.setAttribute("src", model.url);
+    const src = (usePreview && model.previewUrl) ? model.previewUrl : model.url;
+    viewer.setAttribute("src", src);
     viewer.setAttribute("alt", model.label);
     viewer.setAttribute("camera-orbit", model.orbit || "0deg 75deg 8m");
     viewer.setAttribute("camera-target", model.target || "0m 0.7m 0m");
@@ -1168,15 +1173,12 @@
   async function openCarModelViewer(){
     const overlay = document.getElementById("carModelOverlay");
     const host = document.getElementById("carModelHost");
+    const hint = document.getElementById("carModelHint");
     if (!overlay || !host) return;
     overlay.hidden = false;
     overlay.classList.add("open");
     syncCarModelSwitch();
-    const existing = host.querySelector("model-viewer");
-    if (existing) {
-      applyViewerModel(existing);
-      return;
-    }
+    host.querySelector("model-viewer")?.remove();
     host.textContent = "Loading 3D model…";
     try {
       await ensureModelViewer();
@@ -1194,10 +1196,17 @@
     viewer.setAttribute("exposure", "1.15");
     viewer.setAttribute("loading", "eager");
     viewer.setAttribute("reveal", "auto");
+    viewer.setAttribute("crossorigin", "anonymous");
+    let usedPreview = false;
     viewer.addEventListener("error", () => {
-      host.textContent = "Could not display this 3D model.";
+      if (!usedPreview && activeCarModel().previewUrl) {
+        usedPreview = true;
+        applyViewerModel(viewer, true);
+        return;
+      }
+      if (hint) hint.textContent = "Could not display this 3D model.";
     });
-    applyViewerModel(viewer);
+    applyViewerModel(viewer, false);
     host.append(viewer);
   }
 
@@ -1321,6 +1330,70 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
+  function followCenter(point, heading){
+    const h = Number.isFinite(heading) ? heading : lastCarHeading;
+    if (currentView === "drive" || document.body.classList.contains("navigating")) {
+      return lookAhead(point, h, 12);
+    }
+    return { lat: point.lat, lng: point.lng };
+  }
+
+  function isRecentering(){
+    return !!recenterAnim;
+  }
+
+  function stopRecenterAnimation(){
+    if (recenterAnim) {
+      cancelAnimationFrame(recenterAnim);
+      recenterAnim = 0;
+    }
+  }
+
+  function easeOutQuart(t){
+    const u = 1 - clamp(t, 0, 1);
+    return 1 - u * u * u * u;
+  }
+
+  function lerpHeading(a, b, t){
+    const d = ((b - a + 540) % 360) - 180;
+    return normaliseHeading(a + d * t);
+  }
+
+  function animateRecenterToCar(){
+    if (!map3d) return;
+    const from = readMapCenter();
+    const fromHeading = Number(map3d.heading) || 0;
+    stopRecenterAnimation();
+    following = true;
+    const followBtn = document.getElementById("followBtn");
+    if (followBtn) followBtn.textContent = "Following: ON";
+    startGps();
+    const started = performance.now();
+    const step = (now) => {
+      const point = currentCarPoint();
+      const heading = Number.isFinite(lastCarHeading) ? lastCarHeading : currentCarHeading();
+      const to = followCenter(point, heading);
+      const t = clamp((now - started) / RECENTER_MS, 0, 1);
+      const e = easeOutQuart(t);
+      map3d.center = {
+        lat: lerp(from.lat, to.lat, e),
+        lng: lerp(from.lng, to.lng, e),
+        altitude: lerp(from.altitude || 0, 0, e)
+      };
+      map3d.heading = lerpHeading(fromHeading, heading, e);
+      if (t < 1) {
+        recenterAnim = requestAnimationFrame(step);
+      } else {
+        recenterAnim = 0;
+        map3d.center = to;
+        map3d.heading = heading;
+        updateRecenterButton();
+      }
+    };
+    recenterAnim = requestAnimationFrame(step);
+    updateRecenterButton();
+  }
+
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
     const range = Number(map3d.range) || 260;
@@ -1330,11 +1403,7 @@
     refreshViewSpecs();
   };
   window.__aaRecenter = function(){
-    following = true;
-    document.getElementById("followBtn").textContent = "Following: ON";
-    startGps();
-    if (currentGpsPoint && map3d) updateCar(currentGpsPoint, Number(map3d.heading) || 0);
-    updateRecenterButton();
+    animateRecenterToCar();
   };
   window.__aaUserPanned = markUserPanned;
   window.__aaSetDebugOverlay = function(on){
@@ -1356,6 +1425,7 @@
   }
 
   function markUserPanned(){
+    stopRecenterAnimation();
     if (following) {
       following = false;
       const followBtn = document.getElementById("followBtn");
@@ -1367,7 +1437,7 @@
   function updateRecenterButton(){
     const btn = document.getElementById("recenterBtn");
     if (!btn) return;
-    btn.classList.toggle("visible", !following && !!currentGpsPoint);
+    btn.classList.toggle("visible", !following && !!currentGpsPoint && !isRecentering());
   }
   window.__aaInjectGps = function(fix){
     if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;

@@ -73,10 +73,10 @@ def load_geometry(js, binary):
     )
 
 
-def encode_jpeg(im: Image.Image, size: int, quality: int) -> bytes:
-    rgb = im.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+def encode_png(im: Image.Image, size: int) -> bytes:
+    rgba = im.convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
     buf = BytesIO()
-    rgb.save(buf, format="JPEG", quality=quality, optimize=True)
+    rgba.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
@@ -168,8 +168,8 @@ def main():
     albedo_view = js["bufferViews"][js["images"][0]["bufferView"]]
     albedo_blob = binary[albedo_view.get("byteOffset", 0) : albedo_view.get("byteOffset", 0) + albedo_view["byteLength"]]
     albedo_im = Image.open(BytesIO(albedo_blob))
-    albedo = encode_jpeg(albedo_im, 1024, 90)
-    print(f"albedo {albedo_im.size} -> 1024 jpeg {len(albedo)} bytes")
+    albedo = encode_png(albedo_im, 1024)
+    print(f"albedo {albedo_im.size} -> 1024 png {len(albedo)} bytes")
 
     blobs: list[bytes] = []
     views: list[dict] = []
@@ -256,7 +256,7 @@ def main():
         ],
         "materials": [mat],
         "textures": [{"sampler": 0, "source": 0}],
-        "images": [{"bufferView": img_view, "mimeType": "image/jpeg"}],
+        "images": [{"bufferView": img_view, "mimeType": "image/png"}],
         "samplers": [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}],
         "accessors": accessors,
         "bufferViews": views,
