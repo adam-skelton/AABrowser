@@ -234,8 +234,8 @@
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
   const CAR_MODELS = {
-    forte: { id: "forte", label: "Kia Forte", url: new URL("forte.glb", document.baseURI).href },
-    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href }
+    forte: { id: "forte", label: "Kia Forte", url: new URL("forte.glb", document.baseURI).href, orbit: "35deg 70deg auto" },
+    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href, orbit: "35deg 74deg 8m" }
   };
   let activeCarModelId = "forte";
   try {
@@ -378,10 +378,13 @@
     activeCarModelId = id;
     try { localStorage.setItem("aaCarModel", id); } catch (err) {}
     syncCarModelSwitch();
-    const viewer = document.querySelector("#carModelHost model-viewer");
-    if (viewer) {
-      viewer.setAttribute("src", carModelUrl());
-      viewer.setAttribute("alt", activeCarModel().label);
+    const viewerHost = document.getElementById("carModelHost");
+    if (viewerHost) {
+      const old = viewerHost.querySelector("model-viewer");
+      if (old) old.remove();
+      if (document.getElementById("carModelOverlay")?.classList.contains("open")) {
+        openCarModelViewer();
+      }
     }
     if (!changed || !map3d) return;
     const pos = currentCarPoint();
@@ -1081,6 +1084,17 @@
     return modelViewerLoading;
   }
 
+  function applyViewerModel(viewer){
+    const model = activeCarModel();
+    viewer.setAttribute("src", model.url);
+    viewer.setAttribute("alt", model.label);
+    viewer.setAttribute("camera-orbit", model.orbit || "35deg 70deg auto");
+    viewer.setAttribute("min-camera-orbit", "auto 12deg auto");
+    viewer.setAttribute("max-camera-orbit", "auto 90deg auto");
+    viewer.setAttribute("field-of-view", "30deg");
+    try { if (typeof viewer.jumpCameraToGoal === "function") viewer.jumpCameraToGoal(); } catch (err) {}
+  }
+
   async function openCarModelViewer(){
     const overlay = document.getElementById("carModelOverlay");
     const host = document.getElementById("carModelHost");
@@ -1090,8 +1104,7 @@
     syncCarModelSwitch();
     const existing = host.querySelector("model-viewer");
     if (existing) {
-      existing.setAttribute("src", carModelUrl());
-      existing.setAttribute("alt", activeCarModel().label);
+      applyViewerModel(existing);
       return;
     }
     host.textContent = "Loading 3D model…";
@@ -1103,18 +1116,13 @@
     }
     host.textContent = "";
     const viewer = document.createElement("model-viewer");
-    viewer.setAttribute("src", carModelUrl());
-    viewer.setAttribute("alt", activeCarModel().label);
     viewer.setAttribute("camera-controls", "");
     viewer.setAttribute("auto-rotate", "");
     viewer.setAttribute("auto-rotate-delay", "1500");
     viewer.setAttribute("interaction-prompt", "none");
     viewer.setAttribute("shadow-intensity", "1");
-    viewer.setAttribute("exposure", "1.05");
-    viewer.setAttribute("camera-orbit", "35deg 74deg 8m");
-    viewer.setAttribute("min-camera-orbit", "auto 40deg 4m");
-    viewer.setAttribute("max-camera-orbit", "auto 92deg 14m");
-    viewer.setAttribute("field-of-view", "32deg");
+    viewer.setAttribute("exposure", "1.15");
+    applyViewerModel(viewer);
     host.append(viewer);
   }
 

@@ -117,40 +117,53 @@ def write_glb(path: Path, js: dict, views: list[dict], blobs: list[bytes]):
     )
 
 
+def to_gltf_y_up(verts):
+    """Sketchfab stores this car Z-up with length on Y. glTF / Maps want Y-up, +Z forward."""
+    out = np.empty_like(verts)
+    out[:, 0] = verts[:, 0]
+    out[:, 1] = verts[:, 2]
+    out[:, 2] = -verts[:, 1]
+    out[:, 1] -= out[:, 1].min()
+    return out
+
+
 def main():
     js, binary = read_glb(SRC)
     verts, faces, uvs = load_geometry(js, binary)
     print(f"input verts={len(verts)} tris={len(faces)}")
 
-    new_v, new_f = fast_simplification.simplify(
-        verts,
-        faces.astype(np.int32),
-        target_count=min(TARGET_TRIS, len(faces) - 1),
-        agg=AGGRESSION,
-    )
-    tree = cKDTree(verts)
-    _, nearest = tree.query(new_v, k=1, workers=-1)
-    new_uv = uvs[nearest].astype(np.float32)
+    if len(faces) > 150000:
+        new_v, new_f = fast_simplification.simplify(
+            verts,
+            faces.astype(np.int32),
+            target_count=min(TARGET_TRIS, len(faces) - 1),
+            agg=AGGRESSION,
+        )
+        tree = cKDTree(verts)
+        _, nearest = tree.query(new_v, k=1, workers=-1)
+        new_uv = uvs[nearest].astype(np.float32)
+    else:
+        new_v, new_f, new_uv = verts, faces, uvs.astype(np.float32)
+
+    size = new_v.max(axis=0) - new_v.min(axis=0)
+    if size[1] > size[2] * 1.5:
+        new_v = to_gltf_y_up(new_v)
 
     mesh = trimesh.Trimesh(vertices=new_v, faces=new_f, process=True)
     new_v = np.asarray(mesh.vertices, dtype=np.float32)
     new_f = np.asarray(mesh.faces, dtype=np.int32)
     new_n = np.asarray(mesh.vertex_normals, dtype=np.float32)
-    if len(mesh.vertices) != len(nearest):
-        tree2 = cKDTree(verts)
-        _, nearest = tree2.query(new_v, k=1, workers=-1)
-        new_uv = uvs[nearest].astype(np.float32)
-    print(f"output verts={len(new_v)} tris={len(new_f)}")
+    tree2 = cKDTree(to_gltf_y_up(verts) if (verts.max(0) - verts.min(0))[1] > (verts.max(0) - verts.min(0))[2] * 1.5 else verts)
+    _, nearest = tree2.query(new_v, k=1, workers=-1)
+    new_uv = uvs[nearest].astype(np.float32)
+    new_v[:, 1] -= new_v[:, 1].min()
+    print(f"output verts={len(new_v)} tris={len(new_f)} size={(new_v.max(0)-new_v.min(0)).tolist()}")
 
-    images = []
-    for i, spec in enumerate(((1024, 86), (512, 82), (1024, 90))):
-        size, quality = spec
-        view = js["bufferViews"][js["images"][i]["bufferView"]]
-        blob = binary[view.get("byteOffset", 0) : view.get("byteOffset", 0) + view["byteLength"]]
-        im = Image.open(BytesIO(blob))
-        encoded = encode_jpeg(im, size, quality)
-        images.append(encoded)
-        print(f"tex {i} {im.size} -> {size} jpeg {len(encoded)} bytes")
+    albedo_view = js["bufferViews"][js["images"][0]["bufferView"]]
+    albedo_blob = binary[albedo_view.get("byteOffset", 0) : albedo_view.get("byteOffset", 0) + albedo_view["byteLength"]]
+    albedo_im = Image.open(BytesIO(albedo_blob))
+    albedo = encode_jpeg(albedo_im, 1024, 90)
+    print(f"albedo {albedo_im.size} -> 1024 jpeg {len(albedo)} bytes")
 
     blobs: list[bytes] = []
     views: list[dict] = []
@@ -174,7 +187,7 @@ def main():
     uv_view = push(uv_bytes, 34962)
     pos_view = push(pos_bytes, 34962)
     nrm_view = push(nrm_bytes, 34962)
-    img_views = [push(blob) for blob in images]
+    img_view = push(albedo)
 
     accessors = [
         {
@@ -205,16 +218,16 @@ def main():
         },
     ]
 
-    mat = js["materials"][0]
-    pbr = mat.setdefault("pbrMetallicRoughness", {})
-    pbr["baseColorFactor"] = [0.92, 0.94, 0.96, 1.0]
-    pbr["metallicFactor"] = 0.12
-    pbr["roughnessFactor"] = 0.55
-    pbr["baseColorTexture"] = {"index": 0}
-    pbr["metallicRoughnessTexture"] = {"index": 1}
-    mat["normalTexture"] = {"index": 2}
-    mat["emissiveFactor"] = [0.10, 0.11, 0.12]
-    mat.pop("doubleSided", None)
+    mat = {
+        "name": "forte-paint",
+        "pbrMetallicRoughness": {
+            "baseColorFactor": [0.92, 0.94, 0.96, 1.0],
+            "metallicFactor": 0.08,
+            "roughnessFactor": 0.48,
+            "baseColorTexture": {"index": 0},
+        },
+        "emissiveFactor": [0.10, 0.11, 0.12],
+    }
 
     out = {
         "asset": {"version": "2.0", "generator": "AABrowser Forte optimizer"},
@@ -234,12 +247,8 @@ def main():
             }
         ],
         "materials": [mat],
-        "textures": [{"sampler": 0, "source": 0}, {"sampler": 0, "source": 1}, {"sampler": 0, "source": 2}],
-        "images": [
-            {"bufferView": img_views[0], "mimeType": "image/jpeg"},
-            {"bufferView": img_views[1], "mimeType": "image/jpeg"},
-            {"bufferView": img_views[2], "mimeType": "image/jpeg"},
-        ],
+        "textures": [{"sampler": 0, "source": 0}],
+        "images": [{"bufferView": img_view, "mimeType": "image/jpeg"}],
         "samplers": [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}],
         "accessors": accessors,
         "bufferViews": views,
