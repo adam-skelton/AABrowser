@@ -255,11 +255,15 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
-  const CAR_ARROW_SCALE = 3.2;
-  const CAR_ARROW_SCALE_IN = 2.55;
+  const CAR_ARROW_RANGE = 240;
+  const CAR_ARROW_RANGE_IN = 175;
+  const ARROW_REF_RANGE = 420;
+  const ARROW_REF_FOV = 40;
   let lastCarScale = 0;
+  let lastArrowScale = 0;
   let usingArrow = false;
   let lastCarHeading = 0;
+  let lastCarPoint = null;
   let recenterAnim = 0;
   const RECENTER_MS = 2500;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
@@ -274,7 +278,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
   let userMarker, userCar, userArrow, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = false, demoTimer = null;
+  let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
   let currentView = "high";
@@ -352,6 +356,9 @@
   }
 
   function currentCarPoint(){
+    if (lastCarPoint && Number.isFinite(lastCarPoint.lat) && Number.isFinite(lastCarPoint.lng)) {
+      return { lat: lastCarPoint.lat, lng: lastCarPoint.lng };
+    }
     if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)) {
       return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
     }
@@ -392,23 +399,28 @@
       try { userCar.remove(); } catch (err) {}
       userCar = null;
     }
+    detachUserCar();
     carModelReady = false;
     lastCarScale = 0;
     if (isNavigating()) attachUserCar(pos, heading);
   }
 
   function carMapPosition(point){
-    return { lat: point.lat, lng: point.lng, altitude: 0 };
+    return { lat: point.lat, lng: point.lng };
   }
 
-  function carScaleForCamera(){
+  function cameraRange(){
     const range = Number(map3d && map3d.range);
+    return Number.isFinite(range) ? range : CAR_REF_RANGE;
+  }
+
+  function arrowScaleForCamera(){
+    const range = clamp(cameraRange(), 80, 14000);
     const fov = Number(map3d && map3d.fov);
-    const r = Number.isFinite(range) ? clamp(range, 50, 8000) : CAR_REF_RANGE;
-    const f = Number.isFinite(fov) ? clamp(fov, 20, 90) : CAR_REF_FOV;
-    const refTan = Math.tan((CAR_REF_FOV * Math.PI / 180) / 2);
+    const f = Number.isFinite(fov) ? clamp(fov, 20, 90) : ARROW_REF_FOV;
+    const refTan = Math.tan((ARROW_REF_FOV * Math.PI / 180) / 2);
     const tan = Math.tan((f * Math.PI / 180) / 2);
-    return CAR_BASE_SCALE * (r / CAR_REF_RANGE) * (tan / refTan);
+    return (range / ARROW_REF_RANGE) * (tan / refTan);
   }
 
   function applyCarScale(){
@@ -416,8 +428,16 @@
   }
 
   function hideUserCar(){
-    if (userCar && userCar.parentElement) {
+    if (userCar) {
+      try { userCar.scale = 0.001; } catch (err) {}
+    }
+  }
+
+  function detachUserCar(){
+    if (userCar) {
       try { userCar.remove(); } catch (err) {}
+      userCar = null;
+      carModelReady = false;
     }
   }
 
@@ -432,15 +452,27 @@
       attachUserCar(pos, heading);
       return;
     }
-    if (!userCar.parentElement && map3d) {
-      map3d.append(userCar);
-      applyCarPose(pos, heading);
-    }
+    try { userCar.scale = CAR_BASE_SCALE; } catch (err) {}
+    if (!userCar.parentElement && map3d) map3d.append(userCar);
+    applyCarPose(pos, heading);
   }
 
   function hideHeadingArrow(){
-    if (userArrow && userArrow.parentElement) {
+    if (userArrow) {
+      try { userArrow.scale = 0.001; } catch (err) {}
+    }
+    lastArrowScale = 0;
+    if (userMarker) {
+      try { userMarker.remove(); } catch (err) {}
+      userMarker = null;
+    }
+  }
+
+  function detachHeadingArrow(){
+    if (userArrow) {
       try { userArrow.remove(); } catch (err) {}
+      userArrow = null;
+      lastArrowScale = 0;
     }
     if (userMarker) {
       try { userMarker.remove(); } catch (err) {}
@@ -453,22 +485,27 @@
     const h = Number.isFinite(heading) ? heading : lastCarHeading;
     try { userArrow.position = carMapPosition(point); } catch (err) {}
     try { userArrow.orientation = arrowOrientation(h); } catch (err) {}
-    try { userArrow.altitudeMode = "RELATIVE_TO_MESH"; } catch (err) {}
-    const next = carScaleForCamera();
-    try { userArrow.scale = next; } catch (err) {}
+    const next = arrowScaleForCamera();
+    if (usingArrow && Math.abs(next - lastArrowScale) >= 0.02) {
+      lastArrowScale = next;
+      try { userArrow.scale = next; } catch (err) {}
+    }
   }
 
   function attachHeadingArrow(position, heading){
-    if (!Model3DElement || !map3d || userArrow) {
+    if (!isNavigating() || !Model3DElement || !map3d) return;
+    if (userArrow) {
       applyArrowPose(position, heading);
       return;
     }
     try {
+      const scale = arrowScaleForCamera();
+      lastArrowScale = scale;
       userArrow = new Model3DElement({
         src: HEADING_ARROW_URL,
         position: carMapPosition(position),
         orientation: arrowOrientation(Number.isFinite(heading) ? heading : 0),
-        scale: carScaleForCamera(),
+        scale,
         altitudeMode: "RELATIVE_TO_MESH"
       });
       map3d.append(userArrow);
@@ -487,13 +524,12 @@
     }
     const pos = currentCarPoint();
     const heading = Number.isFinite(lastCarHeading) ? lastCarHeading : currentCarHeading();
-    if (!userArrow) attachHeadingArrow(pos, heading);
-    else if (!userArrow.parentElement && map3d) {
-      map3d.append(userArrow);
-      applyArrowPose(pos, heading);
-    } else {
-      applyArrowPose(pos, heading);
+    if (!userArrow) {
+      attachHeadingArrow(pos, heading);
+      return;
     }
+    if (!userArrow.parentElement && map3d) map3d.append(userArrow);
+    applyArrowPose(pos, heading);
   }
 
   function syncCarLod(){
@@ -501,42 +537,36 @@
     syncCarLod.busy = true;
     try {
       if (!isNavigating()) {
-        hideUserCar();
-        hideHeadingArrow();
+        detachUserCar();
+        detachHeadingArrow();
         usingArrow = false;
         return;
       }
-      const next = carScaleForCamera();
-      const wantArrow = usingArrow ? next > CAR_ARROW_SCALE_IN : next > CAR_ARROW_SCALE;
+      const range = cameraRange();
+      const wantArrow = usingArrow ? range > CAR_ARROW_RANGE_IN : range > CAR_ARROW_RANGE;
+      usingArrow = wantArrow;
       if (wantArrow) {
         hideUserCar();
         showHeadingArrow();
       } else {
         hideHeadingArrow();
         showUserCar();
-        if (userCar && Math.abs(next - lastCarScale) >= 0.015) {
-          lastCarScale = next;
-          try { userCar.scale = next; } catch (err) {}
-        }
       }
-      usingArrow = wantArrow;
     } finally {
       syncCarLod.busy = false;
     }
   }
 
   function applyCarPose(point, heading){
+    lastCarPoint = { lat: point.lat, lng: point.lng };
     if (Number.isFinite(heading)) lastCarHeading = heading;
     if (userCar) {
-      const pos = carMapPosition(point);
-      const orientation = carOrientation(lastCarHeading);
-      try { userCar.position = pos; } catch (err) {}
-      try { userCar.orientation = orientation; } catch (err) {}
-      try { userCar.altitudeMode = "RELATIVE_TO_MESH"; } catch (err) {}
+      try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
+      try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
     }
-    if (userArrow) applyArrowPose(point, lastCarHeading);
+    if (userArrow) applyArrowPose(lastCarPoint, lastCarHeading);
     if (userMarker) {
-      try { userMarker.position = { lat: point.lat, lng: point.lng }; } catch (err) {}
+      try { userMarker.position = { lat: lastCarPoint.lat, lng: lastCarPoint.lng }; } catch (err) {}
     }
   }
 
@@ -555,7 +585,6 @@
       const revealModel = () => {
         if (carModelReady) return;
         carModelReady = true;
-        syncCarLod();
       };
       userCar.addEventListener("gmp-load", revealModel);
       userCar.addEventListener("load", revealModel);
@@ -570,11 +599,10 @@
         if (isNavigating()) showHeadingArrow();
       });
       map3d.append(userCar);
-      // Re-apply after attach: some WebViews drop constructor options.
       try { userCar.src = src; } catch (err) {}
+      try { userCar.scale = CAR_BASE_SCALE; } catch (err) {}
+      lastCarScale = CAR_BASE_SCALE;
       applyCarPose(position, h);
-      lastCarScale = 0;
-      syncCarLod();
     } catch (err) {
       console.error(err);
       userCar = null;
@@ -886,8 +914,9 @@
     document.getElementById("followBtn").textContent = "Following: ON";
     setView("drive");
     const here = currentGpsPoint || getRouteOrigin();
-    const heading = Number(map3d.heading) || 0;
-    updateCar({ lat: here.lat, lng: here.lng }, heading);
+    let heading = Number.isFinite(here.heading) ? here.heading : (Number(map3d.heading) || 0);
+    if (activeRoutePath.length >= 2) heading = bearingDegrees(activeRoutePath[0], activeRoutePath[1]);
+    applyGpsFix({ lat: here.lat, lng: here.lng }, heading);
     syncCarLod();
     updateRecenterButton();
     setMessage("Navigation started.");
@@ -904,6 +933,8 @@
     document.documentElement.classList.remove("has-route", "navigating");
     hideUserCar();
     hideHeadingArrow();
+    detachUserCar();
+    detachHeadingArrow();
     usingArrow = false;
     routeTimeEl.textContent = "--";
     routeStatsEl.textContent = "";
@@ -949,19 +980,30 @@
     else startGps();
   }
 
+  function isDemoRunning(){
+    return demoActive || demoTimer !== null;
+  }
+
+  function applyGpsFix(point, heading){
+    const pos = { lat: point.lat, lng: point.lng };
+    const h = Number.isFinite(heading) ? heading : lastCarHeading;
+    currentGpsPoint = { lat: pos.lat, lng: pos.lng, heading: h };
+    previousFix = currentGpsPoint;
+    lastCarPoint = pos;
+    if (placeAutocomplete) {
+      placeAutocomplete.locationBias = { radius: 50000, center: pos };
+    }
+    updateCar(pos, h);
+  }
+
   function handlePosition(position){
-    if (!map3d) return;
+    if (!map3d || isDemoRunning()) return;
     const c = position.coords;
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
-    currentGpsPoint = fix;
     let heading = fix.heading;
     if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) heading = bearingDegrees(previousFix, fix);
-    if (heading === null) heading = Number.isFinite(map3d.heading) ? map3d.heading : 0;
-    updateCar(fix, heading);
-    previousFix = fix;
-    if (placeAutocomplete) {
-      placeAutocomplete.locationBias = { radius: 50000, center: { lat: fix.lat, lng: fix.lng } };
-    }
+    if (heading === null) heading = Number.isFinite(lastCarHeading) ? lastCarHeading : (Number.isFinite(map3d.heading) ? map3d.heading : 0);
+    applyGpsFix(fix, heading);
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
@@ -1284,7 +1326,7 @@
   }
 
   async function startRouteDemo(){
-    if (demoTimer !== null) { stopDemo(); setMessage("Route demo stopped."); return; }
+    if (isDemoRunning()) { stopDemo(); setMessage("Route demo stopped."); return; }
     if (!activeRoutePath || activeRoutePath.length < 2) {
       setMessage("Picking a random route...");
       await randomRoute();
@@ -1295,11 +1337,13 @@
     }
     if (watchId !== null) { stopGps(); }
 
+    demoActive = true;
+    const path = activeRoutePath;
     enterNavigation();
+    applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
     document.getElementById("demoBtn").textContent = "Stop drive demo";
     setMessage("Driving along Google's returned road path.");
 
-    const path = activeRoutePath;
     const DEMO_SPEED = 10;
     const TICK_MS = 50;
     let index = 0;
@@ -1310,7 +1354,7 @@
       while (remaining > 0) {
         if (index >= path.length - 1) {
           const last = path[path.length - 1];
-          updateCar({ lat: last.lat, lng: last.lng }, Number(map3d.heading) || 0);
+          applyGpsFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last));
           stopDemo();
           setMessage("Demo arrived at destination.");
           return;
@@ -1328,7 +1372,7 @@
         distIntoSeg += remaining;
         remaining = 0;
         const t = distIntoSeg / segLen;
-        updateCar(
+        applyGpsFix(
           { lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) },
           bearingDegrees(p1, p2)
         );
@@ -1337,6 +1381,7 @@
   }
 
   function stopDemo(){
+    demoActive = false;
     if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; document.getElementById("demoBtn").textContent = "Drive route demo"; }
   }
 
@@ -1367,10 +1412,13 @@
 
   function followCenter(point, heading){
     const h = Number.isFinite(heading) ? heading : lastCarHeading;
-    if (currentView === "drive" || document.body.classList.contains("navigating")) {
-      return lookAhead(point, h, 12);
-    }
-    return { lat: point.lat, lng: point.lng };
+    const look = (currentView === "drive" || document.body.classList.contains("navigating"))
+      ? lookAhead(point, h, 12)
+      : { lat: point.lat, lng: point.lng };
+    const alt = readMapCenter().altitude;
+    const center = { lat: look.lat, lng: look.lng };
+    if (Number.isFinite(alt) && alt > 0) center.altitude = alt;
+    return center;
   }
 
   function isRecentering(){

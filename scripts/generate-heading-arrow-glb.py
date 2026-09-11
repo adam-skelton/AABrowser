@@ -15,20 +15,20 @@ def pad4(blob: bytes) -> bytes:
 
 
 def main():
-    # Top face of a Google-style chevron, pointing +Z, sitting on Y=0.
-    top = 0.55
+    # Compact Google-style chevron, +Z forward, sitting on Y=0. ~2.4 m long.
+    top = 0.32
     verts = np.array(
         [
-            [0.0, top, 4.2],
-            [3.1, top, -3.4],
-            [1.05, top, -2.15],
-            [-1.05, top, -2.15],
-            [-3.1, top, -3.4],
-            [0.0, 0.0, 4.2],
-            [3.1, 0.0, -3.4],
-            [1.05, 0.0, -2.15],
-            [-1.05, 0.0, -2.15],
-            [-3.1, 0.0, -3.4],
+            [0.0, top, 1.35],
+            [0.95, top, -1.05],
+            [0.32, top, -0.62],
+            [-0.32, top, -0.62],
+            [-0.95, top, -1.05],
+            [0.0, 0.0, 1.35],
+            [0.95, 0.0, -1.05],
+            [0.32, 0.0, -0.62],
+            [-0.32, 0.0, -0.62],
+            [-0.95, 0.0, -1.05],
         ],
         dtype=np.float32,
     )
@@ -106,14 +106,12 @@ def main():
                 "pbrMetallicRoughness": {
                     "baseColorFactor": [0.15, 0.48, 0.98, 1.0],
                     "metallicFactor": 0.0,
-                    "roughnessFactor": 1.0,
+                    "roughnessFactor": 0.45,
                 },
-                "emissiveFactor": [0.15, 0.48, 0.98],
-                "extensions": {"KHR_materials_unlit": {}},
+                "emissiveFactor": [0.08, 0.26, 0.72],
                 "doubleSided": True,
             }
         ],
-        "extensionsUsed": ["KHR_materials_unlit"],
         "accessors": [
             {
                 "bufferView": 1,

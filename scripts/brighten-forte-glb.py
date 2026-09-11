@@ -43,16 +43,20 @@ def main():
     for mat in js.get("materials", []):
         pbr = mat.setdefault("pbrMetallicRoughness", {})
         pbr["baseColorFactor"] = [1.0, 1.0, 1.0, 1.0]
+        # Dielectric paint: metal-rough metal reads as a black slab in Maps lighting.
         pbr["metallicFactor"] = 0.0
-        pbr["roughnessFactor"] = 1.0
-        mat["emissiveFactor"] = [1.0, 1.0, 1.0]
-        mat["extensions"] = {"KHR_materials_unlit": {}}
+        pbr["roughnessFactor"] = 0.42
+        # Soft fill from the albedo so shadows are readable without going unlit/flat.
+        mat["emissiveFactor"] = [0.28, 0.28, 0.28]
+        mat.pop("extensions", None)
         if js.get("textures"):
             mat["emissiveTexture"] = {"index": albedo}
-    used = list(js.get("extensionsUsed") or [])
-    if "KHR_materials_unlit" not in used:
-        used.append("KHR_materials_unlit")
-    js["extensionsUsed"] = used
+    used = [ext for ext in (js.get("extensionsUsed") or []) if ext != "KHR_materials_unlit"]
+    if used:
+        js["extensionsUsed"] = used
+    else:
+        js.pop("extensionsUsed", None)
+    js.pop("extensionsRequired", None)
     write_glb(DST, js, binary)
     print(f"Wrote {DST} ({DST.stat().st_size} bytes)")
 
