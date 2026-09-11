@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun dismissMapBootOverlay() {
-        val overlay = binding.mapBootOverlay
+        val overlay = binding.mapBootOverlay.root
         if (overlay.visibility != View.VISIBLE) return
         overlay.animate()
             .alpha(0f)
