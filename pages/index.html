@@ -323,11 +323,13 @@
       RouteClass = routes.Route;
       PlaceAutocompleteClass = places.PlaceAutocompleteElement;
 
+      const startAt = currentGpsPoint || AUCKLAND;
+      const startHeading = currentGpsPoint && Number.isFinite(currentGpsPoint.heading) ? currentGpsPoint.heading : 0;
       map3d = new maps3d.Map3DElement({
-        center: AUCKLAND,
+        center: { lat: startAt.lat, lng: startAt.lng },
         range: 650,
         tilt: 67,
-        heading: 0,
+        heading: startHeading,
         mode: "SATELLITE",
         gestureHandling: "GREEDY",
         defaultUIHidden: true,
@@ -337,6 +339,8 @@
       map3d.style.height = "100%";
       try { map3d.defaultUIHidden = true; } catch (err) {}
       document.getElementById("map").append(map3d);
+      startGps();
+      preloadCarModel();
 
       map3d.addEventListener("gmp-centerchange", () => {
         if (!following) updateRecenterButton();
@@ -409,10 +413,24 @@
       userCar = null;
     }
     detachUserCar();
-    carModelReady = false;
-    lastCarScale = 0;
-    if (isNavigating()) attachUserCar(pos, heading);
+    preloadCarModel();
+    if (isNavigating()) showUserCar();
   }
+
+  function preloadCarModel(){
+    if (!map3d || !Model3DElement) return;
+    attachUserCar(currentCarPoint(), currentCarHeading());
+    hideUserCar();
+  }
+
+  function prefetchCarModels(){
+    Object.keys(CAR_MODELS).forEach(id => {
+      const url = CAR_MODELS[id] && CAR_MODELS[id].url;
+      if (!url) return;
+      try { fetch(url, { cache: "force-cache", mode: "cors" }); } catch (err) {}
+    });
+  }
+  prefetchCarModels();
 
   function carMapPosition(point){
     return { lat: point.lat, lng: point.lng };
@@ -565,8 +583,8 @@
     syncCarLod.busy = true;
     try {
       if (!isNavigating()) {
-        detachUserCar();
-        detachHeadingArrow();
+        hideUserCar();
+        hideHeadingArrow();
         usingArrow = false;
         return;
       }
@@ -600,20 +618,32 @@
   }
 
   function attachUserCar(position, heading){
-    if (!isNavigating() || !Model3DElement || !map3d) return;
+    if (!Model3DElement || !map3d) return;
+    if (userCar) {
+      applyCarPose(position, heading);
+      return;
+    }
     const h = Number.isFinite(heading) ? heading : 0;
     const src = carModelUrl();
+    const hidden = !isNavigating();
+    const scale = hidden ? 0.001 : carScaleForCamera();
     try {
       userCar = new Model3DElement({
         src,
         position: carMapPosition(position),
         orientation: carOrientation(h),
-        scale: CAR_BASE_SCALE,
+        scale,
         altitudeMode: "RELATIVE_TO_MESH"
       });
       const revealModel = () => {
-        if (carModelReady) return;
         carModelReady = true;
+        if (!userCar) return;
+        if (!isNavigating()) {
+          try { userCar.scale = 0.001; } catch (err) {}
+          lastCarScale = 0.001;
+        } else {
+          applyLiveCarScale();
+        }
       };
       userCar.addEventListener("gmp-load", revealModel);
       userCar.addEventListener("load", revealModel);
@@ -629,8 +659,8 @@
       });
       map3d.append(userCar);
       try { userCar.src = src; } catch (err) {}
-      try { userCar.scale = carScaleForCamera(); } catch (err) {}
-      lastCarScale = carScaleForCamera();
+      try { userCar.scale = scale; } catch (err) {}
+      lastCarScale = scale;
       applyCarPose(position, h);
     } catch (err) {
       console.error(err);
@@ -961,8 +991,6 @@
     document.documentElement.classList.remove("has-route", "navigating");
     hideUserCar();
     hideHeadingArrow();
-    detachUserCar();
-    detachHeadingArrow();
     usingArrow = false;
     routeTimeEl.textContent = "--";
     routeStatsEl.textContent = "";
@@ -1025,12 +1053,16 @@
   }
 
   function handlePosition(position){
-    if (!map3d || isDemoRunning()) return;
+    if (isDemoRunning()) return;
     const c = position.coords;
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
     let heading = fix.heading;
     if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) heading = bearingDegrees(previousFix, fix);
-    if (heading === null) heading = Number.isFinite(lastCarHeading) ? lastCarHeading : (Number.isFinite(map3d.heading) ? map3d.heading : 0);
+    if (heading === null) heading = Number.isFinite(lastCarHeading) ? lastCarHeading : (map3d && Number.isFinite(Number(map3d.heading)) ? Number(map3d.heading) : 0);
+    currentGpsPoint = { lat: fix.lat, lng: fix.lng, heading };
+    lastCarPoint = { lat: fix.lat, lng: fix.lng };
+    previousFix = currentGpsPoint;
+    if (!map3d) return;
     applyGpsFix(fix, heading);
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
@@ -1046,9 +1078,14 @@
     if (userMarker) userMarker.position = pos;
     applyCarPose(pos, h);
     syncCarLod();
-    if (following && !isRecentering() && document.body.classList.contains("map-ready")) {
-      map3d.heading = h;
-      map3d.center = followCenter(pos, h);
+    if (following && !isRecentering() && map3d) {
+      if (document.body.classList.contains("map-ready")) {
+        map3d.heading = h;
+        map3d.center = followCenter(pos, h);
+      } else {
+        map3d.center = { lat: pos.lat, lng: pos.lng };
+        map3d.heading = h;
+      }
     }
     updateRecenterButton();
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
@@ -1857,7 +1894,7 @@
     window.setTimeout(() => {
       window.clearTimeout(pokeTimer);
       revealMap();
-    }, 8000);
+    }, 2000);
   }
 
   function mapsKeyIsMissing(key){

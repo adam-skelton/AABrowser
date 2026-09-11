@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FF000000"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:gravity="center"
+    android:orientation="vertical">
 
-    <ProgressBar
+    <ImageView
+        android:id="@+id/mapBootPin"
+        android:layout_width="72dp"
+        android:layout_height="96dp"
+        android:contentDescription="@null"
+        android:src="@drawable/gmaps_pin" />
+
+    <View
         android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="center"
-        android:indeterminate="true" />
-</FrameLayout>
+        android:layout_height="12dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/gmaps_pin_shadow" />
+</LinearLayout>

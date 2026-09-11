@@ -302,6 +302,7 @@ class CarWebViewHost(
                 )
             )
             bootOverlay = overlay
+            MapBootOverlay.startBounce(overlay)
         }
 
         try {

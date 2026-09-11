@@ -25,6 +25,7 @@ import com.google.android.material.color.DynamicColors
 import com.kododake.aabrowser.analytics.UmamiTracker
 import com.kododake.aabrowser.car.CarJsBridge
 import com.kododake.aabrowser.car.CarWebViewHost
+import com.kododake.aabrowser.car.MapBootOverlay
 import com.kododake.aabrowser.databinding.ActivityMainBinding
 import com.kododake.aabrowser.web.BrowserCallbacks
 import com.kododake.aabrowser.web.configureWebView
@@ -59,6 +60,7 @@ class MainActivity : AppCompatActivity() {
         DynamicColors.applyToActivityIfAvailable(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        MapBootOverlay.startBounce(binding.mapBootOverlay.root)
 
         umamiTracker.trackEvent("app_open")
 
