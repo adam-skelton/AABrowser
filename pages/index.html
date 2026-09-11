@@ -140,6 +140,7 @@
       <button id="followBtn" type="button">Following: ON</button>
       <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
+      <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
       <button id="viewSpecBtn" type="button">View specs</button>
       <button id="carApiBtn" type="button">API level</button>
@@ -247,7 +248,7 @@
   }
   const CAR_MODELS = {
     forte: { id: "forte", label: "Kia Forte", url: modelFileUrl("forte.glb"), previewUrl: modelFileUrl("forte-preview.glb"), orbit: "0deg 75deg 8m", target: "0m 0.75m 0m", yawOffset: 90 },
-    cerato: { id: "cerato", label: "Kia Cerato 2021", url: modelFileUrl("cerato.glb"), orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: -90 }
+    cerato: { id: "cerato", label: "Kia Cerato 2021", url: modelFileUrl("cerato.glb"), orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: 90 }
   };
   const HEADING_ARROW_URL = modelFileUrl("heading-arrow.glb");
   let activeCarModelId = "forte";
@@ -261,6 +262,8 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
+  const CAR_MAX_SCALE = 2.8;
+  const USE_HEADING_ARROW = false;
   const CAR_ARROW_RANGE = 240;
   const CAR_ARROW_RANGE_IN = 175;
   const ARROW_REF_RANGE = 420;
@@ -284,7 +287,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
   let userMarker, userCar, userArrow, destinationMarker, routeLine;
-  let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false;
+  let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
   let currentView = "high";
@@ -420,6 +423,24 @@
     return Number.isFinite(range) ? range : CAR_REF_RANGE;
   }
 
+  function carScaleForCamera(){
+    const range = clamp(cameraRange(), 50, 4000);
+    const fov = Number(map3d && map3d.fov);
+    const f = Number.isFinite(fov) ? clamp(fov, 20, 90) : CAR_REF_FOV;
+    const refTan = Math.tan((CAR_REF_FOV * Math.PI / 180) / 2);
+    const tan = Math.tan((f * Math.PI / 180) / 2);
+    const raw = CAR_BASE_SCALE * (range / CAR_REF_RANGE) * (tan / refTan);
+    return clamp(raw, CAR_BASE_SCALE * 0.9, CAR_MAX_SCALE);
+  }
+
+  function applyLiveCarScale(){
+    if (!userCar || usingArrow) return;
+    const next = carScaleForCamera();
+    if (Math.abs(next - lastCarScale) < 0.02) return;
+    lastCarScale = next;
+    try { userCar.scale = next; } catch (err) {}
+  }
+
   function arrowScaleForCamera(){
     const range = clamp(cameraRange(), 80, 14000);
     const fov = Number(map3d && map3d.fov);
@@ -458,7 +479,8 @@
       attachUserCar(pos, heading);
       return;
     }
-    try { userCar.scale = CAR_BASE_SCALE; } catch (err) {}
+    try { userCar.scale = carScaleForCamera(); } catch (err) {}
+    lastCarScale = carScaleForCamera();
     if (!userCar.parentElement && map3d) map3d.append(userCar);
     applyCarPose(pos, heading);
   }
@@ -549,7 +571,7 @@
         return;
       }
       const range = cameraRange();
-      const wantArrow = usingArrow ? range > CAR_ARROW_RANGE_IN : range > CAR_ARROW_RANGE;
+      const wantArrow = USE_HEADING_ARROW && (usingArrow ? range > CAR_ARROW_RANGE_IN : range > CAR_ARROW_RANGE);
       usingArrow = wantArrow;
       if (wantArrow) {
         hideUserCar();
@@ -557,6 +579,7 @@
       } else {
         hideHeadingArrow();
         showUserCar();
+        applyLiveCarScale();
       }
     } finally {
       syncCarLod.busy = false;
@@ -601,19 +624,18 @@
           userCar = null;
         }
         carModelReady = false;
-        usingArrow = true;
-        if (isNavigating()) showHeadingArrow();
+        usingArrow = false;
+        if (USE_HEADING_ARROW && isNavigating()) showHeadingArrow();
       });
       map3d.append(userCar);
       try { userCar.src = src; } catch (err) {}
-      try { userCar.scale = CAR_BASE_SCALE; } catch (err) {}
-      lastCarScale = CAR_BASE_SCALE;
+      try { userCar.scale = carScaleForCamera(); } catch (err) {}
+      lastCarScale = carScaleForCamera();
       applyCarPose(position, h);
     } catch (err) {
       console.error(err);
       userCar = null;
-      usingArrow = true;
-      if (isNavigating()) showHeadingArrow();
+      usingArrow = false;
     }
   }
 
@@ -1331,38 +1353,50 @@
     if (btn) btn.textContent = "Hide API";
   }
 
-  async function startRouteDemo(){
-    if (isDemoRunning()) { stopDemo(); setMessage("Route demo stopped."); return; }
-    if (!activeRoutePath || activeRoutePath.length < 2) {
-      setMessage("Picking a random route...");
-      await randomRoute();
-      if (!activeRoutePath || activeRoutePath.length < 2) {
-        setMessage("Could not load a route.");
-        return;
-      }
-    }
-    if (watchId !== null) { stopGps(); }
+  async function fetchRoutePath(origin, destination){
+    const result = await RouteClass.computeRoutes({
+      origin: { lat: origin.lat, lng: origin.lng },
+      destination: { lat: destination.lat, lng: destination.lng },
+      travelMode: "DRIVING",
+      routingPreference: "TRAFFIC_AWARE",
+      language: "en-NZ",
+      units: google.maps.UnitSystem.METRIC,
+      fields: ["path", "distanceMeters", "durationMillis", "staticDurationMillis"]
+    });
+    if (!result.routes || !result.routes.length) throw new Error("Google returned no route.");
+    const route = result.routes[0];
+    const path = Array.from(route.path || []).map(point => ({
+      lat: typeof point.lat === "function" ? point.lat() : point.lat,
+      lng: typeof point.lng === "function" ? point.lng() : point.lng
+    }));
+    if (path.length < 2) throw new Error("Route returned without a usable path.");
+    return { route, path };
+  }
 
-    demoActive = true;
-    const path = activeRoutePath;
-    enterNavigation();
-    applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
-    document.getElementById("demoBtn").textContent = "Stop drive demo";
-    setMessage("Driving along Google's returned road path.");
+  function resetDemoButtons(){
+    const demoBtn = document.getElementById("demoBtn");
+    if (demoBtn) demoBtn.textContent = "Drive route demo";
+    const freeBtn = document.getElementById("freeFollowBtn");
+    if (freeBtn) freeBtn.textContent = "Free follow";
+  }
 
+  function driveAlongPath(path, onDone){
     const DEMO_SPEED = 10;
     const TICK_MS = 50;
     let index = 0;
     let distIntoSeg = 0;
-
     demoTimer = setInterval(() => {
       let remaining = DEMO_SPEED * (TICK_MS / 1000);
       while (remaining > 0) {
         if (index >= path.length - 1) {
           const last = path[path.length - 1];
           applyGpsFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last));
-          stopDemo();
-          setMessage("Demo arrived at destination.");
+          if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
+          if (typeof onDone === "function") onDone();
+          else {
+            stopDemo();
+            setMessage("Demo arrived at destination.");
+          }
           return;
         }
         const p1 = path[index];
@@ -1386,9 +1420,74 @@
     }, TICK_MS);
   }
 
+  function pickRandomDestination(origin){
+    const choices = TEST_DESTINATIONS.filter(dest => distanceMetres(origin, dest) > 400);
+    const pool = choices.length ? choices : TEST_DESTINATIONS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  async function startRouteDemo(){
+    if (demoKind === "nav" && isDemoRunning()) { stopDemo(); setMessage("Route demo stopped."); return; }
+    if (isDemoRunning()) stopDemo();
+    if (!activeRoutePath || activeRoutePath.length < 2) {
+      setMessage("Picking a random route...");
+      await randomRoute();
+      if (!activeRoutePath || activeRoutePath.length < 2) {
+        setMessage("Could not load a route.");
+        return;
+      }
+    }
+    if (watchId !== null) { stopGps(); }
+
+    demoKind = "nav";
+    demoActive = true;
+    const path = activeRoutePath;
+    enterNavigation();
+    applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
+    document.getElementById("demoBtn").textContent = "Stop drive demo";
+    setMessage("Driving along Google's returned road path.");
+    driveAlongPath(path);
+  }
+
+  async function continueFreeFollowLeg(){
+    if (demoKind !== "free" || !demoActive) return;
+    const origin = currentGpsPoint || getRouteOrigin();
+    const destination = pickRandomDestination(origin);
+    setMessage("Free follow · routing to " + destination.name + "...");
+    try {
+      const { path } = await fetchRoutePath(origin, destination);
+      if (demoKind !== "free" || !demoActive) return;
+      applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
+      setMessage("Free follow · " + destination.name);
+      driveAlongPath(path, () => {
+        continueFreeFollowLeg();
+      });
+    } catch (err) {
+      console.error(err);
+      stopDemo();
+      setMessage("Free follow could not get a route.");
+    }
+  }
+
+  async function startFreeFollow(){
+    if (demoKind === "free" && isDemoRunning()) { stopDemo(); setMessage("Free follow stopped."); return; }
+    if (isDemoRunning()) stopDemo();
+    if (!RouteClass || !map3d) return;
+    if (watchId !== null) { stopGps(); }
+    clearNavigation();
+    following = true;
+    document.getElementById("followBtn").textContent = "Following: ON";
+    setView("high");
+    demoKind = "free";
+    demoActive = true;
+    document.getElementById("freeFollowBtn").textContent = "Stop free follow";
+    await continueFreeFollowLeg();
+  }
+
   function stopDemo(){
     demoActive = false;
-    if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; document.getElementById("demoBtn").textContent = "Drive route demo"; }
+    demoKind = null;
+    if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
+    resetDemoButtons();
   }
 
   function downsamplePath(path,maxPoints){
@@ -1556,6 +1655,7 @@
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
+  document.getElementById("freeFollowBtn").addEventListener("click",startFreeFollow);
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
   document.getElementById("viewSelectBtn").addEventListener("click", event => {
     event.preventDefault();
@@ -1738,7 +1838,7 @@
       revealMap();
       return;
     }
-    window.setTimeout(revealMap, 2000);
+    window.setTimeout(revealMap, 8000);
   }
 
   function mapsKeyIsMissing(key){

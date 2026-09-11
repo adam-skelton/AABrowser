@@ -24,7 +24,7 @@ function addMaterial(name, color, metallic, roughness, emissive) {
 }
 
 const M = {
-  body: addMaterial("steel-grey-paint", [0.64, 0.67, 0.72, 1], 0.12, 0.42, [0.16, 0.17, 0.19]),
+  body: addMaterial("steel-grey-paint", [0.30, 0.32, 0.34, 1], 0.10, 0.46, [0.08, 0.085, 0.09]),
   dark: addMaterial("black-trim", [0.16, 0.16, 0.18, 1], 0.04, 0.72, [0.03, 0.03, 0.035]),
   glass: addMaterial("tinted-glass", [0.28, 0.36, 0.44, 1], 0.08, 0.28, [0.08, 0.1, 0.13]),
   rubber: addMaterial("tyre", [0.12, 0.12, 0.12, 1], 0.0, 0.9, [0.02, 0.02, 0.02]),
