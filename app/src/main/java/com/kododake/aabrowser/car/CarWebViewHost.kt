@@ -75,6 +75,9 @@ class CarWebViewHost(
     private var dragX = 0f
     private var dragY = 0f
     private var dragDownTime = 0L
+    private var twoFingerUntil = 0L
+    private var lastScaleFocusX = Float.NaN
+    private var lastScaleFocusY = Float.NaN
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
@@ -192,11 +195,25 @@ class CarWebViewHost(
     }
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
-        onMain { dispatchScroll(distanceX, distanceY) }
+        onMain {
+            if (SystemClock.uptimeMillis() < twoFingerUntil) {
+                extendTwoFingerSession()
+                endDrag()
+                val dHeading = distanceX * 0.18f
+                val dTilt = distanceY * 0.12f
+                webView?.evaluateJavascript(
+                    "window.__aaNudgeCamera && window.__aaNudgeCamera($dHeading,$dTilt);",
+                    null
+                )
+                return@onMain
+            }
+            dispatchScroll(distanceX, distanceY)
+        }
     }
 
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
+            if (SystemClock.uptimeMillis() < twoFingerUntil) return@onMain
             endDrag()
             webView?.flingScroll(velocityX.toInt(), velocityY.toInt())
         }
@@ -205,13 +222,28 @@ class CarWebViewHost(
     override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {
         onMain {
             val view = webView ?: return@onMain
-            when {
-                scaleFactor > 1.01f || scaleFactor < 0.99f ->
+            extendTwoFingerSession()
+            endDrag()
+            val zooming = scaleFactor > 1.012f || scaleFactor < 0.988f
+            if (zooming) {
+                view.evaluateJavascript(
+                    "window.__aaScaleMap && window.__aaScaleMap($scaleFactor);",
+                    null
+                )
+            } else if (focusX >= 0f && focusY >= 0f && lastScaleFocusX.isFinite()) {
+                val dx = focusX - lastScaleFocusX
+                val dy = focusY - lastScaleFocusY
+                if (kotlin.math.abs(dx) > 1.2f || kotlin.math.abs(dy) > 1.2f) {
+                    val dHeading = dx * 0.18f
+                    val dTilt = dy * 0.12f
                     view.evaluateJavascript(
-                        "window.__aaScaleMap && window.__aaScaleMap($scaleFactor);",
+                        "window.__aaNudgeCamera && window.__aaNudgeCamera($dHeading,$dTilt);",
                         null
                     )
+                }
             }
+            lastScaleFocusX = if (focusX >= 0f) focusX else Float.NaN
+            lastScaleFocusY = if (focusY >= 0f) focusY else Float.NaN
         }
     }
 
@@ -538,6 +570,10 @@ class CarWebViewHost(
         mainHandler.postDelayed(endDragRunnable, DRAG_END_DELAY_MS)
     }
 
+    private fun extendTwoFingerSession() {
+        twoFingerUntil = SystemClock.uptimeMillis() + TWO_FINGER_MS
+    }
+
     private fun endDrag() {
         if (!dragging) return
         val view = webView
@@ -636,6 +672,7 @@ class CarWebViewHost(
             val speed = if (location.hasSpeed()) location.speed.toString() else "null"
             return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
         }
+        private const val TWO_FINGER_MS = 420L
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L
         private const val DRAG_END_DELAY_MS = 90L

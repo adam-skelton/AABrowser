@@ -336,7 +336,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Installing..."
-& $adb install -r -d -t $Apk
+& $adb install -r -d -t -i com.android.vending $Apk
 if ($LASTEXITCODE -ne 0) {
     throw "Install failed."
 }

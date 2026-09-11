@@ -36,12 +36,12 @@
     #searchResults button + button {border-top:1px solid rgba(0,0,0,.08)}
     #searchResults .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
-    #carDebugBtn {display:none; position:absolute; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:32; width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
-    #carDebugBtn svg {width:22px; height:22px; fill:currentColor}
+    #carDebugBtn {display:none; position:absolute; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:32; width:76px; height:76px; min-height:76px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
+    #carDebugBtn svg {width:34px; height:34px; fill:currentColor}
     body.debug-open #carDebugBtn {background:#1A73E8}
-    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; display:none; align-items:center; gap:8px; min-height:44px; padding:0 16px 0 12px; border-radius:22px; font:inherit; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #recenterBtn {position:absolute; right:max(16px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; display:none; align-items:center; gap:10px; min-height:76px; padding:0 24px 0 18px; border-radius:38px; font:inherit; font-size:18px; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #recenterBtn.visible {display:flex}
-    #recenterBtn svg {width:16px; height:22px; display:block; flex:0 0 auto; fill:currentColor}
+    #recenterBtn svg {width:24px; height:32px; display:block; flex:0 0 auto; fill:currentColor}
     #recenterBtn svg circle {fill:#2E3134}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
@@ -59,9 +59,9 @@
     #viewSelectMenu.open {display:grid; gap:4px}
     #viewSelectMenu button {min-height:44px; width:100%; white-space:nowrap; text-align:left; background:#2E3134; color:#fff; box-shadow:none}
     html.aa-car #viewSelectMenu,body.aa-car #viewSelectMenu {top:auto; bottom:calc(100% + 6px)}
-    #viewSpecPanel {display:none; position:absolute; z-index:31; top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(10px,env(safe-area-inset-left)); width:176px; padding:6px; border-radius:12px; background:#1C1C1E; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.4); pointer-events:auto; gap:2px}
+    #viewSpecPanel {display:none; position:absolute; z-index:31; top:max(96px,calc(env(safe-area-inset-top) + 88px)); left:max(10px,env(safe-area-inset-left)); width:176px; padding:6px; border-radius:12px; background:#1C1C1E; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.4); pointer-events:auto; gap:2px}
     body.view-specs #viewSpecPanel {display:grid}
-    html.aa-car #viewSpecPanel,body.aa-car #viewSpecPanel {top:max(68px,calc(env(safe-area-inset-top) + 56px)); left:max(12px,env(safe-area-inset-left)); right:auto; width:168px; bottom:auto}
+    html.aa-car #viewSpecPanel,body.aa-car #viewSpecPanel {top:max(96px,calc(env(safe-area-inset-top) + 88px)); left:max(12px,env(safe-area-inset-left)); right:auto; width:168px; bottom:auto}
     html.aa-car:not(.debug-open) #viewSpecPanel,body.aa-car:not(.debug-open) #viewSpecPanel {display:none !important}
     #viewSpecPanel .spec-row {display:grid; grid-template-columns:1fr auto 26px 26px; align-items:center; gap:4px}
     #viewSpecPanel .spec-name {font-size:11px; font-weight:650; opacity:.82; line-height:1.1}
@@ -69,8 +69,8 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:31; top:max(66px,calc(env(safe-area-inset-top) + 56px)); left:max(10px,env(safe-area-inset-left)); width:min(280px,calc(100vw - 180px)); padding:14px 48px 14px 16px; border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.4); pointer-events:auto}
-    html.aa-car #routeCard,body.aa-car #routeCard {top:max(72px,calc(env(safe-area-inset-top) + 60px))}
+    #routeCard {display:none; position:absolute; z-index:31; top:max(96px,calc(env(safe-area-inset-top) + 88px)); left:max(10px,env(safe-area-inset-left)); width:min(280px,calc(100vw - 180px)); padding:14px 48px 14px 16px; border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.4); pointer-events:auto}
+    html.aa-car #routeCard,body.aa-car #routeCard {top:max(96px,calc(env(safe-area-inset-top) + 88px))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:max(190px,calc(env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard {display:none !important}
@@ -256,13 +256,13 @@
     const saved = localStorage.getItem("aaCarModel");
     if (saved && CAR_MODELS[saved]) activeCarModelId = saved;
   } catch (err) {}
-  // Keep a constant on-screen size: ~half a two-lane road at driving range.
+  // Keep a constant on-screen size: about one lane / half a two-lane road.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.5;
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
+  const CAR_REF_TILT = 70;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
-  const CAR_MAX_SCALE = CAR_BASE_SCALE * 2;
   const USE_HEADING_ARROW = false;
   const CAR_ARROW_RANGE = 240;
   const CAR_ARROW_RANGE_IN = 175;
@@ -442,13 +442,13 @@
   }
 
   function carScaleForCamera(){
-    const range = clamp(cameraRange(), 50, 4000);
+    const range = Math.max(cameraRange(), 40);
     const fov = Number(map3d && map3d.fov);
     const f = Number.isFinite(fov) ? clamp(fov, 20, 90) : CAR_REF_FOV;
     const refTan = Math.tan((CAR_REF_FOV * Math.PI / 180) / 2);
     const tan = Math.tan((f * Math.PI / 180) / 2);
     const raw = CAR_BASE_SCALE * (range / CAR_REF_RANGE) * (tan / refTan);
-    return clamp(raw, CAR_BASE_SCALE * 0.9, CAR_MAX_SCALE);
+    return Math.max(CAR_BASE_SCALE * 0.9, raw);
   }
 
   function applyLiveCarScale(){
@@ -1125,7 +1125,7 @@
     if (mode === "overview") {
       if (activeDestination) showRouteOverview(getRouteOrigin(), activeDestination, activeRoute?.distanceMeters);
     } else if (mode === "drive") {
-      map3d.tilt = 70; map3d.range = 88; map3d.fov = 42;
+      map3d.tilt = CAR_REF_TILT; map3d.range = CAR_REF_RANGE; map3d.fov = CAR_REF_FOV;
     } else if (mode === "high") {
       map3d.tilt = 62; map3d.range = 650; map3d.fov = 40;
     } else {
@@ -1588,8 +1588,13 @@
     if (!map3d) return;
     const from = readMapCenter();
     const fromHeading = Number(map3d.heading) || 0;
+    const fromRange = Number(map3d.range) || CAR_REF_RANGE;
+    const fromTilt = Number(map3d.tilt) || CAR_REF_TILT;
+    const fromFov = Number(map3d.fov) || CAR_REF_FOV;
     stopRecenterAnimation();
     following = true;
+    currentView = "drive";
+    setViewSelectValue("drive");
     const followBtn = document.getElementById("followBtn");
     if (followBtn) followBtn.textContent = "Following: ON";
     startGps();
@@ -1606,12 +1611,20 @@
         altitude: lerp(from.altitude || 0, 0, e)
       };
       map3d.heading = lerpHeading(fromHeading, heading, e);
+      map3d.range = lerp(fromRange, CAR_REF_RANGE, e);
+      map3d.tilt = lerp(fromTilt, CAR_REF_TILT, e);
+      map3d.fov = lerp(fromFov, CAR_REF_FOV, e);
+      syncCarLod();
       if (t < 1) {
         recenterAnim = requestAnimationFrame(step);
       } else {
         recenterAnim = 0;
         map3d.center = to;
         map3d.heading = heading;
+        map3d.range = CAR_REF_RANGE;
+        map3d.tilt = CAR_REF_TILT;
+        map3d.fov = CAR_REF_FOV;
+        syncCarLod();
         updateRecenterButton();
       }
     };
@@ -1624,6 +1637,17 @@
     const range = Number(map3d.range) || 260;
     const next = range / (Number(factor) || 1);
     map3d.range = clamp(next, 40, 20000);
+    syncCarLod();
+    refreshViewSpecs();
+  };
+  window.__aaNudgeCamera = function(dHeading, dTilt){
+    if (!map3d) return;
+    const dh = Number(dHeading) || 0;
+    const dt = Number(dTilt) || 0;
+    if (!dh && !dt) return;
+    markUserPanned();
+    if (dh) map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dh);
+    if (dt) map3d.tilt = clamp((Number(map3d.tilt) || 0) + dt, 0, 90);
     syncCarLod();
     refreshViewSpecs();
   };
@@ -1823,6 +1847,63 @@
     hideChrome();
     markUserPanned();
   }, { capture:true, passive:true });
+
+  let camGesture = null;
+  function twoTouchState(a, b){
+    const dx = b.clientX - a.clientX;
+    const dy = b.clientY - a.clientY;
+    return {
+      dist: Math.hypot(dx, dy) || 1,
+      angle: Math.atan2(dy, dx),
+      midX: (a.clientX + b.clientX) / 2,
+      midY: (a.clientY + b.clientY) / 2
+    };
+  }
+  function applyTwoFingerCamera(event){
+    if (!map3d || event.touches.length !== 2 || isChromeUiTarget(event.target)) {
+      if (event.touches.length < 2) camGesture = null;
+      return false;
+    }
+    const next = twoTouchState(event.touches[0], event.touches[1]);
+    if (!camGesture) {
+      camGesture = next;
+      return true;
+    }
+    let dAngle = (next.angle - camGesture.angle) * 180 / Math.PI;
+    if (dAngle > 180) dAngle -= 360;
+    if (dAngle < -180) dAngle += 360;
+    const dDist = next.dist / camGesture.dist;
+    const dMidY = next.midY - camGesture.midY;
+    chromeLocked = false;
+    hideChrome();
+    markUserPanned();
+    if (Math.abs(dAngle) > 0.35) {
+      map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
+    }
+    if (Math.abs(dMidY) > 1.5 && Math.abs(dAngle) < 8) {
+      map3d.tilt = clamp((Number(map3d.tilt) || 0) - dMidY * 0.18, 0, 90);
+    }
+    if (Math.abs(dDist - 1) > 0.012) {
+      const range = Number(map3d.range) || 260;
+      map3d.range = clamp(range / dDist, 40, 20000);
+      syncCarLod();
+    }
+    camGesture = next;
+    refreshViewSpecs();
+    return true;
+  }
+  window.addEventListener("touchstart", event => {
+    if (event.touches.length === 2 && !isChromeUiTarget(event.target)) {
+      camGesture = twoTouchState(event.touches[0], event.touches[1]);
+    }
+  }, { capture:true, passive:true });
+  window.addEventListener("touchmove", event => {
+    if (applyTwoFingerCamera(event)) event.preventDefault();
+  }, { capture:true, passive:false });
+  window.addEventListener("touchend", event => {
+    if (event.touches.length < 2) camGesture = null;
+  }, { capture:true, passive:true });
+  window.addEventListener("touchcancel", () => { camGesture = null; }, { capture:true, passive:true });
 
   window.addEventListener("click", () => {
     if (isAndroidAuto()) return;
