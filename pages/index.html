@@ -234,8 +234,8 @@
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
   const CAR_MODELS = {
-    forte: { id: "forte", label: "Kia Forte", url: new URL("forte.glb", document.baseURI).href, orbit: "35deg 70deg auto" },
-    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href, orbit: "35deg 74deg 8m" }
+    forte: { id: "forte", label: "Kia Forte", url: new URL("forte.glb", document.baseURI).href, orbit: "0deg 75deg 8m", target: "0m 0.75m 0m", yawOffset: 90 },
+    cerato: { id: "cerato", label: "Kia Cerato 2021", url: new URL("cerato.glb", document.baseURI).href, orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: -90 }
   };
   let activeCarModelId = "forte";
   try {
@@ -248,7 +248,11 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
+  const CAR_ARROW_SCALE = 3.2;
+  const CAR_ARROW_SCALE_IN = 2.55;
   let lastCarScale = 0;
+  let usingArrow = false;
+  let lastCarHeading = 0;
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -277,22 +281,31 @@
 
   function setMessage(text){ messageEl.textContent = text; }
 
-  function createCarPuck(position){
+  function createHeadingArrow(position){
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("viewBox", "0 0 120 52");
-    svg.setAttribute("width", "56");
-    svg.setAttribute("height", "24");
-    svg.innerHTML = '<rect x="14" y="18" rx="6" width="92" height="16" fill="#8A8E92"/><rect x="34" y="10" rx="4" width="44" height="14" fill="#7C8084"/><rect x="40" y="12" rx="2" width="16" height="10" fill="#2C3338"/><rect x="60" y="12" rx="2" width="14" height="10" fill="#2C3338"/><rect x="98" y="22" width="10" height="8" rx="2" fill="#D7DADC"/><rect x="12" y="22" width="8" height="8" rx="2" fill="#6E7378"/><circle cx="34" cy="38" r="8" fill="#111"/><circle cx="34" cy="38" r="3.2" fill="#8A8E92"/><circle cx="88" cy="38" r="8" fill="#111"/><circle cx="88" cy="38" r="3.2" fill="#8A8E92"/>';
+    svg.setAttribute("viewBox", "0 0 64 64");
+    svg.setAttribute("width", "40");
+    svg.setAttribute("height", "40");
+    svg.innerHTML = '<g class="heading-arrow"><path d="M32 4 L58 56 L32 44 L6 56 Z" fill="#1A73E8" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></g>';
     const template = document.createElement("template");
     template.content.append(svg);
     const marker = new Marker3DElement({
       position: { lat: position.lat, lng: position.lng },
       altitudeMode: "CLAMP_TO_GROUND",
-      sizePreserved: true
+      sizePreserved: true,
+      drawsWhenOccluded: true
     });
     marker.append(template);
     return marker;
+  }
+
+  function setArrowRotation(heading){
+    if (!userMarker) return;
+    const mapH = Number(map3d && map3d.heading) || 0;
+    const rot = normaliseHeading((Number.isFinite(heading) ? heading : 0) - mapH);
+    const g = userMarker.querySelector(".heading-arrow");
+    if (g) g.setAttribute("transform", `rotate(${rot} 32 32)`);
   }
 
   window.initMap = async function initMap(){
@@ -330,7 +343,7 @@
       });
       ["gmp-headingchange","gmp-rangechange","gmp-tiltchange","gmp-fovchange","gmp-rollchange"].forEach(name => {
         map3d.addEventListener(name, () => {
-          if (name === "gmp-rangechange" || name === "gmp-fovchange") applyCarScale();
+          if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
           refreshViewSpecs();
         });
       });
@@ -413,21 +426,82 @@
   }
 
   function applyCarScale(){
-    if (!userCar) return;
-    const next = carScaleForCamera();
-    if (Math.abs(next - lastCarScale) < 0.015) return;
-    lastCarScale = next;
-    try { userCar.scale = next; } catch (err) {}
+    syncCarLod();
+  }
+
+  function hideUserCar(){
+    if (userCar && userCar.parentElement) {
+      try { userCar.remove(); } catch (err) {}
+    }
+  }
+
+  function showUserCar(){
+    const pos = currentCarPoint();
+    const heading = Number.isFinite(lastCarHeading) ? lastCarHeading : currentCarHeading();
+    if (!userCar) {
+      attachUserCar(pos, heading);
+      return;
+    }
+    if (!userCar.parentElement && map3d) {
+      map3d.append(userCar);
+      applyCarPose(pos, heading);
+    }
+  }
+
+  function hideHeadingArrow(){
+    if (userMarker) {
+      try { userMarker.remove(); } catch (err) {}
+      userMarker = null;
+    }
+  }
+
+  function showHeadingArrow(){
+    const pos = currentCarPoint();
+    if (!userMarker && Marker3DElement && map3d) {
+      userMarker = createHeadingArrow(pos);
+      map3d.append(userMarker);
+    } else if (userMarker) {
+      try { userMarker.position = { lat: pos.lat, lng: pos.lng }; } catch (err) {}
+    }
+    setArrowRotation(Number.isFinite(lastCarHeading) ? lastCarHeading : currentCarHeading());
+  }
+
+  function syncCarLod(){
+    if (syncCarLod.busy) return;
+    syncCarLod.busy = true;
+    try {
+      const next = carScaleForCamera();
+      const wantArrow = usingArrow ? next > CAR_ARROW_SCALE_IN : next > CAR_ARROW_SCALE;
+      if (wantArrow) {
+        hideUserCar();
+        showHeadingArrow();
+      } else {
+        hideHeadingArrow();
+        showUserCar();
+        if (userCar && Math.abs(next - lastCarScale) >= 0.015) {
+          lastCarScale = next;
+          try { userCar.scale = next; } catch (err) {}
+        }
+      }
+      usingArrow = wantArrow;
+    } finally {
+      syncCarLod.busy = false;
+    }
   }
 
   function applyCarPose(point, heading){
-    if (!userCar) return;
-    const pos = carMapPosition(point);
-    const orientation = carOrientation(heading);
-    try { userCar.position = pos; } catch (err) {}
-    try { userCar.orientation = orientation; } catch (err) {}
-    try { userCar.altitudeMode = "RELATIVE_TO_MESH"; } catch (err) {}
-    applyCarScale();
+    if (Number.isFinite(heading)) lastCarHeading = heading;
+    if (userCar) {
+      const pos = carMapPosition(point);
+      const orientation = carOrientation(lastCarHeading);
+      try { userCar.position = pos; } catch (err) {}
+      try { userCar.orientation = orientation; } catch (err) {}
+      try { userCar.altitudeMode = "RELATIVE_TO_MESH"; } catch (err) {}
+    }
+    if (userMarker) {
+      try { userMarker.position = { lat: point.lat, lng: point.lng }; } catch (err) {}
+      setArrowRotation(lastCarHeading);
+    }
   }
 
   function attachUserCar(position, heading){
@@ -445,10 +519,7 @@
       const revealModel = () => {
         if (carModelReady) return;
         carModelReady = true;
-        if (userMarker) {
-          userMarker.remove();
-          userMarker = null;
-        }
+        syncCarLod();
       };
       userCar.addEventListener("gmp-load", revealModel);
       userCar.addEventListener("load", revealModel);
@@ -459,24 +530,20 @@
           userCar = null;
         }
         carModelReady = false;
-        if (!userMarker && Marker3DElement) {
-          userMarker = createCarPuck(position);
-          map3d.append(userMarker);
-        }
+        usingArrow = true;
+        showHeadingArrow();
       });
       map3d.append(userCar);
       // Re-apply after attach: some WebViews drop constructor options.
       try { userCar.src = src; } catch (err) {}
       applyCarPose(position, h);
       lastCarScale = 0;
-      applyCarScale();
+      syncCarLod();
     } catch (err) {
       console.error(err);
       userCar = null;
-      if (!userMarker && Marker3DElement) {
-        userMarker = createCarPuck(position);
-        map3d.append(userMarker);
-      }
+      usingArrow = true;
+      showHeadingArrow();
     }
   }
 
@@ -842,7 +909,7 @@
   }
 
   function handlePosition(position){
-    if (!map3d || (!userMarker && !userCar)) return;
+    if (!map3d) return;
     const c = position.coords;
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
     currentGpsPoint = fix;
@@ -858,9 +925,8 @@
   }
 
   function carOrientation(heading){
-    // tilt/roll sits a Y-up glTF on the map; -90 yaw aims +Z (nose) along travel,
-    // not +X (right doors).
-    return { heading: normaliseHeading(heading - 90), tilt: 270, roll: 90 };
+    const yaw = Number.isFinite(activeCarModel().yawOffset) ? activeCarModel().yawOffset : -90;
+    return { heading: normaliseHeading(heading + yaw), tilt: 270, roll: 90 };
   }
 
   function updateCar(point, heading){
@@ -868,6 +934,8 @@
     const h = normaliseHeading(heading);
     if (userMarker) userMarker.position = pos;
     applyCarPose(pos, h);
+    setArrowRotation(h);
+    syncCarLod();
     if (following) {
       map3d.heading = h;
       if (currentView === "drive" || document.body.classList.contains("navigating")) {
@@ -921,7 +989,7 @@
       map3d.tilt = 0; map3d.range = 1300; map3d.heading = 0; map3d.fov = 35;
     }
     setViewSelectValue(mode);
-    applyCarScale();
+    syncCarLod();
     refreshViewSpecs();
   }
 
@@ -1088,10 +1156,12 @@
     const model = activeCarModel();
     viewer.setAttribute("src", model.url);
     viewer.setAttribute("alt", model.label);
-    viewer.setAttribute("camera-orbit", model.orbit || "35deg 70deg auto");
-    viewer.setAttribute("min-camera-orbit", "auto 12deg auto");
-    viewer.setAttribute("max-camera-orbit", "auto 90deg auto");
-    viewer.setAttribute("field-of-view", "30deg");
+    viewer.setAttribute("camera-orbit", model.orbit || "0deg 75deg 8m");
+    viewer.setAttribute("camera-target", model.target || "0m 0.7m 0m");
+    viewer.setAttribute("min-camera-orbit", "auto 5deg 3m");
+    viewer.setAttribute("max-camera-orbit", "auto 90deg 24m");
+    viewer.setAttribute("field-of-view", "28deg");
+    viewer.setAttribute("interpolation-decay", "20");
     try { if (typeof viewer.jumpCameraToGoal === "function") viewer.jumpCameraToGoal(); } catch (err) {}
   }
 
@@ -1122,6 +1192,11 @@
     viewer.setAttribute("interaction-prompt", "none");
     viewer.setAttribute("shadow-intensity", "1");
     viewer.setAttribute("exposure", "1.15");
+    viewer.setAttribute("loading", "eager");
+    viewer.setAttribute("reveal", "auto");
+    viewer.addEventListener("error", () => {
+      host.textContent = "Could not display this 3D model.";
+    });
     applyViewerModel(viewer);
     host.append(viewer);
   }
@@ -1251,7 +1326,7 @@
     const range = Number(map3d.range) || 260;
     const next = range / (Number(factor) || 1);
     map3d.range = clamp(next, 40, 20000);
-    applyCarScale();
+    syncCarLod();
     refreshViewSpecs();
   };
   window.__aaRecenter = function(){

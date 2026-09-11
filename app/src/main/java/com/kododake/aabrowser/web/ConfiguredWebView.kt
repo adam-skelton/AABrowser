@@ -40,7 +40,8 @@ data class BrowserCallbacks(
     ) -> Unit = { _, _, _, cancel -> cancel() },
     val onEnterFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit = { _, _ -> },
     val onExitFullscreen: () -> Unit = {},
-    val onPermissionRequest: (PermissionRequest) -> Unit = { it.deny() }
+    val onPermissionRequest: (PermissionRequest) -> Unit = { it.deny() },
+    val onGeolocationPermission: (origin: String?, grant: (Boolean) -> Unit) -> Unit = { _, grant -> grant(false) }
 )
 
 fun configureWebView(
@@ -139,30 +140,28 @@ fun configureWebView(
                 request: WebResourceRequest,
                 error: WebResourceError
             ) {
-                if (request.isForMainFrame) {
-                    val code = error.errorCode
-                    val shouldShowErrorPage = when (code) {
-                        WebViewClient.ERROR_HOST_LOOKUP,
-                        WebViewClient.ERROR_CONNECT,
-                        WebViewClient.ERROR_TIMEOUT,
-                        WebViewClient.ERROR_UNKNOWN,
-                        WebViewClient.ERROR_PROXY_AUTHENTICATION -> true
-                        else -> false
-                    }
-
-                    if (shouldShowErrorPage) {
-                        val failed = request.url?.toString().orEmpty()
-                        val message = error.description?.toString().orEmpty()
-                        val assetUrl = "file:///android_asset/error.html?failedUrl=${Uri.encode(failed)}&code=$code&message=${Uri.encode(message)}"
-                        try {
-                            view.loadUrl(assetUrl)
-                        } catch (_: Exception) {
-                            callbacks.onError(code, error.description?.toString())
-                        }
-                        return
-                    }
+                if (!request.isForMainFrame) return
+                val code = error.errorCode
+                val shouldShowErrorPage = when (code) {
+                    WebViewClient.ERROR_HOST_LOOKUP,
+                    WebViewClient.ERROR_CONNECT,
+                    WebViewClient.ERROR_TIMEOUT,
+                    WebViewClient.ERROR_PROXY_AUTHENTICATION -> true
+                    else -> false
                 }
-                callbacks.onError(error.errorCode, error.description?.toString())
+
+                if (shouldShowErrorPage) {
+                    val failed = request.url?.toString().orEmpty()
+                    val message = error.description?.toString().orEmpty()
+                    val assetUrl = "file:///android_asset/error.html?failedUrl=${Uri.encode(failed)}&code=$code&message=${Uri.encode(message)}"
+                    try {
+                        view.loadUrl(assetUrl)
+                    } catch (_: Exception) {
+                        callbacks.onError(code, error.description?.toString())
+                    }
+                    return
+                }
+                callbacks.onError(code, error.description?.toString())
             }
 
             override fun onReceivedHttpError(
@@ -237,7 +236,13 @@ fun configureWebView(
                         context,
                         Manifest.permission.ACCESS_COARSE_LOCATION
                     ) == PackageManager.PERMISSION_GRANTED
-                callback.invoke(origin, granted, false)
+                if (granted) {
+                    callback.invoke(origin, true, true)
+                    return
+                }
+                callbacks.onGeolocationPermission(origin) { allow ->
+                    callback.invoke(origin, allow, allow)
+                }
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {

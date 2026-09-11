@@ -20,7 +20,8 @@ from scipy.spatial import cKDTree
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "pages" / "forte.glb"
 DST = ROOT / "pages" / "forte.glb"
-TARGET_TRIS = 96000
+TARGET_TRIS = 40000
+MAX_VERTS = 65000
 AGGRESSION = 5.0
 
 
@@ -132,18 +133,23 @@ def main():
     verts, faces, uvs = load_geometry(js, binary)
     print(f"input verts={len(verts)} tris={len(faces)}")
 
-    if len(faces) > 150000:
+    new_v, new_f, new_uv = verts, faces, uvs.astype(np.float32)
+    target = min(TARGET_TRIS, max(8000, len(faces) - 1))
+    while len(new_v) >= MAX_VERTS or len(new_f) > TARGET_TRIS:
         new_v, new_f = fast_simplification.simplify(
-            verts,
-            faces.astype(np.int32),
-            target_count=min(TARGET_TRIS, len(faces) - 1),
+            new_v,
+            new_f.astype(np.int32),
+            target_count=target,
             agg=AGGRESSION,
         )
-        tree = cKDTree(verts)
-        _, nearest = tree.query(new_v, k=1, workers=-1)
-        new_uv = uvs[nearest].astype(np.float32)
-    else:
-        new_v, new_f, new_uv = verts, faces, uvs.astype(np.float32)
+        if len(new_v) < MAX_VERTS and len(new_f) <= TARGET_TRIS:
+            break
+        target = max(8000, int(target * 0.72))
+        if target < 8000:
+            break
+    tree = cKDTree(verts)
+    _, nearest = tree.query(new_v, k=1, workers=-1)
+    new_uv = uvs[nearest].astype(np.float32)
 
     size = new_v.max(axis=0) - new_v.min(axis=0)
     if size[1] > size[2] * 1.5:
@@ -177,6 +183,8 @@ def main():
         return len(blobs) - 1
 
     use_u16 = len(new_v) < 65535
+    if not use_u16:
+        raise SystemExit(f"Forte still has {len(new_v)} verts; needs uint16 for WebView model-viewer")
     idx = new_f.reshape(-1)
     idx_bytes = (idx.astype("<u2") if use_u16 else idx.astype("<u4")).tobytes()
     pos_bytes = np.ascontiguousarray(new_v, dtype="<f4").tobytes()

@@ -1,99 +1,58 @@
 package com.kododake.aabrowser
 
 import android.Manifest
-import android.content.Context
-import android.content.DialogInterface
 import android.content.Intent
-import android.net.Uri
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Color
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
 import android.os.Looper
-import android.text.TextUtils
-import android.util.TypedValue
-import android.view.ContextThemeWrapper
 import android.view.Display
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.webkit.WebChromeClient
 import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.Toast
-import com.kododake.aabrowser.analytics.UmamiTracker
-import com.kododake.aabrowser.car.CarJsBridge
-import com.kododake.aabrowser.car.CarWebViewHost
-import com.google.android.material.color.DynamicColors
 import androidx.activity.addCallback
-import androidx.core.app.ActivityCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.isVisible
-import androidx.webkit.WebMessageCompat
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.kododake.aabrowser.data.BrowserPreferences
+import com.google.android.material.color.DynamicColors
+import com.kododake.aabrowser.analytics.UmamiTracker
+import com.kododake.aabrowser.car.CarJsBridge
+import com.kododake.aabrowser.car.CarWebViewHost
 import com.kododake.aabrowser.databinding.ActivityMainBinding
-import com.kododake.aabrowser.model.UserAgentProfile
 import com.kododake.aabrowser.web.BrowserCallbacks
 import com.kododake.aabrowser.web.configureWebView
 import com.kododake.aabrowser.web.releaseCompletely
-import com.kododake.aabrowser.web.updateDesktopMode
-import com.kododake.aabrowser.web.updateUserAgentProfile
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.textview.MaterialTextView
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
-import com.google.zxing.common.BitMatrix
-import android.widget.RadioGroup
-import com.kododake.aabrowser.settings.SettingsViews
-import org.woheller69.freeDroidWarn.R as FreeDroidWarnR
-import android.car.Car
-import android.car.drivingstate.CarUxRestrictions
-import android.car.drivingstate.CarUxRestrictionsManager
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val isDebugBuild: Boolean by lazy {
-        (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-    }
-    private val handler = Handler(Looper.getMainLooper())
-    private val autoHideMenuFab = Runnable {
-        if (::binding.isInitialized) binding.menuFab.hide()
-    }
-    private val showMenuFabRunnable = Runnable {
-        if (!::binding.isInitialized) return@Runnable
-        if (isInFullscreen() || binding.menuOverlay.isVisible) return@Runnable
-        binding.menuFab.show()
-        handler.postDelayed(autoHideMenuFab, MENU_BUTTON_AUTO_HIDE_DELAY_MS)
-    }
+    private val umamiTracker: UmamiTracker by lazy { UmamiTracker(applicationContext) }
 
     private var webView: android.webkit.WebView? = null
-    private var currentUrl: String = BrowserPreferences.defaultUrl()
-    private var currentPageTitle: String = ""
-    private var currentUserAgentProfile: UserAgentProfile = UserAgentProfile.ANDROID_CHROME
-    private var browserCallbacks: BrowserCallbacks? = null
+    private var currentUrl: String = CarWebViewHost.START_URL
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-    private var isShowingCleartextDialog: Boolean = false
-    private var isShowingMicrophoneDialog: Boolean = false
-    private var latestReleaseUrl: String = "https://github.com/kododake/AABrowser/releases"
-    private val umamiTracker: UmamiTracker by lazy { UmamiTracker(applicationContext) }
-    private var pendingPermissionRequest: android.webkit.PermissionRequest? = null
-    private var speechBridge: com.kododake.aabrowser.web.SpeechRecognitionBridge? = null
-    private var carInstance: Any? = null
-    private var uxRestrictionsManagerInstance: Any? = null
+    private var pendingGeoGrant: ((Boolean) -> Unit)? = null
+    private var locationStarted = false
+    private var lastLocation: Location? = null
+
+    private val locationListener = LocationListener { location -> injectPhoneLocation(location) }
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        val allow = granted.values.any { it }
+        pendingGeoGrant?.invoke(allow)
+        pendingGeoGrant = null
+        if (allow) startPhoneLocation()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,49 +63,47 @@ class MainActivity : AppCompatActivity() {
         umamiTracker.trackEvent("app_open")
 
         val disp = currentDisplayOrNull()
-        val best = disp?.supportedModes?.maxWithOrNull(compareBy({ it.refreshRate }, { it.physicalWidth.toLong() * it.physicalHeight }))
+        val best = disp?.supportedModes?.maxWithOrNull(
+            compareBy({ it.refreshRate }, { it.physicalWidth.toLong() * it.physicalHeight })
+        )
         best?.let { mode ->
             val attrs = window.attributes
             attrs.preferredDisplayModeId = mode.modeId
             window.attributes = attrs
         }
 
-        setupUi()
         setupBackPressHandling()
-        ensureNotificationPermissionIfNeeded()
         ensureLocationPermissionIfNeeded()
-        showFreeDroidWarnOnUpgradeMaterial()
-        setupCarRestrictions()
+        setupUi()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        extractBrowsableUrl(intent)?.let { loadUrlFromIntent(it) }
+        extractBrowsableUrl(intent)?.let { url ->
+            currentUrl = url
+            webView?.loadUrl(url)
+        }
     }
 
     override fun onResume() {
         super.onResume()
         webView?.onResume()
-        refreshBookmarks()
-        syncUserAgentProfile()
+        if (hasLocationPermission()) startPhoneLocation()
     }
 
     override fun onPause() {
         exitFullscreen()
+        stopPhoneLocation()
         webView?.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(autoHideMenuFab)
-        handler.removeCallbacks(showMenuFabRunnable)
         exitFullscreen()
-        speechBridge?.destroy()
-        speechBridge = null
+        stopPhoneLocation()
         binding.webView.releaseCompletely()
         webView = null
-        runCatching { (carInstance as? Car)?.disconnect() }
         super.onDestroy()
     }
 
@@ -158,411 +115,67 @@ class MainActivity : AppCompatActivity() {
             windowManager.defaultDisplay
         }
     }
-    private fun setupCarRestrictions() {
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) return
-        try {
-            val car = Car.createCar(this)
-            carInstance = car
-            val manager = car.getCarManager(Car.CAR_UX_RESTRICTION_SERVICE) as? CarUxRestrictionsManager
-            uxRestrictionsManagerInstance = manager
-            manager?.registerListener { restrictions ->
-                runOnUiThread { handleUxRestrictions(restrictions) }
-            }
-            manager?.getCurrentCarUxRestrictions()?.let { handleUxRestrictions(it) }
-        } catch (_: Exception) {}
-    }
 
-    private fun handleUxRestrictions(restrictions: CarUxRestrictions) {
-        if (isFinishing || isDestroyed) return
-        if (BrowserPreferences.isBypassMotionRestrictionsEnabled(this)) {
-            binding.addressEdit.isEnabled = true
-            binding.addressEdit.hint = getString(R.string.menu_address_label)
-            return
-        }
-
-        val isRestricted = restrictions.activeRestrictions != 0
-
-        if (isRestricted) {
-            binding.addressEdit.isEnabled = false
-            binding.addressEdit.hint = "Disabled while driving"
-            if (binding.menuOverlay.isVisible) hideMenuOverlay()
-        } else {
-            binding.addressEdit.isEnabled = true
-            binding.addressEdit.hint = getString(R.string.menu_address_label)
-        }
-    }
-
-    private fun resolveThemeColor(attrRes: Int): Int {
-        val typedValue = TypedValue()
-        theme.resolveAttribute(attrRes, typedValue, true)
-        return typedValue.data
+    private fun hasLocationPermission(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
     }
 
     private fun ensureLocationPermissionIfNeeded() {
-        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) return
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            REQUEST_CODE_LOCATION
+        if (hasLocationPermission()) {
+            startPhoneLocation()
+            return
+        }
+        locationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
         )
     }
 
-    private fun ensureNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_POST_NOTIFICATIONS)
-    }
-
-    private fun grantableWebPermissionResources(request: android.webkit.PermissionRequest): Array<String> {
-        val allowed = setOf(
-            android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID,
-            android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE
-        )
-        return request.resources.filter { it in allowed }.toTypedArray()
-    }
-
-    private fun protectedMediaResources(request: android.webkit.PermissionRequest): Array<String> {
-        return request.resources
-            .filter { it == android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID }
-            .toTypedArray()
-    }
-
-    private fun denyAudioButAllowProtectedMediaIfPresent(request: android.webkit.PermissionRequest) {
-        val protectedMedia = protectedMediaResources(request)
-        if (protectedMedia.isNotEmpty()) {
-            request.grant(protectedMedia)
-        } else {
-            request.deny()
+    private fun startPhoneLocation() {
+        if (locationStarted || !hasLocationPermission()) return
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val provider = when {
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                manager.isProviderEnabled(LocationManager.FUSED_PROVIDER) -> LocationManager.FUSED_PROVIDER
+            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> manager.getProviders(true).firstOrNull()
+        } ?: return
+        runCatching {
+            manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            locationStarted = true
+            manager.getLastKnownLocation(provider)?.let(::injectPhoneLocation)
         }
     }
 
-    private fun continueWebPermissionRequest(request: android.webkit.PermissionRequest) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            val grantable = grantableWebPermissionResources(request)
-            if (grantable.isNotEmpty()) request.grant(grantable) else request.deny()
-        } else {
-            pendingPermissionRequest = request
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_CODE_RECORD_AUDIO)
-        }
+    private fun stopPhoneLocation() {
+        if (!locationStarted) return
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        runCatching { manager.removeUpdates(locationListener) }
+        locationStarted = false
     }
 
-    private fun handleWebPermissionRequest(request: android.webkit.PermissionRequest) {
-        val grantable = grantableWebPermissionResources(request)
-        if (grantable.isEmpty()) {
-            request.deny()
-            return
-        }
-
-        val origin = runCatching { request.origin }.getOrNull()
-        val host = origin?.host?.lowercase()
-        if (android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE !in grantable || BrowserPreferences.isHostAllowedMicrophone(this, host)) {
-            continueWebPermissionRequest(request)
-            return
-        }
-
-        if (isFinishing || isDestroyed || isShowingMicrophoneDialog) {
-            denyAudioButAllowProtectedMediaIfPresent(request)
-            return
-        }
-
-        showMicrophoneAccessDialog(
-            origin = origin,
-            onAllowOnce = { continueWebPermissionRequest(request) },
-            onAllowHost = {
-                host?.let { BrowserPreferences.addAllowedMicrophoneHost(this, it) }
-                continueWebPermissionRequest(request)
-            },
-            onCancel = { denyAudioButAllowProtectedMediaIfPresent(request) }
-        )
-    }
-
-    private fun requestSpeechRecognitionMicrophoneAccess(pageUrl: String?) {
-        val pageUri = runCatching { pageUrl?.let(Uri::parse) }.getOrNull()
-        val host = pageUri?.host?.lowercase()
-        if (BrowserPreferences.isHostAllowedMicrophone(this, host)) {
-            continueSpeechRecognitionMicrophoneAccess()
-            return
-        }
-
-        if (isFinishing || isDestroyed || isShowingMicrophoneDialog) {
-            speechBridge?.onPermissionResult(false)
-            return
-        }
-
-        showMicrophoneAccessDialog(
-            origin = pageUri,
-            onAllowOnce = { continueSpeechRecognitionMicrophoneAccess() },
-            onAllowHost = {
-                host?.let { BrowserPreferences.addAllowedMicrophoneHost(this, it) }
-                continueSpeechRecognitionMicrophoneAccess()
-            },
-            onCancel = { speechBridge?.onPermissionResult(false) }
-        )
-    }
-
-    private fun continueSpeechRecognitionMicrophoneAccess() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            speechBridge?.onPermissionResult(true)
-        } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_CODE_RECORD_AUDIO)
-        }
-    }
-
-    private fun showMicrophoneAccessDialog(
-        origin: Uri?,
-        onAllowOnce: () -> Unit,
-        onAllowHost: () -> Unit,
-        onCancel: () -> Unit
-    ) {
-        val originLabel = origin?.host ?: origin?.toString() ?: getString(R.string.microphone_access_unknown_origin)
-        showSitePermissionDialog(
-            title = getString(R.string.microphone_access_title),
-            message = getString(R.string.microphone_access_message),
-            isMicrophoneDialog = true,
-            hostLabel = getString(R.string.microphone_access_host_label),
-            hostValue = originLabel,
-            detailMessage = getString(R.string.microphone_access_detail),
-            onAllowOnce = onAllowOnce,
-            onAllowHost = if (origin?.host.isNullOrBlank()) null else onAllowHost,
-            onCancel = onCancel
-        )
-    }
-
-    private fun showSitePermissionDialog(
-        title: String,
-        message: String,
-        isMicrophoneDialog: Boolean,
-        hostLabel: String? = null,
-        hostValue: String? = null,
-        detailMessage: String? = null,
-        onAllowOnce: () -> Unit,
-        onAllowHost: (() -> Unit)?,
-        onCancel: () -> Unit
-    ) {
-        val flagAccessor: () -> Boolean = { if (isMicrophoneDialog) isShowingMicrophoneDialog else isShowingCleartextDialog }
-        val flagSetter: (Boolean) -> Unit = { showing ->
-            if (isMicrophoneDialog) {
-                isShowingMicrophoneDialog = showing
-            } else {
-                isShowingCleartextDialog = showing
-            }
-        }
-
-        if (isFinishing || isDestroyed) {
-            onCancel()
-            return
-        }
-        if (flagAccessor()) return
-        flagSetter(true)
-
-        val view = layoutInflater.inflate(R.layout.dialog_cleartext_confirmation, null)
-        val titleView = view.findViewById<android.widget.TextView>(R.id.cleartext_title)
-        val messageView = view.findViewById<android.widget.TextView>(R.id.cleartext_message)
-        val hostContainer = view.findViewById<android.view.View>(R.id.cleartext_host_container)
-        val hostLabelView = view.findViewById<android.widget.TextView>(R.id.cleartext_host_label)
-        val hostValueView = view.findViewById<android.widget.TextView>(R.id.cleartext_host_value)
-        val detailView = view.findViewById<android.widget.TextView>(R.id.cleartext_detail)
-        val cancelButton = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_cancel_dialog)
-        val allowOnceButton = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_allow_once)
-        val allowHostButton = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_allow_host)
-        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(
-            this,
-            com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog
-        ).setView(view).create()
-
-        titleView.text = title
-        messageView.text = message
-        if (!hostLabel.isNullOrBlank() && !hostValue.isNullOrBlank()) {
-            hostContainer.visibility = View.VISIBLE
-            hostLabelView.text = hostLabel
-            hostValueView.text = hostValue
-        } else {
-            hostContainer.visibility = View.GONE
-        }
-        if (!detailMessage.isNullOrBlank()) {
-            detailView.visibility = View.VISIBLE
-            detailView.text = detailMessage
-        } else {
-            detailView.visibility = View.GONE
-        }
-
-        cancelButton.setOnClickListener {
-            try { dialog.dismiss() } catch (_: Exception) {}
-            onCancel()
-        }
-        allowOnceButton.setOnClickListener {
-            try { dialog.dismiss() } catch (_: Exception) {}
-            onAllowOnce()
-        }
-        if (onAllowHost != null) {
-            allowHostButton.visibility = View.VISIBLE
-            allowHostButton.setOnClickListener {
-                try { dialog.dismiss() } catch (_: Exception) {}
-                onAllowHost()
-            }
-        } else {
-            allowHostButton.visibility = View.GONE
-        }
-
-        dialog.setOnDismissListener { flagSetter(false) }
-
-        try {
-            dialog.show()
-            val width = (resources.displayMetrics.widthPixels * 0.9).toInt()
-            dialog.window?.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
-        } catch (_: Exception) {
-            flagSetter(false)
-            onCancel()
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_RECORD_AUDIO) {
-            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-
-            val request = pendingPermissionRequest
-            pendingPermissionRequest = null
-            if (request != null) {
-                if (granted) {
-                    val grantable = grantableWebPermissionResources(request)
-                    if (grantable.isNotEmpty()) request.grant(grantable) else request.deny()
-                } else {
-                    denyAudioButAllowProtectedMediaIfPresent(request)
-                }
-            }
-
-            if (speechBridge?.hasPendingPermissionRequest() == true) {
-                speechBridge?.onPermissionResult(granted)
-            }
-        }
-        if (requestCode == REQUEST_CODE_LOCATION) {
-            val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
-            if (granted && CarWebViewHost.isCarMapUrl(currentUrl)) {
-                webView?.evaluateJavascript(
-                    "(function(){ try { if (typeof startGps === 'function') startGps(); } catch (err) {} })();",
-                    null
-                )
-            }
-        }
-    }
-
-    private fun applyCarPreviewIfNeeded(url: String?) {
-        if (!CarWebViewHost.isCarMapUrl(url)) return
+    private fun injectPhoneLocation(location: Location) {
+        lastLocation = location
         val view = webView ?: return
-        CarWebViewHost.applyCarChrome(view)
-        handler.postDelayed({
-            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
-                webView?.let { CarWebViewHost.applyCarChrome(it) }
-            }
-        }, 120L)
-        handler.postDelayed({
-            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
-                webView?.let { CarWebViewHost.applyCarChrome(it) }
-            }
-        }, 400L)
-    }
-
-    private fun showFreeDroidWarnOnUpgradeMaterial() {
-        if (isFinishing || isDestroyed) return
-
-        val appVersionCode = runCatching {
-            packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
-        }.getOrDefault(1)
-
-        val prefManager = getSharedPreferences("${packageName}_preferences", Context.MODE_PRIVATE)
-        val warnedVersionCode = prefManager.getInt(FREE_DROID_WARN_VERSION_KEY, 0)
-        if (appVersionCode <= warnedVersionCode) return
-
-        val view = layoutInflater.inflate(R.layout.dialog_free_droid_warn, null)
-        val titleView = view.findViewById<android.widget.TextView>(R.id.free_droid_warn_title)
-        val messageView = view.findViewById<android.widget.TextView>(R.id.free_droid_warn_message)
-        titleView.text = getString(android.R.string.dialog_alert_title)
-        messageView.text = getString(FreeDroidWarnR.string.dialog_Warning)
-
-        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(
-            this,
-            com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog
-        )
-            .setView(view)
-            .setNegativeButton(FreeDroidWarnR.string.dialog_more_info) { _, _ ->
-                loadUrlFromIntent(KEEP_ANDROID_OPEN_URL)
-            }
-            .setNeutralButton(FreeDroidWarnR.string.solution) { _, _ ->
-                loadUrlFromIntent(FREE_DROID_WARN_SOLUTIONS_URL)
-            }
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                prefManager.edit().putInt(FREE_DROID_WARN_VERSION_KEY, appVersionCode).apply()
-            }
-            .create()
-
-        dialog.setCanceledOnTouchOutside(false)
-        dialog.show()
-        dialog.getButton(DialogInterface.BUTTON_NEUTRAL)?.setTextColor(
-            ContextCompat.getColor(this, android.R.color.holo_red_dark)
-        )
+        view.evaluateJavascript(CarWebViewHost.gpsInjectJs(location), null)
     }
 
     private fun setupUi() {
         val intentUrl = extractBrowsableUrl(intent)
         val initialUrl = intentUrl ?: CarWebViewHost.START_URL
         currentUrl = initialUrl
-        val desktopMode = if (intentUrl == null) {
-            true
-        } else {
-            BrowserPreferences.shouldUseDesktopMode(this)
-        }
-        currentUserAgentProfile = BrowserPreferences.getUserAgentProfile(this)
 
-        binding.menuFab.hide()
-
-        browserCallbacks = BrowserCallbacks(
+        val browserCallbacks = BrowserCallbacks(
             onUrlChange = { url ->
                 runOnUiThread {
                     currentUrl = url
-                    if (binding.addressEdit.text?.toString() != url) {
-                        binding.addressEdit.setText(url)
-                        binding.addressEdit.setSelection(binding.addressEdit.text?.length ?: 0)
-                    }
-                    BrowserPreferences.persistUrl(this, url)
-                    updateNavigationButtons()
-                    updateConnectionSecurityIcon(url)
-                    applyCarPreviewIfNeeded(url)
-                }
-            },
-            onTitleChange = { title ->
-                runOnUiThread {
-                    val resolvedTitle = title.orEmpty()
-                    currentPageTitle = resolvedTitle
-                    binding.pageTitle.text = resolvedTitle
-                }
-            },
-            onProgressChange = { progress ->
-                runOnUiThread { updateProgress(progress) }
-            },
-            onShowDownloadPrompt = { uri ->
-                runOnUiThread { openUriExternally(uri) }
-            },
-            onCleartextNavigationRequested = { uri, allowOnce, allowhostPermanently, cancel ->
-                runOnUiThread {
-                    val host = uri.host ?: uri.toString()
-                    showSitePermissionDialog(
-                        title = getString(R.string.cleartext_connection_title),
-                        message = getString(R.string.cleartext_connection_message, host),
-                        isMicrophoneDialog = false,
-                        onAllowOnce = allowOnce,
-                        onAllowHost = allowhostPermanently,
-                        onCancel = cancel
-                    )
-                }
-            },
-            onError = { _, description ->
-                runOnUiThread {
-                    if (isDebugBuild) {
-                        val message = description ?: getString(R.string.error_generic_message)
-                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                    if (CarWebViewHost.isCarMapUrl(url)) {
+                        applyCarPreview(url)
                     }
                 }
             },
@@ -572,40 +185,27 @@ class MainActivity : AppCompatActivity() {
             onExitFullscreen = {
                 runOnUiThread { exitFullscreen(true) }
             },
-            onPermissionRequest = { request ->
-                runOnUiThread { handleWebPermissionRequest(request) }
+            onGeolocationPermission = { _, grant ->
+                runOnUiThread {
+                    if (hasLocationPermission()) {
+                        grant(true)
+                        startPhoneLocation()
+                    } else {
+                        pendingGeoGrant = grant
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                }
             }
         )
 
         webView = binding.webView
         webView?.let { view ->
-            configureWebView(view, browserCallbacks ?: BrowserCallbacks(), desktopMode, currentUserAgentProfile)
-
-            speechBridge = com.kododake.aabrowser.web.SpeechRecognitionBridge(view) { pageUrl ->
-                requestSpeechRecognitionMicrophoneAccess(pageUrl)
-            }
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-                WebViewCompat.addWebMessageListener(
-                    view,
-                    com.kododake.aabrowser.web.SpeechRecognitionBridge.BRIDGE_OBJECT_NAME,
-                    setOf("*")
-                ) { webView, message, sourceOrigin, isMainFrame, _ ->
-                    speechBridge?.handleWebMessage(
-                        message = message,
-                        sourceOrigin = sourceOrigin,
-                        isMainFrame = isMainFrame,
-                        currentPageUrl = webView.url
-                    )
-                }
-            }
-
-            view.addJavascriptInterface(object {
-                @android.webkit.JavascriptInterface
-                fun openExternal(url: String) {
-                    if (url.isNullOrBlank()) return
-                    runOnUiThread { runCatching { openUriExternally(Uri.parse(url)) } }
-                }
-            }, "Android")
+            configureWebView(view, browserCallbacks, true)
             view.addJavascriptInterface(
                 CarJsBridge(
                     onMain = { block -> runOnUiThread(block) },
@@ -618,343 +218,38 @@ class MainActivity : AppCompatActivity() {
                 ),
                 CarWebViewHost.BRIDGE_NAME
             )
-
-            view.setOnTouchListener { _, _ ->
-                showMenuButtonTemporarily()
-                false
-            }
             view.loadUrl(initialUrl)
         }
-
-        updateConnectionSecurityIcon(initialUrl)
-
-        if (intentUrl != null) {
-            BrowserPreferences.persistUrl(this, initialUrl)
-        }
-
-        binding.desktopSwitch.isChecked = desktopMode
-        binding.desktopSwitch.setOnCheckedChangeListener { _, isChecked ->
-            BrowserPreferences.setDesktopMode(this, isChecked)
-            webView?.updateDesktopMode(isChecked, currentUserAgentProfile)
-        }
-
-        binding.addressEdit.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_GO) {
-                navigateToAddress()
-                true
-            } else {
-                false
-            }
-        }
-
-        binding.addressEdit.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                val hasText = !s.isNullOrEmpty()
-                if (hasText && binding.buttonClearAddress.visibility != View.VISIBLE) {
-                    binding.buttonClearAddress.visibility = View.VISIBLE
-                    binding.buttonClearAddress.alpha = 0f
-                    binding.buttonClearAddress.animate().alpha(1f).setDuration(150).start()
-                } else if (!hasText && binding.buttonClearAddress.visibility == View.VISIBLE) {
-                    binding.buttonClearAddress.animate().alpha(0f).setDuration(100).withEndAction {
-                        binding.buttonClearAddress.visibility = View.GONE
-                    }.start()
-                }
-            }
-        })
-
-        binding.buttonClearAddress.setOnClickListener {
-            binding.addressEdit.setText("")
-            binding.addressEdit.requestFocus()
-            showKeyboard(binding.addressEdit)
-        }
-
-        binding.buttonGo.setOnClickListener { navigateToAddress() }
-
-        binding.buttonReload.setOnClickListener {
-            webView?.reload()
-            hideMenuOverlay()
-        }
-
-        binding.buttonBack.setOnClickListener {
-            webView?.let { if (it.canGoBack()) it.goBack() }
-            updateNavigationButtons()
-        }
-
-        binding.buttonForward.setOnClickListener {
-            webView?.let { if (it.canGoForward()) it.goForward() }
-            updateNavigationButtons()
-        }
-
-        val tonalIconColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSecondaryContainer)
-        val tonalColorStateList = android.content.res.ColorStateList.valueOf(tonalIconColor)
-        val primaryColor = resolveThemeColor(androidx.appcompat.R.attr.colorPrimary)
-        val primaryColorStateList = android.content.res.ColorStateList.valueOf(primaryColor)
-
-        val navButtons = listOf(
-            binding.buttonBack, binding.buttonReload, binding.buttonForward,
-            binding.buttonBookmarks, binding.buttonSettings, binding.buttonExternalGithub
-        )
-
-        navButtons.forEach { btn ->
-            btn.isEnabled = true
-            btn.isClickable = true
-            btn.iconTint = tonalColorStateList
-        }
-
-        binding.buttonExternal.setOnClickListener { showQrCodeView() }
-        binding.buttonExternalGithub.iconTint = primaryColorStateList
-        binding.buttonExternalGithub.setOnClickListener { openUriExternally(Uri.parse(GITHUB_REPO_URL)) }
-        binding.buttonBookmarks.setOnClickListener { showBookmarkManager() }
-        binding.buttonBookmarkManagerBack.setOnClickListener { hideBookmarkManager() }
-        binding.buttonBookmarkAdd.setOnClickListener { addBookmarkForCurrentPage() }
-        binding.buttonQrCodeBack.setOnClickListener { hideQrCodeView() }
-        binding.buttonQrCopy.setOnClickListener {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
-            Toast.makeText(this, "Copied URL", Toast.LENGTH_SHORT).show()
-        }
-        binding.buttonQrExternalBrowser.setOnClickListener {
-            openUriExternally(Uri.parse(currentUrl))
-            hideMenuOverlay()
-        }
-        binding.buttonCheckLatest.setOnClickListener { showCheckLatestView() }
-        binding.buttonCheckLatestBack.setOnClickListener { hideCheckLatestView() }
-        binding.checkLatestOpenReleaseButton.setOnClickListener {
-            openUriExternally(Uri.parse(latestReleaseUrl))
-            hideMenuOverlay()
-        }
-        binding.buttonSettings.setOnClickListener { showSettingsView() }
-
-        binding.menuFab.setOnClickListener { showMenuOverlay() }
-        binding.buttonClose.setOnClickListener { hideMenuOverlay() }
-        binding.menuOverlayScrim.setOnClickListener { hideMenuOverlay() }
-
-        setupManualDragLogic()
-
-        updateNavigationButtons()
-        showMenuButtonTemporarily()
-        refreshBookmarks()
-
-        try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            binding.menuVersion.text = getString(R.string.installed_version_label, "v${pInfo.versionName}")
-        } catch (_: Exception) {}
     }
 
-    private fun setupManualDragLogic() {
-        var startY = 0f
-        var initialTranslationY = 0f
-        val swipeThreshold = 250f
-
-        binding.dragHandleArea.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startY = event.rawY
-                    initialTranslationY = binding.menuCard.translationY
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaY = event.rawY - startY
-                    if (deltaY > 0) {
-                        binding.menuCard.translationY = initialTranslationY + deltaY
-                        val progress = (deltaY / binding.menuCard.height.coerceAtLeast(1)).coerceIn(0f, 1f)
-                        binding.menuOverlayScrim.alpha = 1f - progress
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val totalDeltaY = event.rawY - startY
-                    if (totalDeltaY > swipeThreshold) {
-                        hideMenuOverlay()
-                    } else {
-                        binding.menuCard.animate()
-                            .translationY(0f)
-                            .setDuration(200)
-                            .start()
-                        binding.menuOverlayScrim.animate()
-                            .alpha(1f)
-                            .setDuration(200)
-                            .start()
-                    }
-                    true
-                }
-                else -> false
+    private fun applyCarPreview(url: String?) {
+        if (!CarWebViewHost.isCarMapUrl(url)) return
+        val view = webView ?: return
+        CarWebViewHost.applyCarChrome(view)
+        lastLocation?.let { injectPhoneLocation(it) }
+        view.postDelayed({
+            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
+                webView?.let { CarWebViewHost.applyCarChrome(it) }
             }
-        }
+        }, 120L)
+        view.postDelayed({
+            if (CarWebViewHost.isCarMapUrl(currentUrl)) {
+                webView?.let { CarWebViewHost.applyCarChrome(it) }
+            }
+        }, 400L)
     }
 
     private fun setupBackPressHandling() {
         onBackPressedDispatcher.addCallback(this) {
             when {
-                isInFullscreen() -> exitFullscreen()
-                binding.checkLatestViewRoot.isVisible -> hideCheckLatestView()
-                binding.qrCodeViewRoot.isVisible -> hideQrCodeView()
-                binding.bookmarkManagerRoot.isVisible -> hideBookmarkManager()
-                binding.settingsViewRoot.isVisible -> hideSettingsView()
-                binding.menuOverlay.isVisible -> hideMenuOverlay()
+                customView != null -> exitFullscreen()
                 webView?.canGoBack() == true -> webView?.goBack()
                 else -> {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                 }
             }
-            updateNavigationButtons()
         }
-    }
-
-    private fun syncUserAgentProfile() {
-        val latestProfile = BrowserPreferences.getUserAgentProfile(this)
-        if (latestProfile == currentUserAgentProfile) return
-        currentUserAgentProfile = latestProfile
-        webView?.updateUserAgentProfile(latestProfile, BrowserPreferences.shouldUseDesktopMode(this))
-    }
-
-    private fun navigateToAddress() {
-        val raw = binding.addressEdit.text?.toString().orEmpty()
-        val navigable = BrowserPreferences.formatNavigableUrl(raw)
-        if (navigable.isEmpty()) return
-        val uri = runCatching { Uri.parse(navigable) }.getOrNull() ?: return
-        if (uri.scheme?.lowercase() == "http") {
-            val host = uri.host?.lowercase()
-            if (!BrowserPreferences.isHostAllowedCleartext(this, host)) {
-                val allowOnce = {
-                    webView?.setTag(R.id.webview_allow_once_uri_tag, navigable)
-                    webView?.post { webView?.loadUrl(navigable) }
-                    kotlin.Unit
-                }
-                val allowHost = {
-                    host?.let { BrowserPreferences.addAllowedCleartextHost(this, it) }
-                    webView?.setTag(R.id.webview_allow_once_uri_tag, navigable)
-                    webView?.post { webView?.loadUrl(navigable) }
-                    kotlin.Unit
-                }
-                val cancel = { kotlin.Unit }
-                browserCallbacks?.onCleartextNavigationRequested(uri, allowOnce, allowHost, cancel)
-                hideMenuOverlay()
-                return
-            }
-        }
-
-        currentUrl = navigable
-        BrowserPreferences.persistUrl(this, navigable)
-        webView?.loadUrl(navigable)
-        hideMenuOverlay()
-    }
-
-    private fun loadUrlFromIntent(rawUrl: String) {
-        val navigable = BrowserPreferences.formatNavigableUrl(rawUrl.trim())
-        if (navigable.isEmpty()) return
-        val uri = runCatching { Uri.parse(navigable) }.getOrNull() ?: return
-        if (uri.scheme?.lowercase() == "http") {
-            val host = uri.host?.lowercase()
-            if (!BrowserPreferences.isHostAllowedCleartext(this, host)) {
-                val allowOnce = {
-                    webView?.setTag(R.id.webview_allow_once_uri_tag, navigable)
-                    webView?.post { webView?.loadUrl(navigable) }
-                    kotlin.Unit
-                }
-                val allowHost = {
-                    host?.let { BrowserPreferences.addAllowedCleartextHost(this, it) }
-                    webView?.setTag(R.id.webview_allow_once_uri_tag, navigable)
-                    webView?.post { webView?.loadUrl(navigable) }
-                    kotlin.Unit
-                }
-                val cancel = {
-                    webView?.stopLoading()
-                    kotlin.Unit
-                }
-                browserCallbacks?.onCleartextNavigationRequested(uri, allowOnce, allowHost, cancel)
-                binding.addressEdit.setText(navigable)
-                hideMenuOverlay()
-                return
-            }
-        }
-
-        currentUrl = navigable
-        BrowserPreferences.persistUrl(this, navigable)
-        binding.addressEdit.setText(navigable)
-        webView?.loadUrl(navigable)
-        hideMenuOverlay()
-    }
-
-    private fun updateNavigationButtons() {
-        binding.buttonBack.isEnabled = webView?.canGoBack() == true
-        binding.buttonForward.isEnabled = webView?.canGoForward() == true
-    }
-
-    private fun updateConnectionSecurityIcon(url: String?) {
-        val isSecure = try { url?.lowercase()?.startsWith("https://") == true } catch (_: Exception) { false }
-        binding.addressSecureIcon.visibility = if (isSecure) View.VISIBLE else View.GONE
-        binding.addressInsecureIcon.visibility = if (isSecure) View.GONE else View.VISIBLE
-    }
-
-    private fun updateProgress(progress: Int) {
-        binding.progressIndicator.visibility = if (progress in 1..99) View.VISIBLE else View.GONE
-        if (progress in 1..99) binding.progressIndicator.setProgressCompat(progress, true)
-    }
-
-    private fun showMenuOverlay() {
-        binding.menuOverlay.visibility = View.VISIBLE
-        binding.menuCard.post {
-            binding.menuCard.translationY = binding.menuCard.height.toFloat()
-            binding.menuCard.animate()
-                .translationY(0f)
-                .setDuration(300)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-            binding.menuOverlayScrim.animate()
-                .alpha(1f)
-                .setDuration(300)
-                .start()
-        }
-        handler.removeCallbacks(showMenuFabRunnable)
-        binding.menuFab.hide()
-        refreshBookmarks()
-    }
-
-    private fun hideMenuOverlay() {
-        hideKeyboard(binding.addressEdit)
-        binding.menuCard.animate()
-            .translationY(binding.menuCard.height.toFloat())
-            .setDuration(250)
-            .setInterpolator(android.view.animation.AccelerateInterpolator())
-            .withEndAction {
-                binding.menuOverlay.visibility = View.GONE
-                hideBookmarkManager()
-                hideCheckLatestView()
-                hideQrCodeView()
-                hideSettingsView()
-                showMenuButtonTemporarily()
-            }
-            .start()
-        binding.menuOverlayScrim.animate().alpha(0f).setDuration(200).start()
-    }
-
-    private fun showMenuButtonTemporarily() {
-        handler.removeCallbacks(showMenuFabRunnable)
-        handler.removeCallbacks(autoHideMenuFab)
-        if (isInFullscreen() || binding.menuOverlay.isVisible) return
-        handler.postDelayed(showMenuFabRunnable, MENU_BUTTON_SHOW_DELAY_MS)
-    }
-
-    private fun openUriExternally(uri: Uri) {
-        runCatching {
-            startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure {
-            Toast.makeText(this, R.string.error_open_external, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun showKeyboard(view: View) {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        view.post { imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT) }
-    }
-
-    private fun hideKeyboard(view: View) {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
     private fun extractBrowsableUrl(intent: Intent?): String? {
@@ -962,15 +257,14 @@ class MainActivity : AppCompatActivity() {
         return if (data.scheme?.lowercase() in listOf("http", "https")) data.toString() else null
     }
 
-    private fun isInFullscreen(): Boolean = customView != null
-
     private fun enterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
-        if (customView != null) { callback.onCustomViewHidden(); return }
+        if (customView != null) {
+            callback.onCustomViewHidden()
+            return
+        }
         (view.parent as? ViewGroup)?.removeView(view)
         customView = view
         customViewCallback = callback
-        if (binding.menuOverlay.isVisible) hideMenuOverlay()
-        binding.menuFab.hide()
         binding.webView.visibility = View.INVISIBLE
         binding.fullscreenContainer.apply {
             visibility = View.VISIBLE
@@ -984,7 +278,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun exitFullscreen(fromWebChrome: Boolean = false) {
         if (customView == null) return
-        binding.fullscreenContainer.apply { removeAllViews(); visibility = View.GONE }
+        binding.fullscreenContainer.apply {
+            removeAllViews()
+            visibility = View.GONE
+        }
         binding.webView.visibility = View.VISIBLE
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowInsetsControllerCompat(window, binding.root).show(WindowInsetsCompat.Type.systemBars())
@@ -992,187 +289,5 @@ class MainActivity : AppCompatActivity() {
         customView = null
         customViewCallback = null
         if (!fromWebChrome) callback?.onCustomViewHidden()
-        showMenuButtonTemporarily()
-    }
-
-    private fun addBookmarkForCurrentPage() {
-        val url = currentUrl.trim()
-        if (url.isEmpty()) return
-        if (BrowserPreferences.addBookmark(this, url)) {
-            Toast.makeText(this, R.string.bookmark_added, Toast.LENGTH_SHORT).show()
-            refreshBookmarks()
-        } else {
-            Toast.makeText(this, R.string.bookmark_exists, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun removeBookmark(url: String) {
-        if (BrowserPreferences.removeBookmark(this, url)) {
-            Toast.makeText(this, R.string.bookmark_removed, Toast.LENGTH_SHORT).show()
-            refreshBookmarks()
-        }
-    }
-
-    private fun refreshBookmarks() {
-        val container = binding.bookmarkManagerList
-        val density = resources.displayMetrics.density
-        container.removeAllViews()
-        val bookmarks = BrowserPreferences.getBookmarks(this)
-        if (bookmarks.isEmpty()) {
-            container.addView(MaterialTextView(this).apply {
-                text = getString(R.string.menu_bookmark_empty)
-                setPadding((16 * density).toInt(), (24 * density).toInt(), (16 * density).toInt(), (24 * density).toInt())
-                gravity = android.view.Gravity.CENTER
-                setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
-            })
-            return
-        }
-        bookmarks.forEach { bookmark ->
-            val itemCard = com.google.android.material.card.MaterialCardView(this).apply {
-                radius = 12 * density
-                setCardBackgroundColor(resolveThemeColor(com.google.android.material.R.attr.colorSurfaceContainer))
-                strokeWidth = (1 * density).toInt()
-                strokeColor = resolveThemeColor(com.google.android.material.R.attr.colorOutlineVariant)
-                setOnClickListener { loadUrlFromIntent(bookmark) }
-            }
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                setPadding((12 * density).toInt(), (12 * density).toInt(), (8 * density).toInt(), (12 * density).toInt())
-            }
-            val textContainer = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = (12 * density).toInt() }
-            }
-            textContainer.addView(MaterialTextView(this).apply {
-                text = try { java.net.URI(bookmark).host ?: bookmark } catch (_: Exception) { bookmark }
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
-            })
-            textContainer.addView(MaterialTextView(this).apply {
-                text = bookmark
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
-                alpha = 0.7f
-            })
-            val delBtn = MaterialButton(ContextThemeWrapper(this, com.google.android.material.R.style.Widget_Material3_Button_IconButton_Filled_Tonal)).apply {
-                layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt())
-                setIconResource(R.drawable.bookmark_remove_24px)
-                setIconTint(ColorStateList.valueOf(Color.WHITE))
-                iconPadding = 0
-                iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-                setBackgroundColor(resolveThemeColor(android.R.attr.colorError))
-                setOnClickListener { removeBookmark(bookmark) }
-            }
-            row.addView(textContainer)
-            row.addView(delBtn)
-            itemCard.addView(row)
-            val params = LinearLayout.LayoutParams(-1, -2)
-            params.setMargins(0, (8 * density).toInt(), 0, 0)
-            container.addView(itemCard, params)
-        }
-    }
-
-    private fun showBookmarkManager() {
-        binding.menuScroll.visibility = View.GONE
-        binding.bookmarkManagerRoot.visibility = View.VISIBLE
-        refreshBookmarks()
-    }
-
-    private fun hideBookmarkManager() {
-        binding.bookmarkManagerRoot.visibility = View.GONE
-        binding.menuScroll.visibility = View.VISIBLE
-    }
-
-    private fun showQrCodeView() {
-        val url = currentUrl.trim()
-        if (url.isEmpty()) return
-        binding.menuScroll.visibility = View.GONE
-        binding.qrCodeViewRoot.visibility = View.VISIBLE
-        generateQrCode(url)?.let {
-            binding.qrCodeImage.setImageBitmap(it)
-            binding.qrCodeUrl.text = url
-        }
-    }
-
-    private fun hideQrCodeView() {
-        binding.qrCodeViewRoot.visibility = View.GONE
-        binding.menuScroll.visibility = View.VISIBLE
-    }
-
-    private fun showSettingsView() {
-        binding.menuScroll.visibility = View.GONE
-        binding.settingsViewRoot.visibility = View.VISIBLE
-        ensureSettingsContentPopulated()
-    }
-
-    private fun ensureSettingsContentPopulated() {
-        if (binding.settingsContentContainer.childCount > 0) return
-        try {
-            val contentView = SettingsViews.createSettingsContent(this, false) {
-                hideSettingsView()
-            }
-            binding.settingsContentContainer.addView(contentView)
-        } catch (_: Exception) {}
-    }
-
-    private fun hideSettingsView() {
-        binding.settingsViewRoot.visibility = View.GONE
-        binding.menuScroll.visibility = View.VISIBLE
-    }
-
-    private fun showCheckLatestView() {
-        binding.menuScroll.visibility = View.GONE
-        binding.checkLatestViewRoot.visibility = View.VISIBLE
-        binding.checkLatestProgressIndicator.visibility = View.VISIBLE
-        try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            binding.checkLatestInstalledVersion.text = getString(R.string.installed_version_label, "v${pInfo.versionName}")
-        } catch (_: Exception) {
-            binding.checkLatestInstalledVersion.text = "Installed: Unknown"
-        }
-        Thread {
-            try {
-                val conn = java.net.URL("https://api.github.com/repos/kododake/AABrowser/releases/latest").openConnection() as java.net.HttpURLConnection
-                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                if (conn.responseCode == 200) {
-                    val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                    latestReleaseUrl = json.getString("html_url")
-                    val tag = json.getString("tag_name")
-                    runOnUiThread {
-                        binding.checkLatestProgressIndicator.visibility = View.GONE
-                        binding.checkLatestLatestVersion.text = getString(R.string.latest_version_label, tag)
-                    }
-                }
-            } catch (_: Exception) { runOnUiThread { binding.checkLatestProgressIndicator.visibility = View.GONE } }
-        }.start()
-    }
-
-    private fun hideCheckLatestView() {
-        binding.checkLatestViewRoot.visibility = View.GONE
-        binding.menuScroll.visibility = View.VISIBLE
-    }
-
-    private fun generateQrCode(content: String): Bitmap? {
-        return try {
-            val bitMatrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 512, 512)
-            val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
-            for (x in 0 until 512) for (y in 0 until 512) bitmap.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
-            bitmap
-        } catch (_: Exception) { null }
-    }
-
-    companion object {
-        private const val MENU_BUTTON_AUTO_HIDE_DELAY_MS = 3000L
-        private const val MENU_BUTTON_SHOW_DELAY_MS = 500L
-        private const val GITHUB_REPO_URL = "https://github.com/kododake/AABrowser"
-        private const val KEEP_ANDROID_OPEN_URL = "https://keepandroidopen.org"
-        private const val FREE_DROID_WARN_SOLUTIONS_URL = "https://github.com/woheller69/FreeDroidWarn?tab=readme-ov-file#solutions"
-        private const val FREE_DROID_WARN_VERSION_KEY = "versionCodeWarn"
-        private const val REQUEST_CODE_POST_NOTIFICATIONS = 1101
-        private const val REQUEST_CODE_RECORD_AUDIO = 1102
-        private const val REQUEST_CODE_LOCATION = 1103
     }
 }

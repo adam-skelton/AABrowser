@@ -443,11 +443,7 @@ class CarWebViewHost(
     }
 
     private fun injectAndroidLocation(location: Location) {
-        val heading = if (location.hasBearing()) location.bearing.toString() else "null"
-        val speed = if (location.hasSpeed()) location.speed.toString() else "null"
-        evaluateOrQueue(
-            "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
-        )
+        evaluateOrQueue(gpsInjectJs(location))
     }
 
     private fun releaseDisplay(destroyWebView: Boolean) {
@@ -598,6 +594,12 @@ class CarWebViewHost(
         fun applyCarChrome(webView: WebView, apiLevel: Int = 0) {
             webView.evaluateJavascript(WAKE_MAP_JS, null)
             webView.evaluateJavascript("window.__aaCarApiLevel=$apiLevel;", null)
+        }
+
+        fun gpsInjectJs(location: Location): String {
+            val heading = if (location.hasBearing()) location.bearing.toString() else "null"
+            val speed = if (location.hasSpeed()) location.speed.toString() else "null"
+            return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
         }
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L
