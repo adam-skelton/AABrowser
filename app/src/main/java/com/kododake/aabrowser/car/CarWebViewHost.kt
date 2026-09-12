@@ -69,6 +69,8 @@ class CarWebViewHost(
     private var surfaceWidth: Int = 0
     private var surfaceHeight: Int = 0
     private var surfaceDpi: Int = 0
+    private var visibleArea: Rect? = null
+    private var stableArea: Rect? = null
     private var surfaceBound = false
     private var boundSurface: Surface? = null
     private var locationStarted = false
@@ -194,11 +196,17 @@ class CarWebViewHost(
     }
 
     override fun onVisibleAreaChanged(visibleArea: Rect) {
-        onMain { webView?.invalidate() }
+        onMain {
+            this.visibleArea = Rect(visibleArea)
+            publishSafeArea()
+        }
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
-        onMain { webView?.invalidate() }
+        onMain {
+            this.stableArea = Rect(stableArea)
+            publishSafeArea()
+        }
     }
 
     override fun onClick(x: Float, y: Float) {
@@ -292,6 +300,7 @@ class CarWebViewHost(
             boundSurface = surface
             surfaceBound = true
             resumeRenderer()
+            publishSafeArea()
             true
         } catch (error: Exception) {
             Log.w(TAG, "Could not rebind car surface", error)
@@ -480,6 +489,7 @@ class CarWebViewHost(
                 null
             )
         }
+        publishSafeArea()
     }
 
     private fun ensureAndroidLocation() {
@@ -614,6 +624,35 @@ class CarWebViewHost(
         event.source = InputDevice.SOURCE_TOUCHSCREEN
         view.dispatchTouchEvent(event)
         event.recycle()
+    }
+
+    private fun publishSafeArea() {
+        val w = surfaceWidth.coerceAtLeast(1)
+        val h = surfaceHeight.coerceAtLeast(1)
+        val vis = visibleArea
+        val sta = stableArea
+        val area = when {
+            vis != null && sta != null -> {
+                val hit = Rect(
+                    maxOf(vis.left, sta.left),
+                    maxOf(vis.top, sta.top),
+                    minOf(vis.right, sta.right),
+                    minOf(vis.bottom, sta.bottom)
+                )
+                if (hit.width() >= 48 && hit.height() >= 48) hit else vis
+            }
+            vis != null -> vis
+            sta != null -> sta
+            else -> Rect(0, 0, w, h)
+        }
+        val left = area.left.coerceIn(0, w)
+        val top = area.top.coerceIn(0, h)
+        val right = (w - area.right).coerceIn(0, w)
+        val bottom = (h - area.bottom).coerceIn(0, h)
+        evaluateOrQueue(
+            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom,width:$w,height:$h});"
+        )
+        webView?.invalidate()
     }
 
     private fun evaluateOrQueue(js: String) {
