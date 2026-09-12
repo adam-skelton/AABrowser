@@ -72,7 +72,7 @@
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
-    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex}
+    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:12px; left:calc(var(--aa-inset-left) + 12px)}
     html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:calc(var(--aa-inset-left) + max(140px,env(safe-area-inset-left) + 128px)); right:calc(var(--aa-inset-right) + 148px); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); top:auto; z-index:30; overflow:visible}
     html.aa-car #buttonRow button,html.aa-car #buttonRow select,
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
@@ -1344,7 +1344,7 @@
 
   function svgIconUrl(body){
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 64 64">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 64 64">' +
       '<circle cx="32" cy="32" r="30" fill="#1A73E8"/>' + body + "</svg>"
     );
   }
@@ -1375,10 +1375,10 @@
     });
     const img = document.createElement("img");
     img.src = MANEUVER_ICONS[item.type] || MANEUVER_ICONS.straight;
-    img.width = 12;
-    img.height = 12;
-    img.style.width = "12px";
-    img.style.height = "12px";
+    img.width = 36;
+    img.height = 36;
+    img.style.width = "36px";
+    img.style.height = "36px";
     img.alt = item.type;
     const template = document.createElement("template");
     template.content.append(img);
@@ -3478,10 +3478,8 @@
       right *= w;
       bottom *= h;
     }
-    const split = left > w * 0.08 || right > w * 0.08;
-    if (!split && top > h * 0.15) top = 0;
     viewSafe.left = clamp(left, 0, w * 0.48);
-    viewSafe.top = clamp(top, 0, h * 0.12);
+    viewSafe.top = 0;
     viewSafe.right = clamp(right, 0, w * 0.48);
     viewSafe.bottom = clamp(bottom, 0, h * 0.45);
     viewSafe.width = w;

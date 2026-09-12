@@ -635,12 +635,7 @@ class CarWebViewHost(
         val leftPx = area.left.coerceIn(0, w)
         val rightPx = (w - area.right).coerceIn(0, w)
         val bottomPx = (h - area.bottom).coerceIn(0, h)
-        val topRaw = area.top.coerceIn(0, h)
-        val split = leftPx > w * 8 / 100 || rightPx > w * 8 / 100
-        val topPx = when {
-            !split && topRaw > h * 15 / 100 -> 0
-            else -> minOf(topRaw, h * 12 / 100)
-        }
+        val topPx = 0
         bootOverlay?.setPadding(leftPx, topPx, rightPx, bottomPx)
         val left = leftPx.toFloat() / w
         val top = topPx.toFloat() / h
