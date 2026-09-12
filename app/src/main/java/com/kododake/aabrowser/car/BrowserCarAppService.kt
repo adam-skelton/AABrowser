@@ -3,6 +3,7 @@ package com.kododake.aabrowser.car
 import android.Manifest
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.res.Configuration
 import android.content.pm.PackageManager
 import androidx.car.app.CarAppService
 import androidx.car.app.Screen
@@ -43,6 +44,11 @@ class BrowserCarSession : Session() {
             }
         })
         return BrowserCarScreen(carContext, webHost)
+    }
+
+    // The host flips day/night (headlights, ambient light, user setting); follow it.
+    override fun onCarConfigurationChanged(newConfiguration: Configuration) {
+        if (::webHost.isInitialized) webHost.setNightMode(carContext.isDarkMode)
     }
 
     private fun requestLocationIfNeeded() {

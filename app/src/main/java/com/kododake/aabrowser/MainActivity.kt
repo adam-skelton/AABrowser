@@ -26,6 +26,8 @@ import com.kododake.aabrowser.analytics.UmamiTracker
 import com.kododake.aabrowser.car.CarJsBridge
 import com.kododake.aabrowser.car.CarWebViewHost
 import com.kododake.aabrowser.car.MapBootOverlay
+import com.kododake.aabrowser.car.MotionFeed
+import com.kododake.aabrowser.car.TraceStore
 import com.kododake.aabrowser.databinding.ActivityMainBinding
 import com.kododake.aabrowser.web.BrowserCallbacks
 import com.kododake.aabrowser.web.configureWebView
@@ -43,6 +45,10 @@ class MainActivity : AppCompatActivity() {
     private var pendingGeoGrant: ((Boolean) -> Unit)? = null
     private var locationStarted = false
     private var lastLocation: Location? = null
+    private var hadGoodGpsFix = false
+    private val motionFeed by lazy {
+        MotionFeed(applicationContext) { js -> runOnUiThread { webView?.evaluateJavascript(js, null) } }
+    }
 
     private val locationListener = LocationListener { location -> injectPhoneLocation(location) }
 
@@ -140,28 +146,33 @@ class MainActivity : AppCompatActivity() {
     private fun startPhoneLocation() {
         if (locationStarted || !hasLocationPermission()) return
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
-        val provider = when {
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                manager.isProviderEnabled(LocationManager.FUSED_PROVIDER) -> LocationManager.FUSED_PROVIDER
-            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> manager.getProviders(true).firstOrNull()
-        } ?: return
+        val providers = CarWebViewHost.locationProviders(manager)
+        if (providers.isEmpty()) return
         runCatching {
-            manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            for (provider in providers) {
+                manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            }
             locationStarted = true
-            manager.getLastKnownLocation(provider)?.let(::injectPhoneLocation)
+            motionFeed.start()
+            providers.firstNotNullOfOrNull { provider -> manager.getLastKnownLocation(provider) }
+                ?.let(::injectPhoneLocation)
         }
     }
 
     private fun stopPhoneLocation() {
+        motionFeed.stop()
         if (!locationStarted) return
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
         runCatching { manager.removeUpdates(locationListener) }
         locationStarted = false
+        hadGoodGpsFix = false
     }
 
     private fun injectPhoneLocation(location: Location) {
+        // Same GPS-only gate as the car host: coarse/network fixes only bootstrap the map.
+        val good = CarWebViewHost.isGoodGpsFix(location)
+        if (!good && hadGoodGpsFix) return
+        if (good) hadGoodGpsFix = true
         lastLocation = location
         val view = webView ?: return
         view.evaluateJavascript(CarWebViewHost.gpsInjectJs(location), null)
@@ -219,7 +230,8 @@ class MainActivity : AppCompatActivity() {
                     requestGoBack = { runOnUiThread { webView?.goBack() } },
                     notifyDebugOverlay = {},
                     notifyMapReady = { dismissMapBootOverlay() },
-                    resolveCarApiLevel = { 0 }
+                    resolveCarApiLevel = { 0 },
+                    traceStore = TraceStore(applicationContext)
                 ),
                 CarWebViewHost.BRIDGE_NAME
             )

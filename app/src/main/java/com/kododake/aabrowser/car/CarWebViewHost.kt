@@ -56,8 +56,12 @@ class CarWebViewHost(
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
         notifyMapReady = { dismissBootOverlay() },
-        resolveCarApiLevel = ::resolvedCarApiLevel
+        resolveCarApiLevel = ::resolvedCarApiLevel,
+        traceStore = TraceStore(carContext)
     )
+    // Accelerometer feed for the page's speed filter; runs while location runs.
+    private val motionFeed = MotionFeed(carContext) { js -> onMain { webView?.evaluateJavascript(js, null) } }
+    private var hadGoodGpsFix = false
 
     private var virtualDisplay: VirtualDisplay? = null
     private var presentation: Presentation? = null
@@ -148,6 +152,13 @@ class CarWebViewHost(
             evaluateOrQueue("window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(${visible});")
         }
     }
+
+    /** Day/night from the car host (CarContext.isDarkMode), not the wall clock. */
+    fun setNightMode(dark: Boolean) {
+        onMain { evaluateOrQueue(nightJs(dark)) }
+    }
+
+    private fun isNight(): Boolean = runCatching { carContext.isDarkMode }.getOrDefault(false)
 
     fun chooseSearchSuggestion(placeId: String, title: String) {
         onMain {
@@ -462,6 +473,7 @@ class CarWebViewHost(
             "window.__aaCarApiLevel=${resolvedCarApiLevel()};",
             null
         )
+        view.evaluateJavascript(nightJs(isNight()), null)
         if (debugOverlayVisible) {
             view.evaluateJavascript(
                 "window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(true);",
@@ -483,31 +495,38 @@ class CarWebViewHost(
         if (!fine && !coarse) return
 
         val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val provider = when {
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                manager.isProviderEnabled(LocationManager.FUSED_PROVIDER) -> LocationManager.FUSED_PROVIDER
-            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> manager.getProviders(true).firstOrNull()
-        } ?: return
+        val providers = locationProviders(manager)
+        if (providers.isEmpty()) return
 
         runCatching {
-            manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            for (provider in providers) {
+                manager.requestLocationUpdates(provider, 1000L, 1f, locationListener, Looper.getMainLooper())
+            }
             locationStarted = true
-            manager.getLastKnownLocation(provider)?.let(::injectAndroidLocation)
+            motionFeed.start()
+            val last = providers.firstNotNullOfOrNull { provider -> manager.getLastKnownLocation(provider) }
+            last?.let(::injectAndroidLocation)
         }.onFailure { error ->
             Log.w(TAG, "Android location failed", error)
         }
     }
 
     private fun stopAndroidLocation() {
+        motionFeed.stop()
         if (!locationStarted) return
         val manager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         runCatching { manager.removeUpdates(locationListener) }
         locationStarted = false
+        hadGoodGpsFix = false
     }
 
     private fun injectAndroidLocation(location: Location) {
+        // Provider gating (Vela): network/fused/coarse fixes only bootstrap the map before the
+        // first real GPS fix; after that only GPS-quality fixes reach the follow model, so a
+        // 300 m Wi-Fi fix in a tunnel can't yank the car off the road.
+        val good = isGoodGpsFix(location)
+        if (!good && hadGoodGpsFix) return
+        if (good) hadGoodGpsFix = true
         evaluateOrQueue(gpsInjectJs(location))
     }
 
@@ -677,8 +696,40 @@ class CarWebViewHost(
             } else {
                 "null"
             }
-            return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,bearingAccuracy:$bearingAccuracy,accuracy:${location.accuracy}});"
+            val provider = JSONObject.quote(location.provider ?: "")
+            return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,bearingAccuracy:$bearingAccuracy,accuracy:${location.accuracy},provider:$provider});"
         }
+
+        /** GPS-quality fix: from the GPS provider and no coarser than [GPS_MAX_ACCURACY_M]. */
+        fun isGoodGpsFix(location: Location): Boolean {
+            return location.provider == LocationManager.GPS_PROVIDER &&
+                (!location.hasAccuracy() || location.accuracy <= GPS_MAX_ACCURACY_M)
+        }
+
+        /**
+         * Providers to listen to: GPS for the follow model, plus network as a bootstrap so the
+         * map has somewhere to be before the first satellite fix (the gate drops it afterwards).
+         * Falls back to fused / anything enabled where GPS is off.
+         */
+        fun locationProviders(manager: LocationManager): List<String> {
+            val providers = mutableListOf<String>()
+            if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) providers += LocationManager.GPS_PROVIDER
+            if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) providers += LocationManager.NETWORK_PROVIDER
+            if (providers.isEmpty()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    manager.isProviderEnabled(LocationManager.FUSED_PROVIDER)
+                ) {
+                    providers += LocationManager.FUSED_PROVIDER
+                } else {
+                    manager.getProviders(true).firstOrNull()?.let { providers += it }
+                }
+            }
+            return providers
+        }
+
+        fun nightJs(dark: Boolean): String = "window.__aaSetNight && window.__aaSetNight($dark);"
+
+        const val GPS_MAX_ACCURACY_M = 50f
         private const val TWO_FINGER_MS = 420L
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L

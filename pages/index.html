@@ -43,6 +43,27 @@
     #recenterBtn.visible {display:flex}
     #recenterBtn svg {width:24px; height:32px; display:block; flex:0 0 auto; fill:currentColor}
     #recenterBtn svg circle {fill:#2E3134}
+    #speedLimitBadge {display:none; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
+    #speedLimitBadge.visible {display:flex}
+    #compassBtn {display:none; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #compassBtn.visible {display:flex}
+    #compassBtn svg {width:38px; height:38px; display:block}
+    #compassBtn.north-up {background:#1A73E8}
+    body.night gmp-map-3d {filter:brightness(.68) saturate(.82)}
+    body.night #speedLimitBadge {background:#ECEDEE}
+    #traceOverlay {display:none; position:absolute; inset:0; z-index:47; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto}
+    #traceOverlay.open {display:flex}
+    html.aa-car:not(.debug-open) #traceOverlay,body.aa-car:not(.debug-open) #traceOverlay {display:none !important}
+    #traceCard {position:relative; width:min(78vw,640px); max-height:min(78vh,560px); border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden; display:flex; flex-direction:column}
+    #traceTitle {padding:16px 56px 10px 16px; font-size:17px; font-weight:700}
+    #traceList {flex:1; min-height:0; overflow:auto; padding:0 10px 12px}
+    #traceEmpty {padding:8px 16px 20px; font-size:14px; color:rgba(255,255,255,.7)}
+    .trace-row {display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; padding:8px 6px; border-top:1px solid rgba(255,255,255,.1)}
+    .trace-row .trace-name {font-size:14px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .trace-row .trace-meta {display:block; font-size:12px; font-weight:500; color:rgba(255,255,255,.62); margin-top:2px}
+    .trace-row button {min-height:40px; background:#2E3134; color:#fff; box-shadow:none; font-size:14px}
+    .trace-row button.trace-replay {background:#1A73E8}
+    #traceClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
@@ -89,6 +110,8 @@
     body:not(.map-ready) #buttonRow,
     body:not(.map-ready) #carDebugBtn,
     body:not(.map-ready) #recenterBtn,
+    body:not(.map-ready) #compassBtn,
+    body:not(.map-ready) #speedLimitBadge,
     body:not(.map-ready) #routeCard,
     body:not(.map-ready) #viewSpecPanel {
       display:none !important;
@@ -145,6 +168,8 @@
       <button id="viewSpecBtn" type="button">View specs</button>
       <button id="carApiBtn" type="button">API level</button>
       <button id="carModelBtn" type="button">Car model</button>
+      <button id="traceRecBtn" type="button">Rec trace</button>
+      <button id="tracesBtn" type="button">Traces</button>
       <div id="viewPicker">
         <button id="viewSelectBtn" type="button" aria-haspopup="listbox" aria-expanded="false">Driving view</button>
         <div id="viewSelectMenu" hidden role="listbox">
@@ -204,6 +229,13 @@
       <div id="carModelHint">Kia Forte · drag to rotate · pinch to zoom</div>
     </div>
   </div>
+  <div id="traceOverlay" hidden>
+    <div id="traceCard">
+      <button id="traceClose" type="button" aria-label="Close traces">&times;</button>
+      <div id="traceTitle">Recorded drives</div>
+      <div id="traceList"></div>
+    </div>
+  </div>
   <div id="carApiHud" hidden>
     <div class="car-api-label">Car API</div>
     <div class="car-api-value" id="carApiValue">unknown</div>
@@ -230,6 +262,13 @@
     </svg>
     Re-center
   </button>
+  <button id="compassBtn" type="button" aria-label="Toggle north up">
+    <svg id="compassNeedle" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5l4.2 9.5H7.8z" fill="#EA4335"/>
+      <path d="M12 21.5L7.8 12h8.4z" fill="#fff"/>
+    </svg>
+  </button>
+  <div id="speedLimitBadge" aria-live="polite"></div>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -322,24 +361,60 @@
     MAX_EASE_DT: 0.065,     // cap on the ease step so a janky frame spreads its catch-up over several
     FLIGHT_TAU: 0.6,        // extra shared time-constant while the camera is far from the car (re-center, overview -> drive)
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
-    RANGE_SPEED_MAX: 0.6    // drive-view range grows by this fraction at ~30 m/s
+    ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
+    LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
+    HOLD_MPS: 2.0           // ...and the course keeps updating while latched only above this
   };
 
-  // 1-D filter over speed: GPS doppler measurements folded in with a Kalman gain,
-  // held between fixes, decayed toward 0 during a measurement outage.
+  // Vela CarMapRenderer.navZoom: one zoom level per speed band (km/h upper bound -> zoom).
+  // The drive-view range scales by 2^(band0 - zoom), so the RATIOS between bands are
+  // Vela's (town 1x ... motorway ~4.9x); the absolute range stays this view's own.
+  const ZOOM_BANDS = [[15, 17.5], [40, 17.0], [70, 16.3], [100, 15.7], [Infinity, 15.2]];
+  const ZOOM_BAND_HYST_KMH = 3;   // a band changes only this far past its threshold (no flapping at 40 km/h)
+  let zoomBandIdx = 0;
+
+  // Car mode: a pan detaches the camera; it re-attaches this long after the LAST touch (Vela: 6 s).
+  const AUTO_REFOLLOW_MS = 10000;
+  let lastTouchMs = 0, autoRefollowArmed = false;
+  let northUp = false;           // camera north-up (default heading-up)
+
+  // World-frame horizontal acceleration from the host (TYPE_LINEAR_ACCELERATION rotated
+  // into East/North, low-passed). Stale after a second -> the model coasts (a = 0).
+  const motion = { east: 0, north: 0, atMs: -Infinity };
+  const MOTION_STALE_MS = 1000;
+
+  // 1-D Kalman filter over speed (Vela SpeedKalman): GPS doppler = measurement, the
+  // accelerometer steers the PREDICTION so the model brakes and launches WITH the car
+  // between the 1 Hz fixes; no accelerometer degrades to holding the speed (a = 0).
   const speedKalman = {
     speed: 0, p: 4, seeded: false,
     update(v){
       v = Math.max(0, v);
       if (!this.seeded) { this.speed = v; this.p = 0.5; this.seeded = true; return; }
-      const k = this.p / (this.p + 0.5);
+      const k = this.p / (this.p + 0.5);                 // R_GPS 0.5 (m/s)^2
       this.speed = Math.max(0, this.speed + k * (v - this.speed));
       this.p = Math.max(0.05, (1 - k) * this.p);
     },
-    predict(dt){ if (this.seeded && dt > 0) this.p += 0.75 * dt; },
+    // `accel` = forward acceleration (m/s^2, + = speeding up along the travel bearing).
+    predict(dt, accel){
+      if (!this.seeded || dt <= 0) return;
+      let a = Number.isFinite(accel) ? accel : 0;
+      // Denoise gain a^2/(a^2 + 0.5^2): road/engine vibration (~0.3 m/s^2) is cut to a
+      // quarter, a real 4 m/s^2 brake passes within 1.5%. Beyond +-8 is sensor junk.
+      a = clamp(a * ((a * a) / (a * a + 0.25)), -8, 8);
+      this.speed = Math.max(0, this.speed + a * dt);
+      this.p += (0.75 + 0.5 * Math.abs(a)) * dt;         // Q_BASE + Q_ACCEL*|a|
+    },
     decay(dt, tau){ if (!this.seeded || dt <= 0) return; this.speed *= Math.exp(-dt / (tau || 4)); this.p += 0.75 * dt; },
     reset(){ this.speed = 0; this.p = 4; this.seeded = false; }
   };
+
+  // Acceleration along the car's travel bearing from the host's East/North reading.
+  function forwardAccelNow(now){
+    if (now - motion.atMs > MOTION_STALE_MS || !Number.isFinite(puck.heading)) return 0;
+    const r = toRad(puck.heading);
+    return motion.east * Math.sin(r) + motion.north * Math.cos(r);
+  }
 
   // 1-D Kalman filter over the along-route position: dead-reckoned forward each
   // frame (variance grows), each accepted fix folded in weighted by its accuracy.
@@ -385,8 +460,27 @@
     lat: 0, lng: 0, heading: 0,
     range: 0, tilt: 0, fov: 0,
     speedLP: 0,
+    zoom: NaN,             // eased speed-band zoom level
+    latched: false,        // heading-up has locked onto the car's course (set once moving)
     userRange: null        // pinch-zoom override while following; Re-center clears it
   };
+
+  // Route-start fly-over: the camera sweeps the route from the destination back to the
+  // car before diving into the drive view. Null when not running.
+  let flyover = null;
+  const FLYOVER_MIN_M = 800;
+
+  // Off-route detection (Vela NavEngine/NavSession).
+  const OFF_ROUTE = {
+    CORRIDOR_M: 40,        // on-route corridor (accuracy-scaled)
+    FAR_M: 90,             // this far off counts double, even when stopped
+    HITS: 3,               // consecutive off-route hits before a reroute
+    HEADING_DEG: 60,       // course this far from the road's bearing counts as off-route inside the corridor
+    MOVING_MPS: 2.0,       // stationary multipath is ignored unless far-off
+    DEST_ZONE_M: 150,      // no reroute this close to the destination (arriving)
+    COOLDOWN_MS: 10000     // between adopted reroutes
+  };
+  const offRoute = { hits: 0, lastRerouteMs: -Infinity, inFlight: false };
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -398,7 +492,7 @@
   ];
 
   let map3d, Polyline3DElement, Marker3DElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
-  let userMarker, userCar, userArrow, destinationMarker, routeLine;
+  let userMarker, userCar, userArrow, destinationMarker;
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
@@ -975,36 +1069,65 @@
   window.__aaSubmitSearch = searchDestinationFromQuery;
   window.__aaPickSearchResult = pickSearchResult;
 
+  const ROUTE_FIELDS = ["path", "distanceMeters", "durationMillis", "staticDurationMillis"];
+  // "speedPaths" is the JS library's shorthand that also populates travelAdvisory.speedReadingIntervals.
+  const ROUTE_TRAFFIC_FIELDS = ["speedPaths"];
+
+  // One traffic-aware route. `origin` may carry a `heading` (DirectionalLocation) so a
+  // reroute departs the way the car is already pointing. The traffic-on-polyline extra
+  // is requested first; if the loaded API build rejects it, retry for a plain route.
+  async function requestRoute(origin, destination, wantTraffic = true){
+    const request = {
+      origin,
+      destination: { lat: destination.lat, lng: destination.lng },
+      travelMode: "DRIVING",
+      routingPreference: "TRAFFIC_AWARE",
+      language: "en-NZ",
+      units: google.maps.UnitSystem.METRIC,
+      fields: wantTraffic ? ROUTE_FIELDS.concat(ROUTE_TRAFFIC_FIELDS) : ROUTE_FIELDS
+    };
+    if (wantTraffic) request.extraComputations = ["TRAFFIC_ON_POLYLINE"];
+    let result;
+    try {
+      result = await RouteClass.computeRoutes(request);
+    } catch (err) {
+      if (!wantTraffic) throw err;
+      console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
+      return requestRoute(origin, destination, false);
+    }
+    if (!result.routes || !result.routes.length) throw new Error("Google returned no route.");
+    const route = result.routes[0];
+    const path = Array.from(route.path || []).map(point => ({
+      lat: typeof point.lat === "function" ? point.lat() : point.lat,
+      lng: typeof point.lng === "function" ? point.lng() : point.lng
+    }));
+    if (path.length < 2) throw new Error("Route returned without a usable path.");
+    return { route, path, intervals: routeTrafficIntervals(route, path) };
+  }
+
+  // Make `route` the active one: geometry, drawing, card, speed limits, trace metadata.
+  // `keepNav` = a mid-drive reroute (stay in navigation; the car re-acquires at the next fix).
+  function adoptRoute(route, path, intervals, destination, keepNav){
+    activeRoute = route;
+    activeRoutePath = path;
+    activeDestination = destination;
+    setRouteGeometry(path);
+    drawRoute(path, intervals);
+    drawDestination(destination);
+    updateRouteInfo(route, destination.name, keepNav);
+    fetchSpeedLimits(path);
+    offRoute.hits = 0;
+    if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
+  }
+
   async function calculateRoute(origin, destination, destinationName){
     stopDemo();
     if (!RouteClass || !map3d) return;
     setMessage(`Calculating route to ${destinationName}...`);
 
     try {
-      const result = await RouteClass.computeRoutes({
-        origin: { lat: origin.lat, lng: origin.lng },
-        destination: { lat: destination.lat, lng: destination.lng },
-        travelMode: "DRIVING",
-        routingPreference: "TRAFFIC_AWARE",
-        language: "en-NZ",
-        units: google.maps.UnitSystem.METRIC,
-        fields: ["path", "distanceMeters", "durationMillis", "staticDurationMillis"]
-      });
-
-      if (!result.routes || !result.routes.length) throw new Error("Google returned no route.");
-      const route = result.routes[0];
-      activeRoute = route;
-      activeRoutePath = Array.from(route.path || []).map(point => ({
-        lat: typeof point.lat === "function" ? point.lat() : point.lat,
-        lng: typeof point.lng === "function" ? point.lng() : point.lng
-      }));
-      activeDestination = { name: destinationName, lat: destination.lat, lng: destination.lng };
-      if (activeRoutePath.length < 2) throw new Error("Route returned without a usable path.");
-      setRouteGeometry(activeRoutePath);
-
-      drawRoute(activeRoutePath);
-      drawDestination(activeDestination);
-      updateRouteInfo(route, destinationName);
+      const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, destination);
+      adoptRoute(route, path, intervals, { name: destinationName, lat: destination.lat, lng: destination.lng }, false);
       showRoutePreview(origin, destination, route.distanceMeters);
       setMessage("Route ready. Tap Go to start, or X to cancel.");
     } catch (err) {
@@ -1013,19 +1136,86 @@
     }
   }
 
-  function drawRoute(path){
-    if (routeLine) routeLine.remove();
-    routeLine = new Polyline3DElement({
+  // ---- Route line: traffic-coloured ahead, grey behind the car ----
+
+  const ROUTE_COLOURS = {
+    NORMAL: "#4285F4",       // free flow
+    SLOW: "#E8923D",         // slowdown
+    TRAFFIC_JAM: "#D93838",  // jam
+    DONE: "#9AA0A6"          // traversed
+  };
+  let routeLines = [];        // one Polyline3DElement per traffic interval (the whole route)
+  let routeDoneLine = null;   // grey overlay from the route start to the car
+  let routeDoneUpdatedM = -Infinity;
+  const ROUTE_DONE_STEP_M = 4;
+
+  // Routes API speedReadingIntervals -> [{start, end, speed}] over `path` indices; a route
+  // without traffic data (or a plain retry) is one NORMAL interval.
+  function routeTrafficIntervals(route, path){
+    const raw = route && route.travelAdvisory && route.travelAdvisory.speedReadingIntervals;
+    const out = [];
+    if (Array.isArray(raw)) {
+      for (const iv of raw) {
+        const s = Number(iv.startPolylinePointIndex), e = Number(iv.endPolylinePointIndex);
+        if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
+        out.push({ start: clamp(Math.round(s), 0, path.length - 1), end: clamp(Math.round(e), 0, path.length - 1), speed: String(iv.speed || "NORMAL") });
+      }
+    }
+    if (!out.length) out.push({ start: 0, end: path.length - 1, speed: "NORMAL" });
+    return out;
+  }
+
+  function makeRouteLine(path, color, zIndex){
+    return new Polyline3DElement({
       path,
-      strokeColor: "#4285F4",
+      strokeColor: color,
       outerColor: "#FFFFFF",
       strokeWidth: 9,
       outerWidth: 0.35,
       altitudeMode: MODEL_ALTITUDE_MODE,
       drawsOccludedSegments: true,
-      zIndex: 20
+      zIndex
     });
-    map3d.append(routeLine);
+  }
+
+  function drawRoute(path, intervals){
+    removeRouteLines();
+    for (const iv of intervals || [{ start: 0, end: path.length - 1, speed: "NORMAL" }]) {
+      const seg = path.slice(iv.start, iv.end + 1);
+      if (seg.length < 2) continue;
+      const line = makeRouteLine(seg, ROUTE_COLOURS[iv.speed] || ROUTE_COLOURS.NORMAL, 20);
+      map3d.append(line);
+      routeLines.push(line);
+    }
+    routeDoneUpdatedM = -Infinity;
+  }
+
+  function removeRouteLines(){
+    for (const line of routeLines) { try { line.remove(); } catch (err) {} }
+    routeLines = [];
+    if (routeDoneLine) { try { routeDoneLine.remove(); } catch (err) {} routeDoneLine = null; }
+    routeDoneUpdatedM = -Infinity;
+  }
+
+  // The traversed part greys out behind the car: a grey line from the route start to the
+  // car's along-route position, drawn OVER the coloured segments (so they never need
+  // re-splitting). Refreshed every few metres of progress, not every frame.
+  function updateTraversedRoute(){
+    if (!isNavigating() || !puck.engaged || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
+    const m = puck.progressM;
+    if (Math.abs(m - routeDoneUpdatedM) < ROUTE_DONE_STEP_M) return;
+    routeDoneUpdatedM = m;
+    let i = 1;
+    while (i < routeCum.length && routeCum[i] <= m) i++;
+    const donePath = activeRoutePath.slice(0, i);
+    donePath.push(pointAtMetres(activeRoutePath, routeCum, m).point);
+    if (donePath.length < 2) return;
+    if (!routeDoneLine) {
+      routeDoneLine = makeRouteLine(donePath, ROUTE_COLOURS.DONE, 21);
+      map3d.append(routeDoneLine);
+    } else {
+      routeDoneLine.path = donePath;
+    }
   }
 
   function drawDestination(destination){
@@ -1052,7 +1242,7 @@
     return `${Math.round(km)} km`;
   }
 
-  function updateRouteInfo(route, destinationName){
+  function updateRouteInfo(route, destinationName, keepNav){
     const mins = Math.max(1, Math.round(route.durationMillis / 60000));
     const eta = new Date(Date.now() + route.durationMillis);
     routeTimeEl.textContent = formatDuration(route.durationMillis);
@@ -1075,8 +1265,10 @@
     }
     document.body.classList.add("has-route");
     document.documentElement.classList.add("has-route");
-    document.body.classList.remove("navigating");
-    document.documentElement.classList.remove("navigating");
+    if (!keepNav) {
+      document.body.classList.remove("navigating");
+      document.documentElement.classList.remove("navigating");
+    }
     syncCarLod();
   }
 
@@ -1087,36 +1279,52 @@
     showRouteOverview(origin, destination, distanceMeters);
   }
 
-  function enterNavigation(){
+  // `opts.flyover` (default true): sweep the route from the destination back to the car
+  // before diving into the drive view.
+  function enterNavigation(opts){
     if (!activeRoutePath || activeRoutePath.length < 2) return;
     document.body.classList.add("navigating");
     document.documentElement.classList.add("navigating");
     following = true;
     cam.userRange = null;
+    autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: ON";
     // Re-acquire the car onto this route at the next fix (the ticker glides the
     // camera from wherever it is - typically the route overview - into the drive view).
     disengageRoutePuck();
-    setView("drive");
+    currentView = "drive";
+    setViewSelectValue("drive");
+    cam.seeded = false; // never cut: seed from the live (overview) camera and ease
+    updateCompassButton();
     const here = currentGpsPoint || getRouteOrigin();
     let heading = Number.isFinite(here.heading) ? here.heading : (Number(map3d.heading) || 0);
     if (activeRoutePath.length >= 2) heading = bearingDegrees(activeRoutePath[0], activeRoutePath[1]);
     // Synthetic re-injection of the current point: carry the modelled speed so it isn't
     // read as "zero metres since the last fix" and briefly stall the car / zoom.
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
+    if (!opts || opts.flyover !== false) startFlyover();
+    if (activeDestination) traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
     syncCarLod();
     updateRecenterButton();
+    updateSpeedLimitBadge();
     setMessage("Navigation started.");
   }
 
   function clearNavigation(){
     stopDemo();
-    if (routeLine) { routeLine.remove(); routeLine = null; }
+    removeRouteLines();
+    flyover = null;
+    offRoute.hits = 0;
     if (destinationMarker) { destinationMarker.remove(); destinationMarker = null; }
     activeRoute = null;
     activeDestination = null;
     activeRoutePath = [];
     setRouteGeometry([]);
+    speedLimit.ways = [];
+    speedLimit.current = null;
+    speedLimit.routeId += 1;
+    updateSpeedLimitBadge();
+    traceRec.dest = null;
     document.body.classList.remove("has-route", "navigating");
     document.documentElement.classList.remove("has-route", "navigating");
     hideUserCar();
@@ -1183,9 +1391,21 @@
     updateCar(pos, h, extra || {});
   }
 
+  // Provider gating (Vela): once the follow model has a fix, only GPS-quality fixes feed it -
+  // a network/fused fix, or anything coarser than 50 m, would yank the car off the road.
+  // Only fixes that carry a provider (host-injected) are gated; browser geolocation has none.
+  const GPS_MAX_ACCURACY_M = 50;
+  function acceptLiveFix(c){
+    if (!c.provider || !puck.fix) return true;
+    if (String(c.provider).toLowerCase() !== "gps") return false;
+    return !(Number.isFinite(c.accuracy) && c.accuracy > GPS_MAX_ACCURACY_M);
+  }
+
   function handlePosition(position){
     if (isDemoRunning()) return;
     const c = position.coords;
+    if (!acceptLiveFix(c)) return;
+    recordTraceFix(c);
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
     let heading = fix.heading;
     let headingMeasured = heading !== null;
@@ -1349,9 +1569,180 @@
     prefetchTerrain(fix, Number.isFinite(puck.freeHeading) ? puck.freeHeading : heading);
 
     const routeLive = isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length;
-    if (routeLive) ingestRouteFix(puck.fix, now);
-    else if (puck.engaged) disengageRoutePuck();
+    if (routeLive) {
+      ingestRouteFix(puck.fix, now);
+      checkOffRoute(puck.fix, now);
+      updateSpeedLimit(puck.fix);
+    } else if (puck.engaged) {
+      disengageRoutePuck();
+    }
     ensureFollowTicker();
+  }
+
+  // ---- Off-route detection -> reroute (Vela NavEngine) ----
+
+  // Nearest point on the WHOLE route (the map matcher only looks in its forward window).
+  function distanceToRoute(me, path){
+    let best = Infinity, bearing = NaN;
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      const proj = projectOnSegment(me, a, b);
+      const d = distanceMetres(me, proj.point);
+      if (d < best) { best = d; bearing = bearingDegrees(a, b); }
+    }
+    return { d: best, bearing };
+  }
+
+  function checkOffRoute(fix, now){
+    if (!activeDestination || activeRoutePath.length < 2) return;
+    const { d, bearing } = distanceToRoute(fix, activeRoutePath);
+    const acc = Number.isFinite(fix.accuracy) && fix.accuracy > 0 ? fix.accuracy : 12;
+    const corridor = Math.max(OFF_ROUTE.CORRIDOR_M, acc * 1.5);
+    const moving = speedKalman.speed >= OFF_ROUTE.MOVING_MPS;
+    const far = d > OFF_ROUTE.FAR_M;
+    const headingOff = moving && fix.bearingOk && Number.isFinite(bearing) && angleDelta(bearing, fix.heading) > OFF_ROUTE.HEADING_DEG;
+    if (d <= corridor) {
+      // Inside the corridor: clean unless the course disagrees with the road AND we're
+      // clearly to one side of it (a parallel street), which counts double.
+      if (!headingOff) offRoute.hits = 0;
+      else if (d > corridor * 0.25) offRoute.hits += 2;
+    } else if (!moving && !far) {
+      // Stationary multipath drifting outside the corridor: hold the count.
+    } else {
+      offRoute.hits += far ? 2 : 1;
+    }
+    if (offRoute.hits < OFF_ROUTE.HITS) return;
+    offRoute.hits = 0;
+    if (offRoute.inFlight || now - offRoute.lastRerouteMs < OFF_ROUTE.COOLDOWN_MS) return;
+    if (distanceMetres(fix, activeDestination) <= OFF_ROUTE.DEST_ZONE_M) return;
+    requestReroute(fix);
+  }
+
+  async function requestReroute(fix){
+    if (!RouteClass || !activeDestination) return;
+    const dest = activeDestination;
+    offRoute.inFlight = true;
+    offRoute.lastRerouteMs = performance.now();
+    setMessage("Rerouting...");
+    try {
+      const origin = fix.bearingOk && Number.isFinite(fix.heading)
+        ? { lat: fix.lat, lng: fix.lng, heading: fix.heading }
+        : { lat: fix.lat, lng: fix.lng };
+      const { route, path, intervals } = await requestRoute(origin, dest);
+      // Navigation ended or the destination changed while the request was out: drop it.
+      if (!isNavigating() || activeDestination !== dest) return;
+      adoptRoute(route, path, intervals, dest, true);
+      offRoute.lastRerouteMs = performance.now();
+      setMessage("Rerouted.");
+    } catch (err) {
+      console.error(err);
+      setMessage("Reroute failed. " + (err?.message || String(err)));
+    } finally {
+      offRoute.inFlight = false;
+    }
+  }
+
+  // ---- Speed limit (OSM maxspeed along the route, via Overpass) ----
+  // The Routes API carries no speed limits, so like Vela the badge comes from OpenStreetMap:
+  // one query per route for every tagged way within 20 m of the path, then the car is
+  // matched to the nearest heading-compatible way each fix. Shown only while navigating
+  // and only when a limit is known; never the current speed.
+
+  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+  const SPEED_LIMIT_MATCH_M = 22;      // way must pass this close to the fix
+  const SPEED_LIMIT_FORGET_M = 300;    // clear the badge this far past the last matched way
+  const IMPLICIT_MAXSPEED = {          // OSM zone tags -> km/h
+    "NZ:urban": 50, "NZ:rural": 100, "AU:urban": 50, "AU:rural": 100,
+    "GB:nsl_single": 97, "GB:nsl_dual": 113, "GB:motorway": 113,
+    "DE:urban": 50, "DE:rural": 100, "FR:urban": 50, "FR:rural": 80
+  };
+  const speedLimit = { ways: [], routeId: 0, current: null, lastHitM: -Infinity };
+
+  function parseMaxspeed(raw){
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (IMPLICIT_MAXSPEED[s]) return IMPLICIT_MAXSPEED[s];
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh|kph)?$/i);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    const kmh = m[2] && m[2].toLowerCase() === "mph" ? n * 1.609344 : n;
+    return kmh > 0 ? Math.round(kmh) : null;
+  }
+
+  async function fetchSpeedLimits(path){
+    const id = ++speedLimit.routeId;
+    speedLimit.ways = [];
+    speedLimit.current = null;
+    speedLimit.lastHitM = -Infinity;
+    updateSpeedLimitBadge();
+    if (!path || path.length < 2) return;
+    const pts = downsamplePath(path, 80).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
+    const query = `[out:json][timeout:20];way["highway"]["maxspeed"](around:20,${pts});out geom;`;
+    try {
+      const res = await fetch(OVERPASS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "data=" + encodeURIComponent(query)
+      });
+      if (!res.ok) throw new Error("Overpass " + res.status);
+      const json = await res.json();
+      if (id !== speedLimit.routeId) return; // a newer route superseded this query
+      const ways = [];
+      for (const el of json.elements || []) {
+        const kmh = parseMaxspeed(el.tags && el.tags.maxspeed);
+        if (!kmh || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+        ways.push({ kmh, pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon })) });
+      }
+      speedLimit.ways = ways;
+    } catch (err) {
+      console.warn("Speed limits unavailable", err);
+    }
+  }
+
+  function matchSpeedLimit(point, heading){
+    let best = null, bestD = SPEED_LIMIT_MATCH_M;
+    const latTol = 0.0012, lngTol = 0.0016; // ~130 m coarse reject before projecting
+    for (const way of speedLimit.ways) {
+      const pts = way.pts;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        if (Math.abs(a.lat - point.lat) > latTol && Math.abs(b.lat - point.lat) > latTol) continue;
+        if (Math.abs(a.lng - point.lng) > lngTol && Math.abs(b.lng - point.lng) > lngTol) continue;
+        const d = distanceMetres(point, projectOnSegment(point, a, b).point);
+        if (d >= bestD) continue;
+        if (Number.isFinite(heading)) {
+          // Ways are undirected here: accept either direction, reject cross streets.
+          const diff = angleDelta(bearingDegrees(a, b), heading);
+          if (Math.min(diff, 180 - diff) > 40) continue;
+        }
+        bestD = d;
+        best = way.kmh;
+      }
+    }
+    return best;
+  }
+
+  function updateSpeedLimit(fix){
+    if (!isNavigating()) {
+      if (speedLimit.current != null) { speedLimit.current = null; updateSpeedLimitBadge(); }
+      return;
+    }
+    const hit = matchSpeedLimit(fix, fix.bearingOk ? fix.heading : NaN);
+    if (hit != null) {
+      speedLimit.current = hit;
+      speedLimit.lastHitM = puck.progressM;
+    } else if (puck.progressM - speedLimit.lastHitM > SPEED_LIMIT_FORGET_M) {
+      speedLimit.current = null;
+    }
+    updateSpeedLimitBadge();
+  }
+
+  function updateSpeedLimitBadge(){
+    const el = document.getElementById("speedLimitBadge");
+    if (!el) return;
+    const show = isNavigating() && speedLimit.current != null;
+    el.classList.toggle("visible", show);
+    if (show) el.textContent = String(speedLimit.current);
   }
 
   // Port of Vela's nav fix block: forward-only map matching with a plausibility gate,
@@ -1446,7 +1837,12 @@
     if (!puck.fix || !map3d) return;
     stepPuck(dtRaw, dtEase, now);
     applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
-    if (following) applyFollowCamera(dtEase);
+    updateTraversedRoute();
+    // Car mode: a pan let go of the car; re-attach once the screen has been untouched long enough.
+    if (!following && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
+      attachFollow(currentView === "overview" ? "drive" : null);
+    }
+    if (following) applyFollowCamera(dtEase, now);
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
   }
 
@@ -1455,7 +1851,7 @@
     const sinceFix = (now - fix.atMs) / 1000;
     if (puck.engaged && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
       const path = activeRoutePath, cum = routeCum, total = cum[cum.length - 1];
-      speedKalman.predict(dtRaw);
+      speedKalman.predict(dtRaw, forwardAccelNow(now));
       // Past the dead-reckon window with no fix = a measurement outage: decay the speed.
       if (sinceFix > FOLLOW.DEAD_RECKON_S) speedKalman.decay(dtRaw);
       const speed = speedKalman.speed;
@@ -1501,7 +1897,7 @@
       // motion. Same rate-domain idea as the route model: at this close a range a plain
       // ease toward each new fix (Vela's zoomed-out free drive) would show GPS noise as a
       // visible twitch every second; a capped correction spreads it into a gentle drift.
-      speedKalman.predict(dtRaw);
+      speedKalman.predict(dtRaw, forwardAccelNow(now));
       if (sinceFix > FOLLOW.FREE_RECKON_S) speedKalman.decay(dtRaw);
       const v = speedKalman.speed;
       const moving = v > 1.5 && Number.isFinite(puck.freeHeading);
@@ -1533,14 +1929,67 @@
   // ---- Follow camera ----
 
   function viewTargets(){
-    if (currentView === "high") return { tilt: 62, range: 650, fov: 40, headingUp: true, breathe: false };
-    if (currentView === "top") return { tilt: 0, range: 1300, fov: 35, headingUp: false, breathe: false };
-    return { tilt: CAR_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
+    let v;
+    if (currentView === "high") v = { tilt: 62, range: 650, fov: 40, headingUp: true, breathe: false };
+    else if (currentView === "top") v = { tilt: 0, range: 1300, fov: 35, headingUp: false, breathe: false };
+    else v = { tilt: CAR_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
+    if (northUp && v.headingUp) {
+      // North-up: fixed heading with the car centred, a little flatter and wider so the
+      // road ahead stays in frame whichever way it runs.
+      v = { tilt: Math.min(v.tilt, 48), range: v.range * 1.35, fov: v.fov, headingUp: false, breathe: v.breathe };
+    }
+    return v;
   }
 
-  // Zoom widens with speed (more road ahead on a motorway), tightens as you slow.
-  function rangeFactorForSpeed(v){
-    return 1 + FOLLOW.RANGE_SPEED_MAX * clamp((v - 4) / 26, 0, 1);
+  // Speed band -> zoom level (Vela's car bands), with hysteresis so a car hovering at a
+  // threshold doesn't flap between two ranges.
+  function zoomBandForSpeed(v){
+    const kmh = v * 3.6;
+    let idx = zoomBandIdx;
+    while (idx < ZOOM_BANDS.length - 1 && kmh >= ZOOM_BANDS[idx][0] + ZOOM_BAND_HYST_KMH) idx++;
+    while (idx > 0 && kmh < ZOOM_BANDS[idx - 1][0] - ZOOM_BAND_HYST_KMH) idx--;
+    zoomBandIdx = idx;
+    return ZOOM_BANDS[idx][1];
+  }
+
+  // Range multiplier for an (eased) zoom level relative to the tightest band.
+  function rangeFactorForZoom(zoom){
+    return Math.pow(2, ZOOM_BANDS[0][1] - zoom);
+  }
+
+  // ---- Route-start fly-over ----
+
+  function startFlyover(){
+    flyover = null;
+    if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
+    const total = routeCum[routeCum.length - 1];
+    if (total < FLYOVER_MIN_M) return;
+    flyover = {
+      startMs: performance.now(),
+      durMs: clamp(2000 + total / 1.5, 2500, 5000),
+      total,
+      range: clamp(total * 0.4, 500, 2500)
+    };
+  }
+
+  // The camera target while the fly-over runs: a point sliding from the destination back
+  // along the route to the car (ease-in-out), looking down the road, from a range that
+  // frames a good stretch of it. Null once done - the normal follow then dives in.
+  function flyoverFrame(now){
+    if (!flyover) return null;
+    if (!isNavigating() || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) { flyover = null; return null; }
+    const u = (now - flyover.startMs) / flyover.durMs;
+    if (u >= 1) { flyover = null; return null; }
+    const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    const m = lerp(flyover.total, clamp(puck.progressM, 0, flyover.total), e);
+    const at = pointAtMetres(activeRoutePath, routeCum, m);
+    // Look down the route's general direction (a long chord), not the local segment: at
+    // sweep speed the per-vertex bearing would whip the camera at every bend.
+    const look = clamp(flyover.total * 0.1, 200, 800);
+    const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
+    const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
+    const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
+    return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.range, tilt: 55 };
   }
 
   // Ground distance from the camera's centre point to a point that renders at screen
@@ -1565,7 +2014,7 @@
     return Number.isFinite(n) ? n : fallback;
   }
 
-  function applyFollowCamera(dtEase){
+  function applyFollowCamera(dtEase, now){
     const view = viewTargets();
     if (!cam.seeded) {
       // (Re)attach: seed from the live camera so the hand-off from a pan, the route
@@ -1574,17 +2023,40 @@
       cam.lat = c.lat;
       cam.lng = c.lng;
       cam.heading = numOr(map3d.heading, 0);
-      cam.range = numOr(map3d.range, view.range);
+      // (An unset map property can read as 0: fall back to the view's value where 0 is invalid.)
+      const liveRange = numOr(map3d.range, 0), liveFov = numOr(map3d.fov, 0);
+      cam.range = liveRange > 0 ? liveRange : view.range;
       cam.tilt = numOr(map3d.tilt, view.tilt);
-      cam.fov = numOr(map3d.fov, view.fov);
+      cam.fov = liveFov >= 5 ? liveFov : view.fov;
       cam.speedLP = speedKalman.speed;
+      cam.zoom = zoomBandForSpeed(cam.speedLP);
+      cam.latched = false;
       cam.seeded = true;
     }
     cam.speedLP += (speedKalman.speed - cam.speedLP) * easeK(dtEase, FOLLOW.SPEED_TAU);
-    const tgtRange = cam.userRange != null ? cam.userRange
-      : view.range * (view.breathe ? rangeFactorForSpeed(cam.speedLP) : 1);
-    const headingTarget = view.headingUp ? (Number.isFinite(puck.heading) ? puck.heading : cam.heading) : 0;
+    // Speed-band zoom: the band steps, the eased level glides between them.
+    cam.zoom += (zoomBandForSpeed(cam.speedLP) - cam.zoom) * easeK(dtEase, FOLLOW.ZOOM_TAU);
+    let tgtRange = cam.userRange != null ? cam.userRange
+      : view.range * (view.breathe ? rangeFactorForZoom(cam.zoom) : 1);
+    let tiltTarget = view.tilt;
+    // Heading-up latch (Vela): the camera takes the car's course only once the car is
+    // genuinely moving; parked, it holds where it is instead of spinning with GPS noise.
+    // On a route the course is the road's own bearing, which is always trustworthy.
+    let headingTarget;
+    if (!view.headingUp) {
+      headingTarget = 0;
+    } else {
+      if (!cam.latched && cam.speedLP > FOLLOW.LATCH_MPS) cam.latched = true;
+      else if (cam.latched && cam.speedLP < FOLLOW.HOLD_MPS && !puck.engaged) cam.latched = false;
+      headingTarget = (cam.latched || puck.engaged) && Number.isFinite(puck.heading) ? puck.heading : cam.heading;
+    }
     const car = { lat: puck.lat, lng: puck.lng };
+    const fly = flyoverFrame(now);
+    if (fly) {
+      tgtRange = fly.range;
+      tiltTarget = fly.tilt;
+      headingTarget = fly.bearing;
+    }
     // Flight blend: when the camera is far from where it should be (Re-center after a
     // pan, overview -> drive) every parameter eases with a longer SHARED time constant so
     // it reads as one swoop, tightening back to the follow constants as it closes in.
@@ -1598,12 +2070,12 @@
     // blends toward the TARGET framing while in flight: from a 2 km overview the live
     // value would aim a kilometre up the road and drop the car off the bottom edge.
     let lookM = 0;
-    if (view.headingUp) {
+    if (view.headingUp && !fly) {
       const lookLive = lookAheadForFraction(cam.range, cam.tilt, cam.fov, FOLLOW.CAR_SCREEN_Y);
       const lookTarget = lookAheadForFraction(tgtRange, view.tilt, view.fov, FOLLOW.CAR_SCREEN_Y);
       lookM = lerp(lookLive, lookTarget, flight);
     }
-    const aim = lookM > 0 ? lookAhead(car, cam.heading, lookM) : car;
+    const aim = fly ? fly.point : (lookM > 0 ? lookAhead(car, cam.heading, lookM) : car);
 
     const kPos = easeK(dtEase, FOLLOW.POS_TAU + extra);
     cam.lat += (aim.lat - cam.lat) * kPos;
@@ -1617,7 +2089,7 @@
     // view switch (heading-up -> north-up) or a re-center after the user spun the map.
     const maxTurn = FOLLOW.BRG_MAX_RATE * dtEase;
     cam.heading = normaliseHeading(cam.heading + clamp(db * easeK(dtEase, brgTau + extra), -maxTurn, maxTurn));
-    cam.tilt += (view.tilt - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extra);
+    cam.tilt += (tiltTarget - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extra);
     cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
     cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
 
@@ -1630,20 +2102,56 @@
     if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
     if (Math.abs(numOr(map3d.fov, 0) - cam.fov) > 0.005) map3d.fov = cam.fov;
     applyLiveCarScale();
+    updateCompassNeedle(cam.heading);
+  }
+
+  // Attach the follow camera (Re-center, auto re-follow). `view` switches the view first;
+  // null keeps the current one. The ticker seeds from the live camera and flies it in.
+  function attachFollow(view){
+    if (!map3d) return;
+    following = true;
+    cam.userRange = null;
+    cam.seeded = false;
+    autoRefollowArmed = false;
+    if (view) {
+      currentView = view;
+      setViewSelectValue(view);
+    }
+    const followBtn = document.getElementById("followBtn");
+    if (followBtn) followBtn.textContent = "Following: ON";
+    ensureFollowTicker();
+    updateRecenterButton();
   }
 
   function recenterToCar(){
     if (!map3d) return;
-    following = true;
-    cam.userRange = null;
-    cam.seeded = false; // seed from the live camera -> the ticker flies it in and hands off to the follow
-    currentView = "drive";
-    setViewSelectValue("drive");
-    const followBtn = document.getElementById("followBtn");
-    if (followBtn) followBtn.textContent = "Following: ON";
+    attachFollow("drive");
     if (!isDemoRunning()) startGps(); // (startGps stops a running demo - keep a mock drive alive)
-    ensureFollowTicker();
-    updateRecenterButton();
+  }
+
+  // ---- North-up / heading-up ----
+
+  function toggleNorthUp(){
+    northUp = !northUp;
+    cam.userRange = null;
+    updateCompassButton();
+    setMessage(northUp ? "North up." : "Heading up.");
+  }
+
+  let compassNeedleDeg = NaN;
+  function updateCompassNeedle(heading){
+    if (!Number.isFinite(heading)) return;
+    if (Number.isFinite(compassNeedleDeg) && angleDelta(compassNeedleDeg, heading) < 0.5) return;
+    compassNeedleDeg = heading;
+    const needle = document.getElementById("compassNeedle");
+    if (needle) needle.style.transform = `rotate(${-heading}deg)`;
+  }
+
+  function updateCompassButton(){
+    const btn = document.getElementById("compassBtn");
+    if (!btn) return;
+    btn.classList.toggle("visible", !!currentGpsPoint && following && currentView !== "top" && currentView !== "overview");
+    btn.classList.toggle("north-up", northUp);
   }
 
   function handleGpsError(err){
@@ -1655,6 +2163,8 @@
 
   function toggleFollow(){
     following = !following;
+    autoRefollowArmed = false; // an explicit toggle is not a pan: no timed re-attach
+    if (!following) flyover = null;
     document.getElementById("followBtn").textContent = `Following: ${following ? "ON" : "OFF"}`;
     updateRecenterButton();
     setMessage(following ? "Camera will follow the next GPS/demo position." : "Camera unlocked. Drag around the photorealistic map.");
@@ -1685,6 +2195,7 @@
       map3d.tilt = 0; map3d.range = 1300; map3d.heading = 0; map3d.fov = 35;
     }
     setViewSelectValue(mode);
+    updateCompassButton();
     syncCarLod();
     refreshViewSpecs();
   }
@@ -1968,6 +2479,8 @@
     if (demoBtn) demoBtn.textContent = "Drive route demo";
     const freeBtn = document.getElementById("freeFollowBtn");
     if (freeBtn) freeBtn.textContent = "Free follow";
+    const tracesBtn = document.getElementById("tracesBtn");
+    if (tracesBtn) tracesBtn.textContent = "Traces";
   }
 
   // Mock GPS: walks the path at DEMO_SPEED emitting ONE fix per second (position,
@@ -2081,7 +2594,231 @@
     demoActive = false;
     demoKind = null;
     if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
+    if (replayTimer !== null) { clearTimeout(replayTimer); replayTimer = null; }
     resetDemoButtons();
+  }
+
+  // ---- Drive traces (Vela TripStore/DemoTrace): record live GPS, save to disk, replay ----
+  // A trace is { id, startedAt, dest, fixes } with compact fix rows
+  // [tMs, lat, lng, heading|null, speed|null, accuracy|null, bearingAccuracy|null].
+  // Storage is the host's app files (Car.saveTrace / listTraces / readTrace / deleteTrace);
+  // in a plain browser it falls back to localStorage. Replays feed the fixes through the
+  // same path as live GPS with their original timing (gaps capped at 2 s).
+
+  const TRACE_AUTOSAVE_EVERY = 30;       // fixes between saves (a crash loses < 30 s)
+  const TRACE_REPLAY_MAX_GAP_MS = 2000;
+  const traceRec = { on: false, id: null, fixes: [], startedAt: 0, dest: null, sinceSave: 0 };
+  let replayTimer = null;
+
+  const traceStore = {
+    hasBridge(){
+      return !!(window.Car && typeof Car.listTraces === "function" && typeof Car.saveTrace === "function");
+    },
+    list(){
+      if (this.hasBridge()) {
+        try {
+          const arr = JSON.parse(Car.listTraces() || "[]");
+          return Array.isArray(arr) ? arr : [];
+        } catch (err) { return []; }
+      }
+      const out = [];
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith("aaTraceMeta:")) continue;
+          try { out.push(JSON.parse(localStorage.getItem(key))); } catch (err) {}
+        }
+      } catch (err) {}
+      return out;
+    },
+    read(id){
+      try {
+        const raw = this.hasBridge() ? Car.readTrace(id) : localStorage.getItem("aaTrace:" + id);
+        return raw ? JSON.parse(raw) : null;
+      } catch (err) { return null; }
+    },
+    save(id, trace, meta){
+      const body = JSON.stringify(trace), metaJson = JSON.stringify(meta);
+      try {
+        if (this.hasBridge()) {
+          Car.saveTrace(id, body, metaJson);
+        } else {
+          localStorage.setItem("aaTrace:" + id, body);
+          localStorage.setItem("aaTraceMeta:" + id, metaJson);
+        }
+        return true;
+      } catch (err) {
+        console.warn("Trace save failed", err);
+        return false;
+      }
+    },
+    remove(id){
+      try {
+        if (this.hasBridge()) Car.deleteTrace(id);
+        else { localStorage.removeItem("aaTrace:" + id); localStorage.removeItem("aaTraceMeta:" + id); }
+      } catch (err) {}
+    }
+  };
+
+  function finiteOrNull(v){ return Number.isFinite(v) ? v : null; }
+
+  function traceMeta(){
+    const f = traceRec.fixes;
+    return {
+      id: traceRec.id,
+      name: traceRec.dest ? "To " + traceRec.dest.name : "Free drive",
+      startedAt: traceRec.startedAt,
+      count: f.length,
+      durationMs: f.length ? f[f.length - 1][0] - f[0][0] : 0,
+      dest: traceRec.dest
+    };
+  }
+
+  function recordTraceFix(c){
+    if (!traceRec.on) return;
+    traceRec.fixes.push([
+      Date.now(),
+      Math.round(c.latitude * 1e6) / 1e6,
+      Math.round(c.longitude * 1e6) / 1e6,
+      finiteOrNull(c.heading), finiteOrNull(c.speed), finiteOrNull(c.accuracy), finiteOrNull(c.bearingAccuracy)
+    ]);
+    if (++traceRec.sinceSave >= TRACE_AUTOSAVE_EVERY) saveTrace();
+  }
+
+  function saveTrace(){
+    traceRec.sinceSave = 0;
+    if (!traceRec.id || !traceRec.fixes.length) return;
+    traceStore.save(traceRec.id, { id: traceRec.id, startedAt: traceRec.startedAt, dest: traceRec.dest, fixes: traceRec.fixes }, traceMeta());
+  }
+
+  function toggleTraceRecording(){
+    const btn = document.getElementById("traceRecBtn");
+    if (traceRec.on) {
+      traceRec.on = false;
+      saveTrace();
+      const n = traceRec.fixes.length;
+      setMessage(n ? `Trace saved (${n} fixes).` : "Trace discarded (no fixes recorded).");
+      if (btn) btn.textContent = "Rec trace";
+      return;
+    }
+    if (isDemoRunning()) { setMessage("Stop the demo or replay first - traces record live GPS."); return; }
+    traceRec.on = true;
+    traceRec.id = "trace_" + new Date().toISOString().replace(/[:.]/g, "-");
+    traceRec.fixes = [];
+    traceRec.startedAt = Date.now();
+    traceRec.sinceSave = 0;
+    traceRec.dest = activeDestination ? { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng } : null;
+    if (btn) btn.textContent = "Rec trace: ON";
+    if (watchId === null) startGps();
+    setMessage("Recording live GPS to a trace.");
+  }
+
+  function formatTraceDate(ms){
+    if (!Number.isFinite(ms)) return "";
+    const d = new Date(ms);
+    return d.toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) + " " + formatTime(d);
+  }
+
+  function renderTraceList(){
+    const list = document.getElementById("traceList");
+    if (!list) return;
+    const items = traceStore.list().filter(m => m && m.id).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+    list.textContent = "";
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.id = "traceEmpty";
+      empty.textContent = "No recorded drives yet. Tap \"Rec trace\" while driving with live GPS; it saves to " +
+        (traceStore.hasBridge() ? "the app's files on this device." : "this browser's storage.");
+      list.append(empty);
+      return;
+    }
+    for (const m of items) {
+      const row = document.createElement("div");
+      row.className = "trace-row";
+      const label = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "trace-name";
+      name.textContent = m.name || m.id;
+      const meta = document.createElement("span");
+      meta.className = "trace-meta";
+      meta.textContent = `${formatTraceDate(m.startedAt)} · ${m.count || 0} fixes · ${formatDuration(m.durationMs || 0)}`;
+      label.append(name, meta);
+      const replay = document.createElement("button");
+      replay.type = "button";
+      replay.className = "trace-replay";
+      replay.dataset.trace = m.id;
+      replay.dataset.action = "replay";
+      replay.textContent = "Replay";
+      const del = document.createElement("button");
+      del.type = "button";
+      del.dataset.trace = m.id;
+      del.dataset.action = "delete";
+      del.textContent = "Delete";
+      row.append(label, replay, del);
+      list.append(row);
+    }
+  }
+
+  function openTracePanel(){
+    if (demoKind === "replay" && isDemoRunning()) { stopDemo(); setMessage("Replay stopped."); return; }
+    const overlay = document.getElementById("traceOverlay");
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.classList.add("open");
+    renderTraceList();
+  }
+
+  function closeTracePanel(){
+    const overlay = document.getElementById("traceOverlay");
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove("open");
+  }
+
+  async function startTraceReplay(id){
+    const trace = traceStore.read(id);
+    if (!trace || !Array.isArray(trace.fixes) || trace.fixes.length < 2) { setMessage("Trace is empty or unreadable."); return; }
+    if (traceRec.on) toggleTraceRecording(); // a replay must not record itself
+    closeTracePanel();
+    if (isDemoRunning()) stopDemo();
+    if (watchId !== null) stopGps();
+    const fixes = trace.fixes;
+    const first = fixes[0];
+    const start = { lat: first[1], lng: first[2], heading: Number.isFinite(first[3]) ? first[3] : NaN };
+    if (trace.dest && Number.isFinite(trace.dest.lat) && Number.isFinite(trace.dest.lng)) {
+      // Recorded while navigating: rebuild the route from the trace start (current traffic).
+      await calculateRoute({ lat: start.lat, lng: start.lng }, trace.dest, trace.dest.name || "Destination");
+      if (activeRoutePath.length >= 2) {
+        currentGpsPoint = start;
+        enterNavigation();
+      }
+    } else {
+      clearNavigation();
+      following = true;
+      document.getElementById("followBtn").textContent = "Following: ON";
+      setView("drive");
+    }
+    demoKind = "replay";
+    demoActive = true;
+    const btn = document.getElementById("tracesBtn");
+    if (btn) btn.textContent = "Stop replay";
+    setMessage(`Replaying ${fixes.length} recorded fixes...`);
+    let i = 0;
+    const step = () => {
+      replayTimer = null;
+      if (demoKind !== "replay" || !demoActive) return;
+      const f = fixes[i];
+      applyGpsFix({ lat: f[1], lng: f[2] }, Number.isFinite(f[3]) ? f[3] : NaN, {
+        speed: finiteOrNull(f[4]),
+        accuracy: finiteOrNull(f[5]),
+        bearingAccuracy: finiteOrNull(f[6]),
+        headingMeasured: Number.isFinite(f[3])
+      });
+      i += 1;
+      if (i >= fixes.length) { stopDemo(); setMessage("Replay finished."); return; }
+      replayTimer = setTimeout(step, clamp(fixes[i][0] - f[0], 50, TRACE_REPLAY_MAX_GAP_MS));
+    };
+    step();
   }
 
   function downsamplePath(path,maxPoints){
@@ -2223,7 +2960,7 @@
     const dh = Number(dHeading) || 0;
     const dt = Number(dTilt) || 0;
     if (!dh && !dt) return;
-    markUserPanned();
+    markUserPanned(true);
     if (dh) map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dh);
     if (dt) map3d.tilt = clamp((Number(map3d.tilt) || 0) + dt, 0, 90);
     syncCarLod();
@@ -2232,7 +2969,20 @@
   window.__aaRecenter = function(){
     recenterToCar();
   };
-  window.__aaUserPanned = markUserPanned;
+  window.__aaUserPanned = function(){ markUserPanned(true); };
+  // Host day/night (Android Auto's CarContext.isDarkMode - not wall-clock).
+  window.__aaSetNight = function(on){
+    document.documentElement.classList.toggle("night", !!on);
+    document.body.classList.toggle("night", !!on);
+  };
+  // Host accelerometer: world-frame horizontal acceleration (m/s^2, East/North).
+  window.__aaInjectMotion = function(east, north){
+    const e = Number(east), n = Number(north);
+    if (!Number.isFinite(e) || !Number.isFinite(n)) return;
+    motion.east = e;
+    motion.north = n;
+    motion.atMs = performance.now();
+  };
   window.__aaSetDebugOverlay = function(on){
     document.documentElement.classList.toggle("debug-open", !!on);
     document.body.classList.toggle("debug-open", !!on);
@@ -2241,6 +2991,7 @@
       hideCarApiHud();
       closeViewSelectMenu();
       closeCarModelViewer();
+      closeTracePanel();
     }
     try {
       if (window.Car && typeof Car.setDebugOverlay === "function") Car.setDebugOverlay(!!on);
@@ -2251,7 +3002,14 @@
     return document.documentElement.classList.contains("aa-car") || document.body.classList.contains("aa-car");
   }
 
-  function markUserPanned(){
+  // `fromTouch`: a real pan/rotate on the screen (not a programmatic detach such as the
+  // route overview). In car mode that arms the timed re-follow from the LAST touch.
+  function markUserPanned(fromTouch){
+    flyover = null;
+    if (fromTouch && isAndroidAuto()) {
+      lastTouchMs = performance.now();
+      autoRefollowArmed = true;
+    }
     if (following) {
       following = false;
       cam.seeded = false; // re-attach eases in from wherever the user leaves the camera
@@ -2266,6 +3024,7 @@
     if (!btn) return;
     // Shown when detached, or when a pinch zoom overrides the follow range.
     btn.classList.toggle("visible", !!currentGpsPoint && (!following || cam.userRange != null));
+    updateCompassButton();
   }
   window.__aaInjectGps = function(fix){
     if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;
@@ -2276,7 +3035,8 @@
         heading: Number.isFinite(Number(fix.heading)) ? Number(fix.heading) : null,
         speed: Number.isFinite(Number(fix.speed)) ? Number(fix.speed) : null,
         bearingAccuracy: Number.isFinite(Number(fix.bearingAccuracy)) ? Number(fix.bearingAccuracy) : null,
-        accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0
+        accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0,
+        provider: typeof fix.provider === "string" && fix.provider ? fix.provider : null
       }
     });
   };
@@ -2359,6 +3119,41 @@
     event.stopPropagation();
     window.__aaRecenter();
   });
+  document.getElementById("compassBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleNorthUp();
+  });
+  document.getElementById("traceRecBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleTraceRecording();
+  });
+  document.getElementById("tracesBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTracePanel();
+  });
+  document.getElementById("traceClose").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTracePanel();
+  });
+  document.getElementById("traceOverlay").addEventListener("click", event => {
+    if (event.target === event.currentTarget) closeTracePanel();
+  });
+  document.getElementById("traceList").addEventListener("click", event => {
+    const btn = event.target.closest("button[data-trace]");
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (btn.dataset.action === "delete") {
+      traceStore.remove(btn.dataset.trace);
+      renderTraceList();
+    } else {
+      startTraceReplay(btn.dataset.trace);
+    }
+  });
   document.getElementById("carDebugBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -2398,7 +3193,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #compassBtn, #speedLimitBadge, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay"));
   }
 
   let mapDragStart = null;
@@ -2417,7 +3212,7 @@
     if (dx * dx + dy * dy < 64) return;
     chromeLocked = false;
     hideChrome();
-    markUserPanned();
+    markUserPanned(true);
     mapDragStart = null;
   }, { capture:true, passive:true });
   window.addEventListener("pointerup", () => { mapDragStart = null; }, { capture:true, passive:true });
@@ -2426,7 +3221,7 @@
     if (isChromeUiTarget(event.target)) return;
     chromeLocked = false;
     hideChrome();
-    markUserPanned();
+    markUserPanned(true);
   }, { capture:true, passive:true });
 
   let camGesture = null;
@@ -2457,7 +3252,7 @@
     const dMidY = next.midY - camGesture.midY;
     chromeLocked = false;
     hideChrome();
-    markUserPanned();
+    markUserPanned(true);
     if (Math.abs(dAngle) > 0.35) {
       map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
     }
