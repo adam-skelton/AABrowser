@@ -287,6 +287,8 @@
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
   const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
+  // Cloud-based 3D Hybrid style: roads + locality labels, POIs/transit/landmarks off.
+  const GOOGLE_MAPS_MAP_ID = "a6855643070a44926567285b";
   try {
     if (sessionStorage.getItem("aaMapRevealed") === "1") {
       document.body.classList.add("map-ready");
@@ -576,6 +578,7 @@
         tilt: 67,
         heading: startHeading,
         mode: "SATELLITE",
+        mapId: GOOGLE_MAPS_MAP_ID,
         gestureHandling: "GREEDY",
         defaultUIHidden: true,
         description: "Photorealistic 3D routing map"
@@ -596,6 +599,9 @@
           if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
           refreshViewSpecs();
         });
+      });
+      map3d.addEventListener("gmp-map-id-error", () => {
+        console.error("Invalid Maps map ID; street/suburb label style will not apply.");
       });
       map3d.addEventListener("gmp-error", () => {
         showMapFailure("The 3D map failed to initialise.");
