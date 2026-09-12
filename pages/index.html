@@ -7,7 +7,7 @@
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0)}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
     #mapLoader::before {content:""; position:absolute; inset:0; z-index:-1; background:radial-gradient(ellipse at 50% 38%, rgba(28,58,114,.94) 0%, rgba(18,36,76,.95) 34%, rgba(11,20,40,.96) 62%, rgba(7,11,20,.97) 100%); pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
@@ -44,10 +44,10 @@
     #recenterBtn.visible {display:flex}
     #recenterBtn svg {width:24px; height:32px; display:block; flex:0 0 auto; fill:currentColor}
     #recenterBtn svg circle {fill:#2E3134}
-    #infoBtn {position:absolute; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:33; display:none; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #infoBtn {position:absolute; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:33; display:none; width:76px; height:76px; min-height:76px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #infoBtn.visible {display:flex}
-    #infoBtn svg {width:28px; height:28px; display:block}
-    body.has-recenter #infoBtn {bottom:calc(var(--aa-inset-bottom) + max(108px,env(safe-area-inset-bottom) + 88px))}
+    #infoBtn svg {width:34px; height:34px; display:block}
+    body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
     #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
     #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -268,11 +268,9 @@
     </svg>
     Re-center
   </button>
-  <button id="infoBtn" type="button" aria-label="Route info">
+  <button id="infoBtn" type="button" aria-label="Widen view">
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-      <path d="M12 10.2v7.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
-      <circle cx="12" cy="7" r="1.35" fill="currentColor"/>
+      <path fill="currentColor" d="M12 5l9 12H3z"/>
     </svg>
   </button>
   <button id="compassBtn" type="button" aria-label="Toggle north up">
@@ -1346,7 +1344,7 @@
 
   function svgIconUrl(body){
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 64 64">' +
       '<circle cx="32" cy="32" r="30" fill="#1A73E8"/>' + body + "</svg>"
     );
   }
@@ -1372,13 +1370,15 @@
   function makeManeuverMarker(item){
     const marker = new Marker3DElement({
       position: { lat: item.point.lat, lng: item.point.lng },
-      sizePreserved: true,
+      sizePreserved: false,
       drawsWhenOccluded: true
     });
     const img = document.createElement("img");
     img.src = MANEUVER_ICONS[item.type] || MANEUVER_ICONS.straight;
-    img.width = 20;
-    img.height = 20;
+    img.width = 12;
+    img.height = 12;
+    img.style.width = "12px";
+    img.style.height = "12px";
     img.alt = item.type;
     const template = document.createElement("template");
     template.content.append(img);
@@ -3478,8 +3478,10 @@
       right *= w;
       bottom *= h;
     }
+    const split = left > w * 0.08 || right > w * 0.08;
+    if (!split && top > h * 0.15) top = 0;
     viewSafe.left = clamp(left, 0, w * 0.48);
-    viewSafe.top = clamp(top, 0, h * 0.45);
+    viewSafe.top = clamp(top, 0, h * 0.12);
     viewSafe.right = clamp(right, 0, w * 0.48);
     viewSafe.bottom = clamp(bottom, 0, h * 0.45);
     viewSafe.width = w;
@@ -3567,7 +3569,10 @@
       }
       clearManeuverMarkers();
     }
-    btn.classList.toggle("visible", infoBtnArmed && infoUiAvailable());
+    const show = infoBtnArmed && infoUiAvailable();
+    btn.classList.toggle("visible", show);
+    document.body.classList.toggle("has-info", show);
+    document.documentElement.classList.toggle("has-info", show);
   }
 
   function armNavInfoIdle(){

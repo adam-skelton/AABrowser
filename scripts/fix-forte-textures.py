@@ -18,8 +18,8 @@ from io import BytesIO
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
-from scipy.ndimage import distance_transform_edt, label
+from PIL import Image, ImageDraw, ImageFilter
+from scipy.ndimage import binary_closing, binary_dilation, distance_transform_edt, label
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "pages" / "forte.glb"
@@ -36,6 +36,9 @@ PAINT = {
     },
     "emissiveFactor": [0.042, 0.040, 0.037],
 }
+SKY_BLUE = np.array([118.0, 188.0, 245.0], dtype=np.float32)
+GLASS_ROUGH = 0.12
+PAINT_ROUGH = 0.68
 
 
 def read_glb(path: Path):
@@ -153,11 +156,159 @@ def patch_pbr(path: Path):
     )
 
 
+def acc_f32(js: dict, binary: bytes, acc_i: int, ncomp: int):
+    acc = js["accessors"][acc_i]
+    view = js["bufferViews"][acc["bufferView"]]
+    start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    count = acc["count"]
+    stride = view.get("byteStride") or ncomp * 4
+    need = count * stride
+    if start < 0 or start + need > len(binary):
+        count = max(0, (len(binary) - start) // stride)
+        need = count * stride
+    if count <= 0:
+        return np.zeros((0, ncomp), dtype=np.float32)
+    if stride == ncomp * 4:
+        return np.frombuffer(binary, dtype="<f4", count=count * ncomp, offset=start).reshape(count, ncomp).copy()
+    raw = np.frombuffer(binary, dtype=np.uint8, offset=start, count=need)
+    out = np.empty((count, ncomp), dtype=np.float32)
+    for i in range(count):
+        out[i] = np.frombuffer(raw[i * stride : i * stride + ncomp * 4], dtype="<f4")
+    return out
+
+
+def acc_idx(js: dict, binary: bytes, acc_i: int):
+    acc = js["accessors"][acc_i]
+    view = js["bufferViews"][acc["bufferView"]]
+    start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    count = acc["count"]
+    dt = {5121: np.uint8, 5123: np.uint16, 5125: np.uint32}[acc["componentType"]]
+    n = min(count, max(0, (len(binary) - start) // np.dtype(dt).itemsize))
+    return np.frombuffer(binary, dtype=dt, count=n, offset=start).astype(np.int32)
+
+
+def cabin_glass_mask(js: dict, binary: bytes, size: tuple[int, int]) -> np.ndarray:
+    w, h = size
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    for mesh in js.get("meshes", []):
+        for prim in mesh.get("primitives", []):
+            attrs = prim.get("attributes") or {}
+            if "POSITION" not in attrs or "TEXCOORD_0" not in attrs:
+                continue
+            pos = acc_f32(js, binary, attrs["POSITION"], 3)
+            uv = acc_f32(js, binary, attrs["TEXCOORD_0"], 2)
+            if len(pos) < 3 or len(uv) != len(pos):
+                continue
+            nrm = acc_f32(js, binary, attrs["NORMAL"], 3) if "NORMAL" in attrs else None
+            if "indices" in prim:
+                idx = acc_idx(js, binary, prim["indices"])
+                idx = idx[: len(idx) - (len(idx) % 3)].reshape(-1, 3)
+            else:
+                idx = np.arange(len(pos) - (len(pos) % 3), dtype=np.int32).reshape(-1, 3)
+            if idx.size == 0:
+                continue
+            valid = (idx < len(pos)).all(axis=1)
+            idx = idx[valid]
+            tri = pos[idx]
+            c = tri.mean(axis=1)
+            area = 0.5 * np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+            keep = (c[:, 1] > 0.82) & (c[:, 1] < 1.42) & (area > 4e-5)
+            if nrm is not None and len(nrm) == len(pos):
+                n = nrm[idx].mean(axis=1)
+                keep = keep & (n[:, 1] < 0.72)
+            uvs = uv[idx][keep]
+            if uvs.size == 0:
+                continue
+            uvs = uvs - np.floor(uvs)
+            xs = uvs[..., 0] * (w - 1)
+            ys = (1.0 - uvs[..., 1]) * (h - 1)
+            for t in range(len(xs)):
+                draw.polygon(
+                    [
+                        (float(xs[t, 0]), float(ys[t, 0])),
+                        (float(xs[t, 1]), float(ys[t, 1])),
+                        (float(xs[t, 2]), float(ys[t, 2])),
+                    ],
+                    fill=255,
+                )
+    return np.asarray(mask) > 0
+
+
+def glass_pixels(albedo_rgb: np.ndarray, cabin: np.ndarray) -> np.ndarray:
+    rgb = albedo_rgb.astype(np.float32)
+    luma = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+    dark = cabin & (luma < 110)
+    glass = binary_closing(dark, iterations=2)
+    return binary_dilation(glass, iterations=4) & cabin
+
+
+def png_bytes(im: Image.Image) -> bytes:
+    buf = BytesIO()
+    im.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def patch_glass(path: Path):
+    js, binary = read_glb(path)
+    if not js.get("images"):
+        print(f"Skip {path} (no albedo image)")
+        return
+    albedo_i = js["images"][0]["bufferView"]
+    albedo = Image.open(BytesIO(view_blob(binary, js["bufferViews"][albedo_i]))).convert("RGBA")
+    rgb = np.asarray(albedo)[..., :3].copy()
+    cabin = cabin_glass_mask(js, binary, albedo.size)
+    glass = glass_pixels(rgb, cabin)
+    rgb = rgb.astype(np.float32)
+    rgb[glass] = rgb[glass] * 0.18 + SKY_BLUE * 0.82
+    out = np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), np.asarray(albedo)[..., 3]])
+    albedo_png = png_bytes(Image.fromarray(out, "RGBA"))
+
+    mr = np.zeros((albedo.size[1], albedo.size[0], 3), dtype=np.uint8)
+    mr[..., 1] = 255
+    mr[glass] = (0, max(1, int(round(255 * GLASS_ROUGH / PAINT_ROUGH))), 0)
+    mr_png = png_bytes(Image.fromarray(mr, "RGB"))
+
+    blobs = []
+    views = []
+    for i, view in enumerate(js["bufferViews"]):
+        blob = albedo_png if i == albedo_i else view_blob(binary, view)
+        blobs.append(blob)
+        views.append(view)
+    mr_index = len(blobs)
+    blobs.append(mr_png)
+    views.append({})
+
+    js["images"] = [
+        {"bufferView": albedo_i, "mimeType": "image/png"},
+        {"bufferView": mr_index, "mimeType": "image/png"},
+    ]
+    js["textures"] = [
+        {"sampler": 0, "source": 0},
+        {"sampler": 0, "source": 1},
+    ]
+    if "samplers" not in js:
+        js["samplers"] = [{"magFilter": 9729, "minFilter": 9729, "wrapS": 10497, "wrapT": 10497}]
+    mat = dict(PAINT)
+    mat["pbrMetallicRoughness"] = dict(PAINT["pbrMetallicRoughness"])
+    mat["pbrMetallicRoughness"]["roughnessFactor"] = PAINT_ROUGH
+    mat["pbrMetallicRoughness"]["metallicFactor"] = 0.0
+    mat["pbrMetallicRoughness"]["metallicRoughnessTexture"] = {"index": 1}
+    js["materials"] = [mat]
+    write_glb(path, js, views, blobs)
+    print(f"Glass-tinted {path} ({path.stat().st_size} bytes) glass_px={int(glass.sum())}")
+
+
 def main():
     if "--pbr-only" in sys.argv:
         for path in (ROOT / "pages" / "forte.glb", ROOT / "pages" / "forte-preview.glb"):
             if path.exists():
                 patch_pbr(path)
+        return
+    if "--glass" in sys.argv:
+        for path in (ROOT / "pages" / "forte.glb", ROOT / "pages" / "forte-preview.glb"):
+            if path.exists():
+                patch_glass(path)
         return
     js, binary = read_glb(SRC)
     albedo_view_i = js["images"][0]["bufferView"]

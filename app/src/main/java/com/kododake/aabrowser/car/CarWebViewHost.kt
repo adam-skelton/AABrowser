@@ -355,6 +355,7 @@ class CarWebViewHost(
             )
             bootOverlay = overlay
             MapBootOverlay.startBounce(overlay)
+            publishSafeArea()
         }
 
         try {
@@ -631,10 +632,20 @@ class CarWebViewHost(
         val h = surfaceHeight.coerceAtLeast(1)
         val vis = visibleArea
         val area = if (vis != null && vis.width() >= 48 && vis.height() >= 48) vis else Rect(0, 0, w, h)
-        val left = area.left.coerceIn(0, w).toFloat() / w
-        val top = area.top.coerceIn(0, h).toFloat() / h
-        val right = (w - area.right).coerceIn(0, w).toFloat() / w
-        val bottom = (h - area.bottom).coerceIn(0, h).toFloat() / h
+        val leftPx = area.left.coerceIn(0, w)
+        val rightPx = (w - area.right).coerceIn(0, w)
+        val bottomPx = (h - area.bottom).coerceIn(0, h)
+        val topRaw = area.top.coerceIn(0, h)
+        val split = leftPx > w * 8 / 100 || rightPx > w * 8 / 100
+        val topPx = when {
+            !split && topRaw > h * 15 / 100 -> 0
+            else -> minOf(topRaw, h * 12 / 100)
+        }
+        bootOverlay?.setPadding(leftPx, topPx, rightPx, bottomPx)
+        val left = leftPx.toFloat() / w
+        val top = topPx.toFloat() / h
+        val right = rightPx.toFloat() / w
+        val bottom = bottomPx.toFloat() / h
         evaluateOrQueue(
             "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom});"
         )
