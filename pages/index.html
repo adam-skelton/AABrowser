@@ -1247,6 +1247,41 @@
     routeDoneUpdatedM = -Infinity;
   }
 
+  // Guaranteed orange / red stretches on the drive-route demo so traffic colours are
+  // visible even when live Auckland traffic is all free-flow (blue).
+  function demoTrafficIntervals(path){
+    const last = path.length - 1;
+    if (last < 6) return [{ start: 0, end: last, speed: "NORMAL" }];
+    const cum = (routeCum.length === path.length) ? routeCum : cumulativeLengths(path);
+    const total = cum[cum.length - 1] || 1;
+    const at = frac => {
+      const m = total * frac;
+      let i = 0;
+      while (i < cum.length - 1 && cum[i] < m) i++;
+      return clamp(i, 0, last);
+    };
+    const cuts = [
+      { i: 0, speed: "NORMAL" },
+      { i: at(0.18), speed: "SLOW" },
+      { i: at(0.32), speed: "NORMAL" },
+      { i: at(0.46), speed: "TRAFFIC_JAM" },
+      { i: at(0.58), speed: "NORMAL" },
+      { i: last, speed: null }
+    ];
+    const out = [];
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const start = cuts[k].i;
+      const end = cuts[k + 1].i;
+      if (end > start) out.push({ start, end, speed: cuts[k].speed });
+    }
+    return out.length ? out : [{ start: 0, end: last, speed: "NORMAL" }];
+  }
+
+  function paintDemoTraffic(path){
+    if (!path || path.length < 2) return;
+    drawRoute(path, demoTrafficIntervals(path));
+  }
+
   function removeRouteLines(){
     for (const line of routeLines) { try { line.remove(); } catch (err) {} }
     routeLines = [];
@@ -2823,10 +2858,11 @@
     demoKind = "nav";
     demoActive = true;
     const path = activeRoutePath;
+    paintDemoTraffic(path);
     enterNavigation();
     demoFix(path[0], bearingDegrees(path[0], path[1]));
     document.getElementById("demoBtn").textContent = "Stop drive demo";
-    setMessage("Driving along Google's returned road path.");
+    setMessage("Driving the test route. Orange = moderate traffic, red = heavy.");
     driveAlongPath(path);
   }
 
