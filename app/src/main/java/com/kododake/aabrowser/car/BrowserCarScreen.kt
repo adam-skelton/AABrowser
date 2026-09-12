@@ -1,10 +1,12 @@
 package com.kododake.aabrowser.car
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
-import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
@@ -47,16 +49,29 @@ class BrowserCarScreen(
 
     private fun searchAction(): Action {
         return Action.Builder()
-            .setIcon(
-                CarIcon.Builder(
-                    IconCompat.createWithResource(carContext, R.drawable.car_search_24)
-                )
-                    .setTint(CarColor.createCustom(0xFF1A73E8.toInt(), 0xFF7EC8FF.toInt()))
-                    .build()
-            )
+            .setIcon(searchPinIcon())
             .setTitle(carContext.getString(R.string.car_action_search))
             .setOnClickListener { openKeyboard("") }
             .build()
+    }
+
+    // Rasterise the multi-colour pin so Android Auto cannot template-tint a vector.
+    private fun searchPinIcon(): CarIcon {
+        val drawable = AppCompatResources.getDrawable(carContext, R.drawable.gmaps_pin)
+        if (drawable == null) {
+            return CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.gmaps_pin)).build()
+        }
+        val srcW = drawable.intrinsicWidth.coerceAtLeast(1)
+        val srcH = drawable.intrinsicHeight.coerceAtLeast(1)
+        val maxPx = (48 * carContext.resources.displayMetrics.density).toInt().coerceAtLeast(48)
+        val scale = maxPx.toFloat() / maxOf(srcW, srcH)
+        val w = (srcW * scale).toInt().coerceAtLeast(1)
+        val h = (srcH * scale).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, w, h)
+        drawable.draw(canvas)
+        return CarIcon.Builder(IconCompat.createWithBitmap(bitmap)).build()
     }
 
     private fun openKeyboard(initialText: String) {
