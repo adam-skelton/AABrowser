@@ -314,7 +314,7 @@
   // Keep a constant on-screen size: about one lane / half a two-lane road.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.5;
-  const CAR_MAX_WORLD_WIDTH_M = 3.5; // zoomed-out cap: never wider than ~one lane of the 3D road
+  const CAR_MAX_WORLD_WIDTH_M = 7.0; // zoomed-out cap: 2x the close-up lane width
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
@@ -539,7 +539,7 @@
   let infoLevel = 0;
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
-  const NAV_INFO = { IDLE_MS: 15000, RANGE_1: 2.2, RANGE_2: 4.4, OVERHEAD_TILT: 26 };
+  const NAV_INFO = { IDLE_MS: 15000, RANGE_1: 2.2, RANGE_2: 4.4, OVERHEAD_TILT: 18, OVERHEAD_RANGE: 1.65, OVERHEAD_PAD_M: 520 };
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
@@ -1326,12 +1326,46 @@
     map3d.append(destinationMarker);
   }
 
-  function maneuverLabel(item){
-    if (item.type === "roundabout") return "Roundabout";
-    if (item.type === "uturn") return "U-turn";
-    if (item.type === "left") return "Left";
-    if (item.type === "right") return "Right";
-    return "Turn";
+  function svgIconUrl(body){
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<circle cx="32" cy="32" r="30" fill="#1A73E8"/>' + body + "</svg>"
+    );
+  }
+
+  const MANEUVER_ICONS = {
+    straight: svgIconUrl('<path fill="#fff" d="M32 10l14 16h-9v26h-10V26h-9z"/>'),
+    right: svgIconUrl('<path fill="#fff" d="M22 50V28c0-5 4-9 9-9h7V10l18 18-18 18v-9h-7c-1.5 0-3 1-3 3v10z"/>'),
+    left: svgIconUrl('<path fill="#fff" d="M42 50V28c0-5-4-9-9-9h-7V10L8 28l18 18v-9h7c1.5 0 3 1 3 3v10z"/>'),
+    "slight-right": svgIconUrl('<path fill="#fff" d="M26 50V30l12-12h6V10l16 16-16 16v-8h-4z"/>'),
+    "slight-left": svgIconUrl('<path fill="#fff" d="M38 50V30L26 18h-6V10L4 26l16 16v-8h4z"/>'),
+    uturn: svgIconUrl('<path fill="#fff" d="M40 52V28c0-8-6-14-14-14s-14 6-14 14h8c0-3.3 2.7-6 6-6s6 2.7 6 6v24h8zM18 34l-8 8 8 8V34z"/>'),
+    roundabout: svgIconUrl('<path fill="#fff" d="M32 14a16 16 0 1 1-11.3 27.3l3.6-3.6A11 11 0 1 0 32 21v6l12-9-12-9v5z"/>')
+  };
+
+  function maneuverTypeFromTurn(turn){
+    const abs = Math.abs(turn);
+    if (abs > 135) return "uturn";
+    if (abs > 70) return turn > 0 ? "right" : "left";
+    if (abs > 38) return turn > 0 ? "slight-right" : "slight-left";
+    return "straight";
+  }
+
+  function makeManeuverMarker(item){
+    const marker = new Marker3DElement({
+      position: { lat: item.point.lat, lng: item.point.lng },
+      sizePreserved: true,
+      drawsWhenOccluded: true
+    });
+    const img = document.createElement("img");
+    img.src = MANEUVER_ICONS[item.type] || MANEUVER_ICONS.straight;
+    img.width = 52;
+    img.height = 52;
+    img.alt = item.type;
+    const template = document.createElement("template");
+    template.content.append(img);
+    marker.append(template);
+    return marker;
   }
 
   function buildManeuvers(path, cum){
@@ -1354,8 +1388,7 @@
         items.push({ point: mid.point, m: mid.m, type: "roundabout" });
       } else {
         for (const c of cluster) {
-          const type = Math.abs(c.turn) > 135 ? "uturn" : (c.turn > 0 ? "right" : "left");
-          items.push({ point: c.point, m: c.m, type });
+          items.push({ point: c.point, m: c.m, type: maneuverTypeFromTurn(c.turn) });
         }
       }
       cluster = [];
@@ -1385,11 +1418,7 @@
     for (let i = 0; i < items.length; i += step) {
       const item = items[i];
       try {
-        const marker = new Marker3DElement({
-          position: { lat: item.point.lat, lng: item.point.lng },
-          label: maneuverLabel(item),
-          sizePreserved: true
-        });
+        const marker = makeManeuverMarker(item);
         map3d.append(marker);
         maneuverMarkers.push(marker);
       } catch (err) {}
@@ -2155,7 +2184,7 @@
       return { range: Math.max(range0 * 8, 1200), tilt: NAV_INFO.OVERHEAD_TILT, overhead: true };
     }
     return {
-      range: clamp(span.remain * 0.9, 480, 18000),
+      range: clamp(span.remain * NAV_INFO.OVERHEAD_RANGE + NAV_INFO.OVERHEAD_PAD_M, 800, 22000),
       tilt: NAV_INFO.OVERHEAD_TILT,
       heading: span.heading,
       aim: span.mid,
