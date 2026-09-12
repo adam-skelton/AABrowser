@@ -630,27 +630,13 @@ class CarWebViewHost(
         val w = surfaceWidth.coerceAtLeast(1)
         val h = surfaceHeight.coerceAtLeast(1)
         val vis = visibleArea
-        val sta = stableArea
-        val area = when {
-            vis != null && sta != null -> {
-                val hit = Rect(
-                    maxOf(vis.left, sta.left),
-                    maxOf(vis.top, sta.top),
-                    minOf(vis.right, sta.right),
-                    minOf(vis.bottom, sta.bottom)
-                )
-                if (hit.width() >= 48 && hit.height() >= 48) hit else vis
-            }
-            vis != null -> vis
-            sta != null -> sta
-            else -> Rect(0, 0, w, h)
-        }
-        val left = area.left.coerceIn(0, w)
-        val top = area.top.coerceIn(0, h)
-        val right = (w - area.right).coerceIn(0, w)
-        val bottom = (h - area.bottom).coerceIn(0, h)
+        val area = if (vis != null && vis.width() >= 48 && vis.height() >= 48) vis else Rect(0, 0, w, h)
+        val left = area.left.coerceIn(0, w).toFloat() / w
+        val top = area.top.coerceIn(0, h).toFloat() / h
+        val right = (w - area.right).coerceIn(0, w).toFloat() / w
+        val bottom = (h - area.bottom).coerceIn(0, h).toFloat() / h
         evaluateOrQueue(
-            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom,width:$w,height:$h});"
+            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom});"
         )
         webView?.invalidate()
     }

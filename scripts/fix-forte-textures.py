@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import struct
+import sys
 from io import BytesIO
 from pathlib import Path
 
@@ -24,6 +25,17 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "pages" / "forte.glb"
 DST = ROOT / "pages" / "forte.glb"
 FILL = [0.08, 0.08, 0.09]
+# Restored albedo (HEAD~2) + this PBR: dark grey paint without chrome or crushed black.
+PAINT = {
+    "name": "forte-paint",
+    "pbrMetallicRoughness": {
+        "baseColorTexture": {"index": 0},
+        "baseColorFactor": [0.70, 0.69, 0.66, 1.0],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.68,
+    },
+    "emissiveFactor": [0.042, 0.040, 0.037],
+}
 
 
 def read_glb(path: Path):
@@ -111,7 +123,42 @@ def write_glb(path: Path, js: dict, views: list[dict], blobs: list[bytes]):
     )
 
 
+def rewrite_json_keep_bin(path: Path, js: dict):
+    data = path.read_bytes()
+    json_len = struct.unpack_from("<I", data, 12)[0]
+    bin_off = 20 + json_len
+    bin_len = struct.unpack_from("<I", data, bin_off)[0]
+    binary = data[bin_off + 8 : bin_off + 8 + bin_len]
+    json_bytes = json.dumps(js, separators=(",", ":")).encode("utf-8")
+    json_bytes += b" " * ((4 - (len(json_bytes) % 4)) % 4)
+    total = 12 + 8 + len(json_bytes) + 8 + len(binary)
+    path.write_bytes(
+        struct.pack("<4sII", b"glTF", 2, total)
+        + struct.pack("<II", len(json_bytes), 0x4E4F534A)
+        + json_bytes
+        + struct.pack("<II", len(binary), 0x004E4942)
+        + binary
+    )
+
+
+def patch_pbr(path: Path):
+    js, _ = read_glb(path)
+    js["materials"] = [PAINT]
+    rewrite_json_keep_bin(path, js)
+    pbr = js["materials"][0]["pbrMetallicRoughness"]
+    print(
+        f"Patched {path} ({path.stat().st_size} bytes) "
+        f"base={pbr['baseColorFactor'][:3]} rough={pbr['roughnessFactor']} "
+        f"emis={js['materials'][0]['emissiveFactor']}"
+    )
+
+
 def main():
+    if "--pbr-only" in sys.argv:
+        for path in (ROOT / "pages" / "forte.glb", ROOT / "pages" / "forte-preview.glb"):
+            if path.exists():
+                patch_pbr(path)
+        return
     js, binary = read_glb(SRC)
     albedo_view_i = js["images"][0]["bufferView"]
     albedo = clean_albedo(view_blob(binary, js["bufferViews"][albedo_view_i]))
@@ -146,18 +193,7 @@ def main():
     js["samplers"] = [
         {"magFilter": 9729, "minFilter": 9729, "wrapS": 10497, "wrapT": 10497}
     ]
-    js["materials"] = [
-        {
-            "name": "forte-paint",
-            "pbrMetallicRoughness": {
-                "baseColorTexture": {"index": 0},
-                "baseColorFactor": [0.52, 0.50, 0.46, 1.0],
-                "metallicFactor": 0.0,
-                "roughnessFactor": 0.88,
-            },
-            "emissiveFactor": [0.0, 0.0, 0.0],
-        }
-    ]
+    js["materials"] = [PAINT]
     js.pop("extensionsUsed", None)
     js.pop("extensionsRequired", None)
     write_glb(DST, js, views, blobs)

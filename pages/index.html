@@ -512,11 +512,14 @@
   const FLYOVER_MIN_M = 800;
   // Tweaks for the dest-then-path intro (the old overview sweep is startOverviewFlyover).
   const FLYOVER = {
-    DEST_RANGE: 240,       // mid-range so the destination is readable
-    DEST_TILT: 60,
-    DEST_HOLD_MS: 2000,
-    DEST_ARRIVE_M: 48,
+    DEST_START_RANGE: 540, // start above the destination
+    DEST_RANGE: 220,       // then dolly in so the pin is readable
+    DEST_START_TILT: 50,
+    DEST_TILT: 58,
+    DEST_IN_MS: 1700,
+    DEST_HOLD_MS: 700,
     PATH_TILT: 44,         // more top-down while flowing along the route
+    PATH_ZOOM_U: 0.24,     // first slice of the sweep zooms out from dest to path range
     PATH_MIN_RANGE: 700,
     PATH_MAX_RANGE: 2800,
     PATH_DUR_BASE_MS: 4200,
@@ -2003,10 +2006,14 @@
     updateSpeedLimitBadge();
   }
 
+  function freeHudMoving(){
+    return speedKalman.speed * 3.6 > 10;
+  }
+
   function updateSpeedLimitBadge(){
     const el = document.getElementById("speedLimitBadge");
     if (!el) return;
-    const show = speedLimit.current != null;
+    const show = speedLimit.current != null && (isNavigating() || freeHudMoving());
     el.classList.toggle("visible", show);
     if (show) el.textContent = String(speedLimit.current);
   }
@@ -2110,6 +2117,8 @@
     }
     if (following) applyFollowCamera(dtEase, now);
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
+    updateSpeedLimitBadge();
+    updateNavInfoButton();
   }
 
   function stepPuck(dtRaw, dtEase, now){
@@ -2298,16 +2307,32 @@
     const total = routeCum[routeCum.length - 1];
     if (total < FLYOVER_MIN_M) return;
     const dest = activeDestination || activeRoutePath[activeRoutePath.length - 1];
+    const last = activeRoutePath[activeRoutePath.length - 1];
+    const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
+    const arrivalBrg = bearingDegrees(prev, last);
     flyover = {
       kind: "destPath",
-      phase: "toDest",
+      phase: "dollyIn",
       dest: { lat: dest.lat, lng: dest.lng },
       total,
+      dollyStartMs: performance.now(),
       holdUntil: 0,
       pathStartMs: 0,
       pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
       pathRange: clamp(total * 0.45, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
     };
+    cam.lat = dest.lat;
+    cam.lng = dest.lng;
+    cam.range = FLYOVER.DEST_START_RANGE;
+    cam.tilt = FLYOVER.DEST_START_TILT;
+    cam.heading = arrivalBrg;
+    cam.seeded = true;
+    if (map3d) {
+      map3d.center = { lat: dest.lat, lng: dest.lng };
+      map3d.range = FLYOVER.DEST_START_RANGE;
+      map3d.tilt = FLYOVER.DEST_START_TILT;
+      map3d.heading = arrivalBrg;
+    }
   }
 
   function destPathFlyoverFrame(now){
@@ -2317,14 +2342,22 @@
     const last = activeRoutePath[activeRoutePath.length - 1];
     const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
     const arrivalBrg = bearingDegrees(prev, last);
-    if (flyover.phase === "toDest" || flyover.phase === "holdDest") {
-      if (flyover.phase === "toDest" && cam.seeded) {
-        const d = distanceMetres({ lat: cam.lat, lng: cam.lng }, destPt);
-        if (d < FLYOVER.DEST_ARRIVE_M && Math.abs(cam.range - FLYOVER.DEST_RANGE) < 90) {
-          flyover.phase = "holdDest";
-          flyover.holdUntil = now + FLYOVER.DEST_HOLD_MS;
-        }
-      } else if (flyover.phase === "holdDest" && now >= flyover.holdUntil) {
+    if (flyover.phase === "dollyIn") {
+      const u = clamp((now - flyover.dollyStartMs) / FLYOVER.DEST_IN_MS, 0, 1);
+      const e = u * u * (3 - 2 * u);
+      if (u >= 1) {
+        flyover.phase = "holdDest";
+        flyover.holdUntil = now + FLYOVER.DEST_HOLD_MS;
+      }
+      return {
+        point: destPt,
+        bearing: arrivalBrg,
+        range: lerp(FLYOVER.DEST_START_RANGE, FLYOVER.DEST_RANGE, e),
+        tilt: lerp(FLYOVER.DEST_START_TILT, FLYOVER.DEST_TILT, e)
+      };
+    }
+    if (flyover.phase === "holdDest") {
+      if (now >= flyover.holdUntil) {
         flyover.phase = "alongPath";
         flyover.pathStartMs = now;
       }
@@ -2339,7 +2372,14 @@
     const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
     const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
     const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
-    return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.pathRange, tilt: FLYOVER.PATH_TILT };
+    const zoomU = clamp(u / FLYOVER.PATH_ZOOM_U, 0, 1);
+    const zoomE = zoomU * zoomU * (3 - 2 * zoomU);
+    return {
+      point: at.point,
+      bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead),
+      range: lerp(FLYOVER.DEST_RANGE, flyover.pathRange, zoomE),
+      tilt: lerp(FLYOVER.DEST_TILT, FLYOVER.PATH_TILT, zoomE)
+    };
   }
 
   function flyoverFrame(now){
@@ -2408,6 +2448,7 @@
     }
     const car = { lat: puck.lat, lng: puck.lng };
     const fly = flyoverFrame(now);
+    const destIntro = !!(fly && flyover && flyover.kind === "destPath" && flyover.phase !== "alongPath");
     const info = (!fly && infoLevel > 0) ? navInfoPreview(view, tgtRange, tiltTarget) : null;
     if (fly) {
       tgtRange = fly.range;
@@ -2450,7 +2491,8 @@
         const h = Math.max(1, viewSafe.height || window.innerHeight);
         const hFovRad = 2 * Math.atan(Math.tan(toRad(cam.fov) / 2) * (w / h));
         const halfW = Math.max(cam.range, 40) * Math.tan(hFovRad / 2);
-        aim = lookAhead(aim, cam.heading - 90, dx * 2 * halfW);
+        const shift = clamp(dx * 2 * halfW * 0.5, -0.16 * cam.range, 0.16 * cam.range);
+        aim = lookAhead(aim, cam.heading - 90, shift);
       }
     }
 
@@ -2469,6 +2511,13 @@
     cam.tilt += (tiltTarget - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extraZoom);
     cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
     cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
+    if (destIntro) {
+      cam.lat = aim.lat;
+      cam.lng = aim.lng;
+      cam.heading = headingTarget;
+      cam.tilt = tiltTarget;
+      cam.range = tgtRange;
+    }
 
     const center = { lat: cam.lat, lng: cam.lng };
     const alt = followGroundAltitude(center, dtEase);
@@ -3417,17 +3466,33 @@
   };
   window.__aaSetVisibleArea = function(area){
     if (!area) return;
-    viewSafe.left = Math.max(0, Number(area.left) || 0);
-    viewSafe.top = Math.max(0, Number(area.top) || 0);
-    viewSafe.right = Math.max(0, Number(area.right) || 0);
-    viewSafe.bottom = Math.max(0, Number(area.bottom) || 0);
-    viewSafe.width = Math.max(1, Number(area.width) || window.innerWidth || 1);
-    viewSafe.height = Math.max(1, Number(area.height) || window.innerHeight || 1);
-    const root = document.documentElement;
-    root.style.setProperty("--aa-inset-left", viewSafe.left + "px");
-    root.style.setProperty("--aa-inset-top", viewSafe.top + "px");
-    root.style.setProperty("--aa-inset-right", viewSafe.right + "px");
-    root.style.setProperty("--aa-inset-bottom", viewSafe.bottom + "px");
+    const w = window.innerWidth || 1;
+    const h = window.innerHeight || 1;
+    let left = Number(area.left) || 0;
+    let top = Number(area.top) || 0;
+    let right = Number(area.right) || 0;
+    let bottom = Number(area.bottom) || 0;
+    if (left <= 1 && top <= 1 && right <= 1 && bottom <= 1) {
+      left *= w;
+      top *= h;
+      right *= w;
+      bottom *= h;
+    }
+    viewSafe.left = clamp(left, 0, w * 0.48);
+    viewSafe.top = clamp(top, 0, h * 0.45);
+    viewSafe.right = clamp(right, 0, w * 0.48);
+    viewSafe.bottom = clamp(bottom, 0, h * 0.45);
+    viewSafe.width = w;
+    viewSafe.height = h;
+    const apply = (root) => {
+      if (!root || !root.style) return;
+      root.style.setProperty("--aa-inset-left", Math.round(viewSafe.left) + "px");
+      root.style.setProperty("--aa-inset-top", Math.round(viewSafe.top) + "px");
+      root.style.setProperty("--aa-inset-right", Math.round(viewSafe.right) + "px");
+      root.style.setProperty("--aa-inset-bottom", Math.round(viewSafe.bottom) + "px");
+    };
+    apply(document.documentElement);
+    apply(document.body);
   };
   // Host accelerometer: world-frame horizontal acceleration (m/s^2, East/North).
   window.__aaInjectMotion = function(east, north){
@@ -3485,12 +3550,23 @@
   }
 
   function infoUiAvailable(){
-    return !!(puck.fix || currentGpsPoint);
+    if (!(puck.fix || currentGpsPoint)) return false;
+    if (isNavigating()) return true;
+    return freeHudMoving();
   }
 
   function updateNavInfoButton(){
     const btn = document.getElementById("infoBtn");
     if (!btn) return;
+    if (!isNavigating() && !infoUiAvailable() && (infoBtnArmed || infoLevel)) {
+      infoLevel = 0;
+      infoBtnArmed = false;
+      if (infoIdleTimer) {
+        window.clearTimeout(infoIdleTimer);
+        infoIdleTimer = 0;
+      }
+      clearManeuverMarkers();
+    }
     btn.classList.toggle("visible", infoBtnArmed && infoUiAvailable());
   }
 
