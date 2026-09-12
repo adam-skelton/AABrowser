@@ -6,8 +6,9 @@
   <title>Auckland 3D Route Demo</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden}
-    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); isolation:isolate}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 38%, #1c3a72 0%, #12244c 34%, #0b1428 62%, #070b14 100%); opacity:.99; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
+    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0)}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
+    #mapLoader::before {content:""; position:absolute; inset:0; z-index:-1; background:radial-gradient(ellipse at 50% 38%, rgba(28,58,114,.94) 0%, rgba(18,36,76,.95) 34%, rgba(11,20,40,.96) 62%, rgba(7,11,20,.97) 100%); pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45))}
@@ -577,6 +578,16 @@
           if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
           refreshViewSpecs();
         });
+      });
+      const onSteady = ev => {
+        const steady = !!(ev && (ev.isSteady || (ev.detail && ev.detail.isSteady)));
+        if (steady) scheduleMapReveal(180);
+      };
+      map3d.addEventListener("gmp-steadychange", onSteady);
+      map3d.addEventListener("gmp-steadystate", onSteady);
+      map3d.addEventListener("gmp-error", () => {
+        showMapFailure("The 3D map failed to initialise.");
+        revealMap();
       });
       armMapReveal();
     } catch (err) {
@@ -3479,13 +3490,18 @@
   }
 
   let mapRevealDone = false;
+  let mapRevealTimer = 0;
+  let mapRevealArmedAt = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
+  const MAP_REVEAL_MIN_MS = 900;
+  const MAP_REVEAL_MAX_MS = 12000;
   function sessionAlreadyRevealed(){
     try { return sessionStorage.getItem(MAP_REVEAL_KEY) === "1"; } catch (err) { return false; }
   }
   function revealMap(){
     if (mapRevealDone) return;
     mapRevealDone = true;
+    if (mapRevealTimer) { window.clearTimeout(mapRevealTimer); mapRevealTimer = 0; }
     try { sessionStorage.setItem(MAP_REVEAL_KEY, "1"); } catch (err) {}
     document.body.classList.add("map-ready");
     document.documentElement.classList.add("map-ready");
@@ -3498,11 +3514,21 @@
     } catch (err) {}
   }
 
+  function scheduleMapReveal(extraMs){
+    if (mapRevealDone) return;
+    const elapsed = mapRevealArmedAt ? performance.now() - mapRevealArmedAt : MAP_REVEAL_MIN_MS;
+    const minLeft = Math.max(0, MAP_REVEAL_MIN_MS - elapsed);
+    const wait = Math.max(minLeft, Number(extraMs) || 0);
+    if (mapRevealTimer) window.clearTimeout(mapRevealTimer);
+    mapRevealTimer = window.setTimeout(revealMap, wait);
+  }
+
   function armMapReveal(){
     if (sessionAlreadyRevealed()) {
       revealMap();
       return;
     }
+    mapRevealArmedAt = performance.now();
     let pokeTimer = 0;
     const pokeMap = () => {
       if (mapRevealDone) return;
@@ -3518,8 +3544,8 @@
     pokeMap();
     window.setTimeout(() => {
       window.clearTimeout(pokeTimer);
-      revealMap();
-    }, 2000);
+      if (!mapRevealDone) revealMap();
+    }, MAP_REVEAL_MAX_MS);
   }
 
   function mapsKeyIsMissing(key){
