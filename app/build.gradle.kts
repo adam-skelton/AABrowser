@@ -70,50 +70,48 @@ android {
     androidResources {
         noCompress += "glb"
     }
+}
 
-    sourceSets {
-        getByName("main") {
-            assets.srcDir(layout.buildDirectory.dir("generated/mapModels"))
+androidComponents {
+    onVariants { variant ->
+        val copyModels = tasks.register<CopyMapModelsTask>(
+            "copyMapModels${variant.name.replaceFirstChar { it.uppercase() }}"
+        ) {
+            modelFiles.from(
+                rootProject.layout.projectDirectory.file("pages/forte.glb"),
+                rootProject.layout.projectDirectory.file("pages/cerato.glb"),
+                rootProject.layout.projectDirectory.file("pages/forte-preview.glb"),
+                rootProject.layout.projectDirectory.file("pages/heading-arrow.glb")
+            )
         }
-    }
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyModels,
+            CopyMapModelsTask::outputDirectory
+        )
 
-    androidComponents {
-        onVariants { variant ->
-            val vNameStr = android.defaultConfig.versionName ?: "unknown"
-            val appNameStr = "AABrowser"
-            val isDebug = variant.buildType == "debug"
-            val debugSuffixStr = if (isDebug) "_debug" else ""
+        val vNameStr = android.defaultConfig.versionName ?: "unknown"
+        val appNameStr = "AABrowser"
+        val isDebug = variant.buildType == "debug"
+        val debugSuffixStr = if (isDebug) "_debug" else ""
 
-            val renameTaskProvider = tasks.register<RenameApkTask>("${variant.name}RenameApk") {
-                inputDir.set(variant.artifacts.get(SingleArtifact.APK))
-                outputDir.set(layout.buildDirectory.dir("renamedApks/${variant.name}"))
+        val renameTaskProvider = tasks.register<RenameApkTask>("${variant.name}RenameApk") {
+            inputDir.set(variant.artifacts.get(SingleArtifact.APK))
+            outputDir.set(layout.buildDirectory.dir("renamedApks/${variant.name}"))
 
-                appName.set(appNameStr)
-                versionNameProp.set(vNameStr)
-                debugSuffixProp.set(debugSuffixStr)
-            }
+            appName.set(appNameStr)
+            versionNameProp.set(vNameStr)
+            debugSuffixProp.set(debugSuffixStr)
+        }
 
-            afterEvaluate {
-                val assembleTaskName = "assemble${variant.name.replaceFirstChar { it.uppercase() }}"
-                if (tasks.findByName(assembleTaskName) != null) {
-                    tasks.named(assembleTaskName).configure {
-                        finalizedBy(renameTaskProvider)
-                    }
+        afterEvaluate {
+            val assembleTaskName = "assemble${variant.name.replaceFirstChar { it.uppercase() }}"
+            if (tasks.findByName(assembleTaskName) != null) {
+                tasks.named(assembleTaskName).configure {
+                    finalizedBy(renameTaskProvider)
                 }
             }
         }
     }
-}
-
-val copyMapModels by tasks.registering(Copy::class) {
-    from(rootProject.layout.projectDirectory.dir("pages")) {
-        include("forte.glb", "cerato.glb", "forte-preview.glb", "heading-arrow.glb")
-    }
-    into(layout.buildDirectory.dir("generated/mapModels/models"))
-}
-
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-    dependsOn(copyMapModels)
 }
 
 tasks.withType<KotlinJvmCompile>().configureEach {
@@ -140,6 +138,25 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+abstract class CopyMapModelsTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val modelFiles: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun run() {
+        val dest = outputDirectory.get().asFile.resolve("models")
+        dest.mkdirs()
+        dest.listFiles()?.forEach { it.delete() }
+        modelFiles.files.filter { it.isFile }.forEach { file ->
+            file.copyTo(File(dest, file.name), overwrite = true)
+        }
+    }
 }
 
 abstract class RenameApkTask : DefaultTask() {
