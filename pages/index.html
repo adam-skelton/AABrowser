@@ -379,6 +379,8 @@
     MAX_EASE_DT: 0.065,     // cap on the ease step so a janky frame spreads its catch-up over several
     FLIGHT_TAU: 1.15,       // extra shared time-constant while the camera is far from the car (re-center, overview -> drive)
     RECENTER_EXTRA: 0.9,    // extra tau while flying back from a Re-center tap (on top of FLIGHT_TAU)
+    FLIGHT_ZOOM_TAU: 0.4,   // range/tilt while far: quicker than the lateral swoop
+    RECENTER_ZOOM_EXTRA: 0.12,
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
@@ -497,11 +499,15 @@
   const FLYOVER = {
     DEST_RANGE: 240,       // mid-range so the destination is readable
     DEST_TILT: 60,
-    DEST_HOLD_MS: 1700,
+    DEST_HOLD_MS: 2000,
     DEST_ARRIVE_M: 48,
     PATH_TILT: 44,         // more top-down while flowing along the route
     PATH_MIN_RANGE: 700,
-    PATH_MAX_RANGE: 2800
+    PATH_MAX_RANGE: 2800,
+    PATH_DUR_BASE_MS: 4200,
+    PATH_M_PER_MS: 0.85,   // metres of route per ms of sweep (lower = slower)
+    PATH_DUR_MIN_MS: 5200,
+    PATH_DUR_MAX_MS: 10000
   };
   // Shift the route (and the car that follows it) into the left driving lane.
   const ROUTE_LANE_OFFSET_M = 1.9;
@@ -2185,7 +2191,7 @@
     flyover = {
       kind: "overview",
       startMs: performance.now(),
-      durMs: clamp(2000 + total / 1.5, 2500, 5000),
+      durMs: clamp(3800 + total / 0.9, 4800, 9000),
       total,
       range: clamp(total * 0.4, 500, 2500)
     };
@@ -2220,7 +2226,7 @@
       total,
       holdUntil: 0,
       pathStartMs: 0,
-      pathDurMs: clamp(2200 + total / 1.5, 2800, 5500),
+      pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
       pathRange: clamp(total * 0.45, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
     };
   }
@@ -2344,6 +2350,7 @@
       cam.rejoin = false;
     }
     const extra = flight * FOLLOW.FLIGHT_TAU + (cam.rejoin ? FOLLOW.RECENTER_EXTRA : 0);
+    const extraZoom = flight * FOLLOW.FLIGHT_ZOOM_TAU + (cam.rejoin ? FOLLOW.RECENTER_ZOOM_EXTRA : 0);
     // Aim along the CAMERA heading (not the car's), so the car stays on the screen's
     // vertical centre line even while the camera's heading is still catching up in a turn.
     // The look-ahead comes from the LIVE framing (exact car placement every frame) but
@@ -2369,9 +2376,9 @@
     // view switch (heading-up -> north-up) or a re-center after the user spun the map.
     const maxTurn = FOLLOW.BRG_MAX_RATE * dtEase;
     cam.heading = normaliseHeading(cam.heading + clamp(db * easeK(dtEase, brgTau + extra), -maxTurn, maxTurn));
-    cam.tilt += (tiltTarget - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extra);
-    cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
-    cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
+    cam.tilt += (tiltTarget - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extraZoom);
+    cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
+    cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
 
     const center = { lat: cam.lat, lng: cam.lng };
     const alt = followGroundAltitude(center, dtEase);
