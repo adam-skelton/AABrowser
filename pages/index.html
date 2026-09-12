@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auckland 3D Route Demo</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#000; overflow:hidden}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); isolation:isolate}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; opacity:.99; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 38%, #1c3a72 0%, #12244c 34%, #0b1428 62%, #070b14 100%); opacity:.99; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45))}
@@ -45,8 +45,8 @@
     #recenterBtn svg circle {fill:#2E3134}
     #speedLimitBadge {display:none; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
-    #compassBtn {display:none; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
-    #compassBtn.visible {display:flex}
+    #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    #compassBtn.visible {display:none !important}
     #compassBtn svg {width:38px; height:38px; display:block}
     #compassBtn.north-up {background:#1A73E8}
     body.night gmp-map-3d {filter:brightness(.68) saturate(.82)}
@@ -298,6 +298,7 @@
   // Keep a constant on-screen size: about one lane / half a two-lane road.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.5;
+  const CAR_MAX_WORLD_WIDTH_M = 3.5; // zoomed-out cap: never wider than ~one lane of the 3D road
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
@@ -314,6 +315,7 @@
   let lastCarHeading = 0;
   let lastCarPoint = null;
   let followAlt = null;
+  let carAlt = null;
 
   // ---------------------------------------------------------------------------
   // Follow camera + car motion model.
@@ -359,7 +361,8 @@
     SNAP_MAX_M: 22,         // map-match tolerance (+ up to 13 m at speed)
     MISS_LIMIT: 3,          // consecutive snap misses before re-acquiring globally
     MAX_EASE_DT: 0.065,     // cap on the ease step so a janky frame spreads its catch-up over several
-    FLIGHT_TAU: 0.6,        // extra shared time-constant while the camera is far from the car (re-center, overview -> drive)
+    FLIGHT_TAU: 1.15,       // extra shared time-constant while the camera is far from the car (re-center, overview -> drive)
+    RECENTER_EXTRA: 0.9,    // extra tau while flying back from a Re-center tap (on top of FLIGHT_TAU)
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
@@ -371,6 +374,11 @@
   // Vela's (town 1x ... motorway ~4.9x); the absolute range stays this view's own.
   const ZOOM_BANDS = [[15, 17.5], [40, 17.0], [70, 16.3], [100, 15.7], [Infinity, 15.2]];
   const ZOOM_BAND_HYST_KMH = 3;   // a band changes only this far past its threshold (no flapping at 40 km/h)
+  // One debug Zoom "+" is range / 1.25. Nudge follow closer by that many clicks.
+  const ZOOM_PLUS_FACTOR = 1.25;
+  const ZOOM_PLUS_STEP = Math.log(ZOOM_PLUS_FACTOR) / Math.log(2);
+  const FOLLOW_ZOOM_IN_CLICKS_NAV = 1;   // nav follow (e.g. 50-60 km/h) vs the band table
+  const FOLLOW_ZOOM_IN_CLICKS_FREE = 2;  // free follow
   let zoomBandIdx = 0;
 
   // Car mode: a pan detaches the camera; it re-attaches this long after the LAST touch (Vela: 6 s).
@@ -462,13 +470,25 @@
     speedLP: 0,
     zoom: NaN,             // eased speed-band zoom level
     latched: false,        // heading-up has locked onto the car's course (set once moving)
-    userRange: null        // pinch-zoom override while following; Re-center clears it
+    userRange: null,       // pinch-zoom override while following; Re-center clears it
+    rejoin: false          // true after Re-center until the camera has nearly arrived
   };
 
-  // Route-start fly-over: the camera sweeps the route from the destination back to the
-  // car before diving into the drive view. Null when not running.
+  // Route-start fly-over. Null when not running.
   let flyover = null;
   const FLYOVER_MIN_M = 800;
+  // Tweaks for the dest-then-path intro (the old overview sweep is startOverviewFlyover).
+  const FLYOVER = {
+    DEST_RANGE: 240,       // mid-range so the destination is readable
+    DEST_TILT: 60,
+    DEST_HOLD_MS: 1700,
+    DEST_ARRIVE_M: 48,
+    PATH_TILT: 44,         // more top-down while flowing along the route
+    PATH_MIN_RANGE: 700,
+    PATH_MAX_RANGE: 2800
+  };
+  // Shift the route (and the car that follows it) into the left driving lane.
+  const ROUTE_LANE_OFFSET_M = 1.9;
 
   // Off-route detection (Vela NavEngine/NavSession).
   const OFF_ROUTE = {
@@ -576,7 +596,9 @@
 
   function currentCarPoint(){
     if (lastCarPoint && Number.isFinite(lastCarPoint.lat) && Number.isFinite(lastCarPoint.lng)) {
-      return { lat: lastCarPoint.lat, lng: lastCarPoint.lng };
+      const p = { lat: lastCarPoint.lat, lng: lastCarPoint.lng };
+      if (Number.isFinite(lastCarPoint.altitude)) p.altitude = lastCarPoint.altitude;
+      return p;
     }
     if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)) {
       return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
@@ -639,7 +661,10 @@
   prefetchCarModels();
 
   function carMapPosition(point){
-    return { lat: point.lat, lng: point.lng };
+    const pos = { lat: point.lat, lng: point.lng };
+    if (Number.isFinite(point.altitude)) pos.altitude = point.altitude;
+    else if (Number.isFinite(carAlt)) pos.altitude = carAlt;
+    return pos;
   }
 
   function cameraRange(){
@@ -654,7 +679,8 @@
     const refTan = Math.tan((CAR_REF_FOV * Math.PI / 180) / 2);
     const tan = Math.tan((f * Math.PI / 180) / 2);
     const raw = CAR_BASE_SCALE * (range / CAR_REF_RANGE) * (tan / refTan);
-    return Math.max(CAR_BASE_SCALE * 0.9, raw);
+    const maxScale = CAR_MAX_WORLD_WIDTH_M / CAR_WIDTH_M;
+    return clamp(raw, CAR_BASE_SCALE * 0.9, maxScale);
   }
 
   function applyLiveCarScale(){
@@ -813,6 +839,8 @@
   let carPoseWritten = null;
   function applyCarPose(point, heading){
     lastCarPoint = { lat: point.lat, lng: point.lng };
+    if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
+    else if (Number.isFinite(carAlt)) lastCarPoint.altitude = carAlt;
     if (Number.isFinite(heading)) lastCarHeading = heading;
     if (userCar) {
       // Skip the native writes when nothing moved enough to see (the follow ticker
@@ -820,11 +848,12 @@
       const w = carPoseWritten;
       const same = w && w.car === userCar &&
         Math.abs(w.lat - lastCarPoint.lat) < 1e-8 && Math.abs(w.lng - lastCarPoint.lng) < 1e-8 &&
-        Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02;
+        Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02 &&
+        Math.abs((w.alt || 0) - (Number(lastCarPoint.altitude) || 0)) < 0.05;
       if (!same) {
         try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
         try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
-        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading };
+        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt: Number(lastCarPoint.altitude) || 0 };
       }
     }
     if (userArrow) applyArrowPose(lastCarPoint, lastCarHeading);
@@ -849,7 +878,7 @@
         position: carMapPosition(position),
         orientation: carOrientation(h),
         scale,
-        altitudeMode: MODEL_ALTITUDE_MODE
+        altitudeMode: "ABSOLUTE"
       });
       const revealModel = () => {
         carModelReady = true;
@@ -1109,13 +1138,14 @@
   // `keepNav` = a mid-drive reroute (stay in navigation; the car re-acquires at the next fix).
   function adoptRoute(route, path, intervals, destination, keepNav){
     activeRoute = route;
-    activeRoutePath = path;
+    const driven = offsetPathLeft(path, ROUTE_LANE_OFFSET_M);
+    activeRoutePath = driven;
     activeDestination = destination;
-    setRouteGeometry(path);
-    drawRoute(path, intervals);
+    setRouteGeometry(driven);
+    drawRoute(driven, intervals);
     drawDestination(destination);
     updateRouteInfo(route, destination.name, keepNav);
-    fetchSpeedLimits(path);
+    fetchSpeedLimits(driven);
     offRoute.hits = 0;
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
   }
@@ -1303,6 +1333,7 @@
     // read as "zero metres since the last fix" and briefly stall the car / zoom.
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
     if (!opts || opts.flyover !== false) startFlyover();
+    setMapLabels(true);
     if (activeDestination) traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
     syncCarLod();
     updateRecenterButton();
@@ -1327,6 +1358,7 @@
     traceRec.dest = null;
     document.body.classList.remove("has-route", "navigating");
     document.documentElement.classList.remove("has-route", "navigating");
+    setMapLabels(false);
     hideUserCar();
     hideHeadingArrow();
     usingArrow = false;
@@ -1454,6 +1486,21 @@
     return { lat: point.lat + dLat, lng: point.lng + dLng };
   }
 
+  // NZ drives on the left: shift the Google centerline into the left lane.
+  function offsetPathLeft(path, metres){
+    if (!metres || !path || path.length < 2) return path;
+    const out = new Array(path.length);
+    for (let i = 0; i < path.length; i++) {
+      const brg = i === 0
+        ? bearingDegrees(path[0], path[1])
+        : i === path.length - 1
+          ? bearingDegrees(path[i - 1], path[i])
+          : bearingDegrees(path[i - 1], path[i + 1]);
+      out[i] = lookAhead(path[i], brg - 90, metres);
+    }
+    return out;
+  }
+
   // ---- Route geometry helpers (Vela: pointAtMeters / snapToRouteWindowed) ----
 
   function setRouteGeometry(path){
@@ -1560,6 +1607,7 @@
       if (heading != null) puck.heading = heading;
       disengageRoutePuck();
       followAlt = null;
+      carAlt = null;
     }
 
     // A trustworthy course: moving, measured (not a held-over value), and not flagged inaccurate.
@@ -1836,7 +1884,8 @@
     const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
     if (!puck.fix || !map3d) return;
     stepPuck(dtRaw, dtEase, now);
-    applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
+    const alt = carGroundAltitude({ lat: puck.lat, lng: puck.lng }, puck.heading, dtEase);
+    applyCarPose({ lat: puck.lat, lng: puck.lng, altitude: alt }, puck.heading);
     updateTraversedRoute();
     // Car mode: a pan let go of the car; re-attach once the screen has been untouched long enough.
     if (!following && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
@@ -1949,7 +1998,8 @@
     while (idx < ZOOM_BANDS.length - 1 && kmh >= ZOOM_BANDS[idx][0] + ZOOM_BAND_HYST_KMH) idx++;
     while (idx > 0 && kmh < ZOOM_BANDS[idx - 1][0] - ZOOM_BAND_HYST_KMH) idx--;
     zoomBandIdx = idx;
-    return ZOOM_BANDS[idx][1];
+    const clicks = isNavigating() ? FOLLOW_ZOOM_IN_CLICKS_NAV : FOLLOW_ZOOM_IN_CLICKS_FREE;
+    return ZOOM_BANDS[idx][1] + clicks * ZOOM_PLUS_STEP;
   }
 
   // Range multiplier for an (eased) zoom level relative to the tightest band.
@@ -1959,12 +2009,14 @@
 
   // ---- Route-start fly-over ----
 
-  function startFlyover(){
+  // Original intro: sweep the route from the destination back to the car, then dive in.
+  function startOverviewFlyover(){
     flyover = null;
     if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
     const total = routeCum[routeCum.length - 1];
     if (total < FLYOVER_MIN_M) return;
     flyover = {
+      kind: "overview",
       startMs: performance.now(),
       durMs: clamp(2000 + total / 1.5, 2500, 5000),
       total,
@@ -1972,24 +2024,76 @@
     };
   }
 
-  // The camera target while the fly-over runs: a point sliding from the destination back
-  // along the route to the car (ease-in-out), looking down the road, from a range that
-  // frames a good stretch of it. Null once done - the normal follow then dives in.
-  function flyoverFrame(now){
-    if (!flyover) return null;
+  function overviewFlyoverFrame(now){
+    if (!flyover || flyover.kind !== "overview") return null;
     if (!isNavigating() || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) { flyover = null; return null; }
     const u = (now - flyover.startMs) / flyover.durMs;
     if (u >= 1) { flyover = null; return null; }
     const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
     const m = lerp(flyover.total, clamp(puck.progressM, 0, flyover.total), e);
     const at = pointAtMetres(activeRoutePath, routeCum, m);
-    // Look down the route's general direction (a long chord), not the local segment: at
-    // sweep speed the per-vertex bearing would whip the camera at every bend.
     const look = clamp(flyover.total * 0.1, 200, 800);
     const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
     const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
     const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
     return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.range, tilt: 55 };
+  }
+
+  function startFlyover(){
+    flyover = null;
+    cam.rejoin = false;
+    if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
+    const total = routeCum[routeCum.length - 1];
+    if (total < FLYOVER_MIN_M) return;
+    const dest = activeDestination || activeRoutePath[activeRoutePath.length - 1];
+    flyover = {
+      kind: "destPath",
+      phase: "toDest",
+      dest: { lat: dest.lat, lng: dest.lng },
+      total,
+      holdUntil: 0,
+      pathStartMs: 0,
+      pathDurMs: clamp(2200 + total / 1.5, 2800, 5500),
+      pathRange: clamp(total * 0.45, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
+    };
+  }
+
+  function destPathFlyoverFrame(now){
+    if (!flyover || flyover.kind !== "destPath") return null;
+    if (!isNavigating() || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) { flyover = null; return null; }
+    const destPt = flyover.dest;
+    const last = activeRoutePath[activeRoutePath.length - 1];
+    const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
+    const arrivalBrg = bearingDegrees(prev, last);
+    if (flyover.phase === "toDest" || flyover.phase === "holdDest") {
+      if (flyover.phase === "toDest" && cam.seeded) {
+        const d = distanceMetres({ lat: cam.lat, lng: cam.lng }, destPt);
+        if (d < FLYOVER.DEST_ARRIVE_M && Math.abs(cam.range - FLYOVER.DEST_RANGE) < 90) {
+          flyover.phase = "holdDest";
+          flyover.holdUntil = now + FLYOVER.DEST_HOLD_MS;
+        }
+      } else if (flyover.phase === "holdDest" && now >= flyover.holdUntil) {
+        flyover.phase = "alongPath";
+        flyover.pathStartMs = now;
+      }
+      return { point: destPt, bearing: arrivalBrg, range: FLYOVER.DEST_RANGE, tilt: FLYOVER.DEST_TILT };
+    }
+    const u = (now - flyover.pathStartMs) / flyover.pathDurMs;
+    if (u >= 1) { flyover = null; return null; }
+    const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    const m = lerp(flyover.total, clamp(puck.progressM, 0, flyover.total), e);
+    const at = pointAtMetres(activeRoutePath, routeCum, m);
+    const look = clamp(flyover.total * 0.1, 200, 800);
+    const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
+    const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
+    const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
+    return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.pathRange, tilt: FLYOVER.PATH_TILT };
+  }
+
+  function flyoverFrame(now){
+    if (!flyover) return null;
+    if (flyover.kind === "overview") return overviewFlyoverFrame(now);
+    return destPathFlyoverFrame(now);
   }
 
   // Ground distance from the camera's centre point to a point that renders at screen
@@ -2057,13 +2161,17 @@
       tiltTarget = fly.tilt;
       headingTarget = fly.bearing;
     }
+    const ref = fly ? fly.point : car;
     // Flight blend: when the camera is far from where it should be (Re-center after a
     // pan, overview -> drive) every parameter eases with a longer SHARED time constant so
     // it reads as one swoop, tightening back to the follow constants as it closes in.
-    const farPos = clamp((distanceMetres({ lat: cam.lat, lng: cam.lng }, car) - tgtRange) / 1200, 0, 1);
+    const farPos = clamp((distanceMetres({ lat: cam.lat, lng: cam.lng }, ref) - tgtRange) / 1600, 0, 1);
     const farRange = clamp(Math.abs(Math.log(Math.max(cam.range, 1) / Math.max(tgtRange, 1))) / Math.log(4), 0, 1);
     const flight = Math.max(farPos, farRange);
-    const extra = flight * FOLLOW.FLIGHT_TAU;
+    if (cam.rejoin && flight < 0.07 && distanceMetres({ lat: cam.lat, lng: cam.lng }, car) < Math.max(80, tgtRange * 0.4)) {
+      cam.rejoin = false;
+    }
+    const extra = flight * FOLLOW.FLIGHT_TAU + (cam.rejoin ? FOLLOW.RECENTER_EXTRA : 0);
     // Aim along the CAMERA heading (not the car's), so the car stays on the screen's
     // vertical centre line even while the camera's heading is still catching up in a turn.
     // The look-ahead comes from the LIVE framing (exact car placement every frame) but
@@ -2112,6 +2220,7 @@
     following = true;
     cam.userRange = null;
     cam.seeded = false;
+    cam.rejoin = true;
     autoRefollowArmed = false;
     if (view) {
       currentView = view;
@@ -2150,8 +2259,7 @@
   function updateCompassButton(){
     const btn = document.getElementById("compassBtn");
     if (!btn) return;
-    btn.classList.toggle("visible", !!currentGpsPoint && following && currentView !== "top" && currentView !== "overview");
-    btn.classList.toggle("north-up", northUp);
+    btn.classList.remove("visible");
   }
 
   function handleGpsError(err){
@@ -2171,9 +2279,16 @@
   }
 
   function toggleLabels(){
-    labelsOn = !labelsOn;
-    map3d.mode = labelsOn ? "HYBRID" : "SATELLITE";
-    document.getElementById("labelsBtn").textContent = `Labels: ${labelsOn ? "ON" : "OFF"}`;
+    setMapLabels(!labelsOn);
+  }
+
+  function setMapLabels(on){
+    labelsOn = !!on;
+    if (map3d) {
+      try { map3d.mode = labelsOn ? "HYBRID" : "SATELLITE"; } catch (err) {}
+    }
+    const btn = document.getElementById("labelsBtn");
+    if (btn) btn.textContent = `Labels: ${labelsOn ? "ON" : "OFF"}`;
   }
 
   function setView(mode){
@@ -2192,7 +2307,7 @@
     } else if (mode === "high") {
       map3d.tilt = 62; map3d.range = 650; map3d.fov = 40;
     } else {
-      map3d.tilt = 0; map3d.range = 1300; map3d.heading = 0; map3d.fov = 35;
+      map3d.tilt = 0; map3d.range = 1300; map3d.fov = 35;
     }
     setViewSelectValue(mode);
     updateCompassButton();
@@ -2483,20 +2598,40 @@
     if (tracesBtn) tracesBtn.textContent = "Traces";
   }
 
-  // Mock GPS: walks the path at DEMO_SPEED emitting ONE fix per second (position,
-  // course, doppler speed, accuracy) - the cadence a real receiver delivers - so the
-  // follow model is exercised exactly as it will be on the road (Vela's DemoTrace).
-  const DEMO_SPEED = 10;   // m/s (~36 km/h)
+  // Mock GPS: walks the path emitting ONE fix per second (position, course, doppler
+  // speed, accuracy) - the cadence a real receiver delivers - so the follow model is
+  // exercised exactly as it will be on the road (Vela's DemoTrace).
   const DEMO_FIX_MS = 1000;
-  function demoFix(point, heading){
-    applyGpsFix(point, heading, { speed: DEMO_SPEED, accuracy: 4, headingMeasured: true });
+  // Path fraction -> km/h. Holds each band long enough for zoom breathing to settle.
+  const DEMO_SPEED_BANDS = [
+    [0.12, 28],
+    [0.28, 55],
+    [0.48, 100],
+    [0.62, 80],
+    [0.78, 42],
+    [1.00, 110]
+  ];
+  function demoSpeedMps(alongM, totalM){
+    const u = totalM > 1 ? clamp(alongM / totalM, 0, 1) : 0;
+    for (let i = 0; i < DEMO_SPEED_BANDS.length; i++) {
+      if (u <= DEMO_SPEED_BANDS[i][0]) return DEMO_SPEED_BANDS[i][1] / 3.6;
+    }
+    return DEMO_SPEED_BANDS[DEMO_SPEED_BANDS.length - 1][1] / 3.6;
+  }
+  function demoFix(point, heading, speedMps){
+    const speed = Number.isFinite(speedMps) ? speedMps : demoSpeedMps(0, 1);
+    applyGpsFix(point, heading, { speed, accuracy: 4, headingMeasured: true });
   }
 
   function driveAlongPath(path, onDone){
     let index = 0;
     let distIntoSeg = 0;
+    const cum = cumulativeLengths(path);
+    const totalM = cum[cum.length - 1] || 1;
     demoTimer = setInterval(() => {
-      let remaining = DEMO_SPEED * (DEMO_FIX_MS / 1000);
+      const alongM = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
+      const speed = demoSpeedMps(alongM, totalM);
+      let remaining = speed * (DEMO_FIX_MS / 1000);
       while (remaining > 0 && index < path.length - 1) {
         const segLen = Math.max(distanceMetres(path[index], path[index + 1]), 0.05);
         const left = segLen - distIntoSeg;
@@ -2509,9 +2644,11 @@
           remaining = 0;
         }
       }
+      const nowAlong = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
+      const nowSpeed = demoSpeedMps(nowAlong, totalM);
       if (index >= path.length - 1) {
         const last = path[path.length - 1];
-        demoFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last));
+        demoFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last), nowSpeed);
         if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
         if (typeof onDone === "function") onDone();
         else {
@@ -2523,7 +2660,7 @@
       const p1 = path[index];
       const p2 = path[index + 1];
       const t = distIntoSeg / Math.max(distanceMetres(p1, p2), 0.05);
-      demoFix({ lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) }, bearingDegrees(p1, p2));
+      demoFix({ lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) }, bearingDegrees(p1, p2), nowSpeed);
     }, DEMO_FIX_MS);
   }
 
@@ -2939,6 +3076,37 @@
     }
     followAlt += (g - followAlt) * easeK(dtEase, 1.0);
     return followAlt;
+  }
+
+  // Car height from DEM, median-sampled along the heading so photorealistic "ghost cars"
+  // in CLAMP_TO_GROUND don't pop the model. Eased so remaining spikes don't jerk.
+  const CAR_ALT_LOOKAHEAD_M = [-8, 0, 14, 32, 55, 90];
+  const CAR_ALT_TAU = 0.45;
+  const CAR_ALT_PAD_M = 0.2;
+  function carGroundAltitude(point, heading, dtEase){
+    const hdg = Number.isFinite(heading) ? heading : 0;
+    const samples = [];
+    for (let i = 0; i < CAR_ALT_LOOKAHEAD_M.length; i++) {
+      const m = CAR_ALT_LOOKAHEAD_M[i];
+      const p = m === 0 ? point : lookAhead(point, hdg, m);
+      const g = terrainAltitude(p.lat, p.lng);
+      if (g != null) samples.push(g);
+    }
+    let target = null;
+    if (samples.length) {
+      samples.sort((a, b) => a - b);
+      target = samples[samples.length >> 1] + CAR_ALT_PAD_M;
+    } else if (Number.isFinite(followAlt)) {
+      target = followAlt + CAR_ALT_PAD_M;
+    }
+    if (target == null) return carAlt;
+    if (carAlt == null || !Number.isFinite(carAlt)) {
+      carAlt = target;
+      return carAlt;
+    }
+    const dt = Number.isFinite(dtEase) && dtEase > 0 ? dtEase : 0.05;
+    carAlt += (target - carAlt) * easeK(dt, CAR_ALT_TAU);
+    return carAlt;
   }
 
   window.__aaScaleMap = function(factor){

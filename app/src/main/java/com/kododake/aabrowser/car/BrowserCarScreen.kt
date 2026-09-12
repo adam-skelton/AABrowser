@@ -4,6 +4,7 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
@@ -49,7 +50,9 @@ class BrowserCarScreen(
             .setIcon(
                 CarIcon.Builder(
                     IconCompat.createWithResource(carContext, R.drawable.car_search_24)
-                ).build()
+                )
+                    .setTint(CarColor.createCustom(0xFF1A73E8.toInt(), 0xFF7EC8FF.toInt()))
+                    .build()
             )
             .setTitle(carContext.getString(R.string.car_action_search))
             .setOnClickListener { openKeyboard("") }
