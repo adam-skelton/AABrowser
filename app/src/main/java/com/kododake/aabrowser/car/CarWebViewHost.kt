@@ -670,7 +670,14 @@ class CarWebViewHost(
         fun gpsInjectJs(location: Location): String {
             val heading = if (location.hasBearing()) location.bearing.toString() else "null"
             val speed = if (location.hasSpeed()) location.speed.toString() else "null"
-            return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,accuracy:${location.accuracy}});"
+            // Bearing accuracy lets the page reject a noisy course (a parked car can report
+            // a 130-degree-uncertain bearing that would otherwise spin the follow camera).
+            val bearingAccuracy = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && location.hasBearingAccuracy()) {
+                location.bearingAccuracyDegrees.toString()
+            } else {
+                "null"
+            }
+            return "window.__aaInjectGps && window.__aaInjectGps({lat:${location.latitude},lng:${location.longitude},speed:$speed,heading:$heading,bearingAccuracy:$bearingAccuracy,accuracy:${location.accuracy}});"
         }
         private const val TWO_FINGER_MS = 420L
         private const val CLICK_DURATION_MS = 40L

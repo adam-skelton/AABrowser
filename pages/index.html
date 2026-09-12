@@ -275,8 +275,118 @@
   let lastCarHeading = 0;
   let lastCarPoint = null;
   let followAlt = null;
-  let recenterAnim = 0;
-  const RECENTER_MS = 2500;
+
+  // ---------------------------------------------------------------------------
+  // Follow camera + car motion model.
+  // Ported from Vela (reference/app/src/main/java/app/vela/ui/map/VelaMapView.kt
+  // nav + free-drive follow tickers, reference/app/src/main/java/app/vela/car/
+  // CarMapRenderer.kt, and core/location/{SpeedKalman,AlongRouteFilter}.kt).
+  // GPS fixes arrive ~1 Hz. Nothing here writes the camera from a fix: a fix only
+  // updates a TARGET, and a requestAnimationFrame ticker glides the drawn car and
+  // the camera toward it every frame.
+  //  - Navigating: the fix is map-matched onto the route (forward-only window),
+  //    progress along the route is dead-reckoned at the modelled speed between
+  //    fixes and corrected in the RATE domain (bounded, never a jump, never
+  //    backwards), the car is drawn at a boxcar-smoothed point on the line and
+  //    its heading is the chord across that window (no per-vertex snap).
+  //  - Free follow (no route): the car rolls on at the modelled speed along its
+  //    smoothed heading; the last fix, projected forward along its course
+  //    (capped), enters as a rate-capped correction, so GPS noise is a gentle
+  //    drift rather than a hop once a second.
+  //  - Camera: split time constants (tight position, heavy adaptively-damped
+  //    heading, breathing range/tilt), aimed a computed distance AHEAD of the
+  //    car so the car sits low on screen and the road ahead owns the view. The
+  //    orbit target's altitude is the real ground height (Terrarium DEM), since
+  //    Map3DElement.center.altitude is absolute and defaults to sea level.
+  // ---------------------------------------------------------------------------
+  const FOLLOW = {
+    CAR_SCREEN_Y: 0.72,     // where the car sits on screen while heading-up (0 = top, 1 = bottom)
+    POS_TAU: 0.25,          // camera position ease time-constant (s)
+    BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
+    BRG_TAU_TURN: 0.35,     // ...and through a genuine turn
+    BRG_TURN_DEG: 25,       // heading error at which the damping is fully in "turn" mode
+    BRG_MAX_RATE: 150,      // camera heading rate cap (deg/s); corners peak ~60-120, view switches would exceed it
+    TILT_TAU: 0.55,
+    RANGE_TAU: 0.5,
+    SPEED_TAU: 0.6,         // low-pass on the speed that drives the range breathing
+    CAR_BRG_TAU: 0.3,       // drawn car heading smoothing
+    FREE_RECKON_S: 2.5,     // free-follow dead-reckon cap (a dropped signal can't run the car away)
+    FREE_GENTLE_M: 8,       // free-follow residual treated as GPS noise (gentle correction)...
+    FREE_FULL_M: 30,        // ...and where the correction reaches full catch-up rate
+    DEAD_RECKON_S: 3.0,     // nav dead-reckon cap
+    CORRECT_TIME_S: 0.6,    // seconds to absorb an along-route position error
+    SMOOTH_SAMPLES: 7,      // boxcar samples across the along-route smoothing window
+    WIN_TAU: 2.5,           // time constant of the smoothing window WIDTH (tracks town vs motorway only)
+    SNAP_MAX_M: 22,         // map-match tolerance (+ up to 13 m at speed)
+    MISS_LIMIT: 3,          // consecutive snap misses before re-acquiring globally
+    MAX_EASE_DT: 0.065,     // cap on the ease step so a janky frame spreads its catch-up over several
+    FLIGHT_TAU: 0.6,        // extra shared time-constant while the camera is far from the car (re-center, overview -> drive)
+    TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
+    RANGE_SPEED_MAX: 0.6    // drive-view range grows by this fraction at ~30 m/s
+  };
+
+  // 1-D filter over speed: GPS doppler measurements folded in with a Kalman gain,
+  // held between fixes, decayed toward 0 during a measurement outage.
+  const speedKalman = {
+    speed: 0, p: 4, seeded: false,
+    update(v){
+      v = Math.max(0, v);
+      if (!this.seeded) { this.speed = v; this.p = 0.5; this.seeded = true; return; }
+      const k = this.p / (this.p + 0.5);
+      this.speed = Math.max(0, this.speed + k * (v - this.speed));
+      this.p = Math.max(0.05, (1 - k) * this.p);
+    },
+    predict(dt){ if (this.seeded && dt > 0) this.p += 0.75 * dt; },
+    decay(dt, tau){ if (!this.seeded || dt <= 0) return; this.speed *= Math.exp(-dt / (tau || 4)); this.p += 0.75 * dt; },
+    reset(){ this.speed = 0; this.p = 4; this.seeded = false; }
+  };
+
+  // 1-D Kalman filter over the along-route position: dead-reckoned forward each
+  // frame (variance grows), each accepted fix folded in weighted by its accuracy.
+  const alongFilter = {
+    alongM: 0, variance: 0, seeded: false,
+    measVar(acc){
+      const a = clamp(Number.isFinite(acc) && acc > 0 ? acc : 12, 1, 60);
+      const sigma = Math.max(2.5, a * 0.66);
+      return sigma * sigma;
+    },
+    predict(advanceM, dt){ if (!this.seeded) return; if (advanceM > 0) this.alongM += advanceM; if (dt > 0) this.variance += 0.5 * dt; },
+    update(m, acc){
+      if (!this.seeded) return this.reseed(m, acc);
+      const r = this.measVar(acc);
+      const k = this.variance / (this.variance + r);
+      this.alongM += k * (m - this.alongM);
+      this.variance = Math.max(0.25, (1 - k) * this.variance);
+    },
+    reseed(m, acc){ this.alongM = m; this.variance = this.measVar(acc); this.seeded = true; },
+    reset(){ this.alongM = 0; this.variance = 0; this.seeded = false; }
+  };
+
+  // The drawn car ("puck"): what the camera follows. Never the raw fix.
+  const puck = {
+    fix: null,             // latest fix {lat,lng,heading,bearingOk,speed,accuracy,atMs}
+    lat: NaN, lng: NaN,    // drawn position
+    heading: NaN,          // drawn heading (smoothed)
+    freeHeading: NaN,      // last trustworthy GPS course (free-follow reckoning direction)
+    engaged: false,        // riding the route
+    progressM: 0,          // drawn metres along the route
+    targetM: 0,            // last accepted fix's metres along the route
+    targetAtMs: 0,         // when it was accepted (dead-reckoning anchor)
+    smoothWin: NaN,        // eased along-route smoothing half-window (m)
+    missCount: 0,
+    fwdRejects: 0,
+    speedAtAccept: 0
+  };
+  let routeCum = [];       // cumulative metres at each activeRoutePath vertex
+
+  // Eased camera state (what is actually written to map3d while following).
+  const cam = {
+    seeded: false,
+    lat: 0, lng: 0, heading: 0,
+    range: 0, tilt: 0, fov: 0,
+    speedLP: 0,
+    userRange: null        // pinch-zoom override while following; Re-center clears it
+  };
   const TEST_ORIGIN = { name: "Sky Tower", lat: -36.848461, lng: 174.763336 };
   const TEST_DESTINATIONS = [
     { name: "Auckland War Memorial Museum", lat: -36.860158, lng: 174.777953 },
@@ -499,9 +609,9 @@
       attachUserCar(pos, heading);
       return;
     }
-    try { userCar.scale = carScaleForCamera(); } catch (err) {}
-    lastCarScale = carScaleForCamera();
     if (!userCar.parentElement && map3d) map3d.append(userCar);
+    // Guarded: this runs on every camera-change event (60x/s while following).
+    applyLiveCarScale();
     applyCarPose(pos, heading);
   }
 
@@ -606,12 +716,22 @@
     }
   }
 
+  let carPoseWritten = null;
   function applyCarPose(point, heading){
     lastCarPoint = { lat: point.lat, lng: point.lng };
     if (Number.isFinite(heading)) lastCarHeading = heading;
     if (userCar) {
-      try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
-      try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
+      // Skip the native writes when nothing moved enough to see (the follow ticker
+      // and the camera-change events both land here every frame).
+      const w = carPoseWritten;
+      const same = w && w.car === userCar &&
+        Math.abs(w.lat - lastCarPoint.lat) < 1e-8 && Math.abs(w.lng - lastCarPoint.lng) < 1e-8 &&
+        Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02;
+      if (!same) {
+        try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
+        try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
+        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading };
+      }
     }
     if (userArrow) applyArrowPose(lastCarPoint, lastCarHeading);
     if (userMarker) {
@@ -880,6 +1000,7 @@
       }));
       activeDestination = { name: destinationName, lat: destination.lat, lng: destination.lng };
       if (activeRoutePath.length < 2) throw new Error("Route returned without a usable path.");
+      setRouteGeometry(activeRoutePath);
 
       drawRoute(activeRoutePath);
       drawDestination(activeDestination);
@@ -971,12 +1092,18 @@
     document.body.classList.add("navigating");
     document.documentElement.classList.add("navigating");
     following = true;
+    cam.userRange = null;
     document.getElementById("followBtn").textContent = "Following: ON";
+    // Re-acquire the car onto this route at the next fix (the ticker glides the
+    // camera from wherever it is - typically the route overview - into the drive view).
+    disengageRoutePuck();
     setView("drive");
     const here = currentGpsPoint || getRouteOrigin();
     let heading = Number.isFinite(here.heading) ? here.heading : (Number(map3d.heading) || 0);
     if (activeRoutePath.length >= 2) heading = bearingDegrees(activeRoutePath[0], activeRoutePath[1]);
-    applyGpsFix({ lat: here.lat, lng: here.lng }, heading);
+    // Synthetic re-injection of the current point: carry the modelled speed so it isn't
+    // read as "zero metres since the last fix" and briefly stall the car / zoom.
+    applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
     syncCarLod();
     updateRecenterButton();
     setMessage("Navigation started.");
@@ -989,6 +1116,7 @@
     activeRoute = null;
     activeDestination = null;
     activeRoutePath = [];
+    setRouteGeometry([]);
     document.body.classList.remove("has-route", "navigating");
     document.documentElement.classList.remove("has-route", "navigating");
     hideUserCar();
@@ -1007,6 +1135,7 @@
     map3d.tilt = 58;
     const routeDistance = Number.isFinite(distanceMeters) ? distanceMeters : distanceMetres(origin, destination);
     map3d.range = clamp(routeDistance * 0.75, 1200, 18000);
+    cam.seeded = false; // camera moved outside the ticker: re-seed from here when following resumes
     setViewSelectValue("overview");
   }
 
@@ -1042,16 +1171,16 @@
     return demoActive || demoTimer !== null;
   }
 
-  function applyGpsFix(point, heading){
+  // `extra` = { speed (m/s), accuracy (m), bearingAccuracy (deg), headingMeasured (bool) }.
+  function applyGpsFix(point, heading, extra){
     const pos = { lat: point.lat, lng: point.lng };
     const h = Number.isFinite(heading) ? heading : lastCarHeading;
     currentGpsPoint = { lat: pos.lat, lng: pos.lng, heading: h };
     previousFix = currentGpsPoint;
-    lastCarPoint = pos;
     if (placeAutocomplete) {
       placeAutocomplete.locationBias = { radius: 50000, center: pos };
     }
-    updateCar(pos, h);
+    updateCar(pos, h, extra || {});
   }
 
   function handlePosition(position){
@@ -1059,13 +1188,21 @@
     const c = position.coords;
     const fix = { lat:c.latitude, lng:c.longitude, heading:Number.isFinite(c.heading) ? c.heading : null };
     let heading = fix.heading;
-    if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) heading = bearingDegrees(previousFix, fix);
+    let headingMeasured = heading !== null;
+    if (heading === null && previousFix && distanceMetres(previousFix, fix) > 2) {
+      heading = bearingDegrees(previousFix, fix);
+      headingMeasured = true;
+    }
     if (heading === null) heading = Number.isFinite(lastCarHeading) ? lastCarHeading : (map3d && Number.isFinite(Number(map3d.heading)) ? Number(map3d.heading) : 0);
     currentGpsPoint = { lat: fix.lat, lng: fix.lng, heading };
-    lastCarPoint = { lat: fix.lat, lng: fix.lng };
     previousFix = currentGpsPoint;
     if (!map3d) return;
-    applyGpsFix(fix, heading);
+    applyGpsFix(fix, heading, {
+      speed: Number.isFinite(c.speed) && c.speed >= 0 ? c.speed : null,
+      accuracy: Number.isFinite(c.accuracy) ? c.accuracy : null,
+      bearingAccuracy: Number.isFinite(c.bearingAccuracy) ? c.bearingAccuracy : null,
+      headingMeasured
+    });
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
@@ -1074,22 +1211,17 @@
     return { heading: normaliseHeading(heading + yaw), tilt: 270, roll: 90 };
   }
 
-  function updateCar(point, heading){
-    const pos = { lat: point.lat, lng: point.lng };
-    if (lastCarPoint && distanceMetres(lastCarPoint, pos) > 250) followAlt = null;
+  function updateCar(point, heading, extra){
     const h = normaliseHeading(heading);
-    if (userMarker) userMarker.position = pos;
-    applyCarPose(pos, h);
-    syncCarLod();
-    if (following && !isRecentering() && map3d) {
-      if (document.body.classList.contains("map-ready")) {
-        map3d.heading = h;
-        map3d.center = followCenter(pos, h);
-      } else {
-        map3d.center = { lat: pos.lat, lng: pos.lng };
-        map3d.heading = h;
-      }
-    }
+    ingestFix({
+      lat: point.lat,
+      lng: point.lng,
+      heading: h,
+      headingMeasured: extra.headingMeasured !== false,
+      speed: extra.speed,
+      accuracy: extra.accuracy,
+      bearingAccuracy: extra.bearingAccuracy
+    });
     updateRecenterButton();
     coordsEl.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
     headingEl.textContent = `${Math.round(h)}°`;
@@ -1100,6 +1232,418 @@
     const dLat = (metres * Math.cos(rad)) / 111320;
     const dLng = (metres * Math.sin(rad)) / (111320 * Math.max(0.2, Math.cos(toRad(point.lat))));
     return { lat: point.lat + dLat, lng: point.lng + dLng };
+  }
+
+  // ---- Route geometry helpers (Vela: pointAtMeters / snapToRouteWindowed) ----
+
+  function setRouteGeometry(path){
+    routeCum = cumulativeLengths(path);
+    disengageRoutePuck();
+    prefetchRouteTerrain(path, routeCum);
+  }
+
+  function disengageRoutePuck(){
+    puck.engaged = false;
+    puck.missCount = 0;
+    puck.fwdRejects = 0;
+    puck.smoothWin = NaN;
+    alongFilter.reset();
+  }
+
+  function cumulativeLengths(path){
+    const cum = new Array(path.length).fill(0);
+    for (let i = 1; i < path.length; i++) cum[i] = cum[i - 1] + distanceMetres(path[i - 1], path[i]);
+    return cum;
+  }
+
+  // Point + segment bearing at `metres` along the route (binary search on cum).
+  function pointAtMetres(path, cum, metres){
+    if (path.length < 2) return { point: path[0] || { lat: AUCKLAND.lat, lng: AUCKLAND.lng }, bearing: 0 };
+    const total = cum[cum.length - 1];
+    const d = clamp(metres, 0, total);
+    let lo = 1, hi = path.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] < d) lo = mid + 1; else hi = mid;
+    }
+    const a = path[lo - 1], b = path[lo];
+    const segLen = cum[lo] - cum[lo - 1];
+    const t = segLen > 0 ? clamp((d - cum[lo - 1]) / segLen, 0, 1) : 0;
+    return { point: { lat: lerp(a.lat, b.lat, t), lng: lerp(a.lng, b.lng, t) }, bearing: bearingDegrees(a, b) };
+  }
+
+  // Closest point on segment a->b to p (local equirectangular), plus t in [0,1].
+  function projectOnSegment(p, a, b){
+    const k = Math.cos(toRad((a.lat + b.lat) / 2));
+    const ax = a.lng * k, ay = a.lat, bx = b.lng * k, by = b.lat, px = p.lng * k, py = p.lat;
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : clamp(((px - ax) * dx + (py - ay) * dy) / len2, 0, 1);
+    return { point: { lat: ay + t * dy, lng: (ax + t * dx) / k }, t };
+  }
+
+  // Map-match `me` onto the route, considering only segments whose along-route range
+  // overlaps [loM, hiM] (forward-only once engaged, so a route that passes near itself
+  // can't yank the car onto the wrong leg). Null when we're not genuinely on the route:
+  // farther than maxM, or the GPS course disagrees with the road by > 55 degrees.
+  function snapToRouteWindowed(me, gpsBearing, path, cum, loM, hiM, maxM){
+    if (path.length < 2 || cum.length < path.length) return null;
+    let bestD = Infinity, best = null;
+    for (let i = 1; i < path.length; i++) {
+      if (cum[i] < loM || cum[i - 1] > hiM) continue;
+      const a = path[i - 1], b = path[i];
+      const proj = projectOnSegment(me, a, b);
+      const d = distanceMetres(me, proj.point);
+      if (d < bestD) {
+        bestD = d;
+        best = { point: proj.point, bearing: bearingDegrees(a, b), metres: cum[i - 1] + proj.t * (cum[i] - cum[i - 1]) };
+      }
+    }
+    if (!best || bestD > maxM) return null;
+    if (Number.isFinite(gpsBearing) && angleDelta(gpsBearing, best.bearing) > 55) return null;
+    return best;
+  }
+
+  function angleDelta(a, b){ return Math.abs(((a - b + 540) % 360) - 180); }
+  function easeK(dt, tau){ return 1 - Math.exp(-dt / tau); }
+  function smoothBearing(cur, target, dt, tau){
+    const d = ((target - cur + 540) % 360) - 180;
+    return normaliseHeading(cur + d * easeK(dt, tau));
+  }
+
+  // ---- Fix ingest: a fix updates targets only; the ticker does the moving ----
+
+  function ingestFix(fix){
+    const now = performance.now();
+    const prev = puck.fix;
+    let speed = Number.isFinite(fix.speed) && fix.speed >= 0 ? fix.speed : null;
+    if (speed == null && prev) {
+      // No doppler speed (browser geolocation often omits it): derive from the fix pair.
+      const dt = (now - prev.atMs) / 1000;
+      if (dt > 0.3) speed = clamp(distanceMetres(prev, fix) / dt, 0, 60);
+    }
+    const heading = Number.isFinite(fix.heading) ? normaliseHeading(fix.heading) : null;
+    const bearingOk = heading != null && fix.headingMeasured &&
+      (!Number.isFinite(fix.bearingAccuracy) || fix.bearingAccuracy <= 45);
+    puck.fix = {
+      lat: fix.lat, lng: fix.lng, heading, bearingOk, speed,
+      accuracy: Number.isFinite(fix.accuracy) ? fix.accuracy : null,
+      atMs: now
+    };
+    if (speed != null) speedKalman.update(speed);
+
+    // First fix, or a teleport: snap into place, don't glide across the city.
+    const drawn = Number.isFinite(puck.lat) ? { lat: puck.lat, lng: puck.lng } : null;
+    if (!drawn || distanceMetres(drawn, fix) > FOLLOW.TELEPORT_M) {
+      puck.lat = fix.lat;
+      puck.lng = fix.lng;
+      if (heading != null) puck.heading = heading;
+      disengageRoutePuck();
+      followAlt = null;
+    }
+
+    // A trustworthy course: moving, measured (not a held-over value), and not flagged inaccurate.
+    // Speed unknown = trust the measured heading (handlePosition only derives one after > 2 m).
+    if (bearingOk && (speed == null || speed > 2)) puck.freeHeading = heading;
+    if (!Number.isFinite(puck.heading) && heading != null) puck.heading = heading;
+    prefetchTerrain(fix, Number.isFinite(puck.freeHeading) ? puck.freeHeading : heading);
+
+    const routeLive = isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length;
+    if (routeLive) ingestRouteFix(puck.fix, now);
+    else if (puck.engaged) disengageRoutePuck();
+    ensureFollowTicker();
+  }
+
+  // Port of Vela's nav fix block: forward-only map matching with a plausibility gate,
+  // then the along-route position filter takes the fix as a MEASUREMENT.
+  function ingestRouteFix(fix, now){
+    const path = activeRoutePath, cum = routeCum;
+    const me = { lat: fix.lat, lng: fix.lng };
+    const kSpeed = speedKalman.speed;
+    let snap;
+    if (puck.engaged) {
+      // Look-ahead sized from the speed at the last ACCEPTED fix too, so a decaying model
+      // during an outage doesn't shrink the window exactly when the resume fix needs it big.
+      const aheadSpeed = Math.max(kSpeed, puck.speedAtAccept);
+      const ahead = clamp(aheadSpeed * 8, 150, 600);
+      snap = snapToRouteWindowed(
+        me,
+        (kSpeed < 1 || !fix.bearingOk) ? null : fix.heading, // heading gate skipped when stopped
+        path, cum,
+        puck.targetM - 25, puck.targetM + ahead,
+        FOLLOW.SNAP_MAX_M + clamp(aheadSpeed, 0, 13)
+      );
+    } else {
+      // Not yet engaged (nav start / new route): one global acquisition, then forward-only.
+      snap = snapToRouteWindowed(me, fix.bearingOk ? fix.heading : null, path, cum, -Infinity, Infinity, FOLLOW.SNAP_MAX_M + 13);
+    }
+    if (snap) {
+      const m = snap.metres;
+      let accepted = false, reanchor = false;
+      if (!puck.engaged) {
+        puck.engaged = true;
+        puck.progressM = m;
+        puck.targetM = m;
+        puck.smoothWin = NaN;
+        puck.fwdRejects = 0;
+        accepted = true;
+        reanchor = true;
+      } else {
+        // Monotonic forward only: accept a plausible advance (speed x elapsed x 2.5 + 60 m
+        // absorbs a real GPS gap), hold on anything else and let dead reckoning cover it.
+        const dtFix = clamp((now - puck.targetAtMs) / 1000, 0, 10);
+        const maxStep = Math.max(kSpeed, 1) * dtFix * 2.5 + 60;
+        const fwd = m - puck.targetM;
+        if (fwd >= 0 && fwd <= maxStep && (kSpeed > 0.5 || fwd > 8)) {
+          // (parked-jitter gate: at ~zero speed a small forward hop is noise, not travel)
+          puck.targetM = m;
+          accepted = true;
+          puck.fwdRejects = 0;
+        } else if (fwd > maxStep) {
+          // An over-cap jump that PERSISTS is the new reality (long fix gap at speed).
+          puck.fwdRejects += 1;
+          if (puck.fwdRejects >= 2) {
+            puck.targetM = m;
+            accepted = true;
+            reanchor = true;
+            puck.fwdRejects = 0;
+          }
+        } else {
+          puck.fwdRejects = 0;
+        }
+      }
+      puck.missCount = 0;
+      if (accepted) {
+        puck.targetAtMs = now;
+        if (reanchor) alongFilter.reseed(m, fix.accuracy);
+        else alongFilter.update(m, fix.accuracy);
+        puck.speedAtAccept = speedKalman.speed;
+      }
+    } else if (puck.engaged) {
+      // Nothing ahead within tolerance: a spike or we've left the route. Hold and keep
+      // dead-reckoning; a short run of misses disengages to re-acquire globally.
+      puck.missCount += 1;
+      if (puck.missCount >= FOLLOW.MISS_LIMIT) disengageRoutePuck();
+    }
+  }
+
+  // ---- Per-frame ticker ----
+
+  let followRaf = 0;
+  let followLastMs = 0;
+  function ensureFollowTicker(){
+    if (!followRaf) followRaf = requestAnimationFrame(followTick);
+  }
+
+  function followTick(now){
+    followRaf = requestAnimationFrame(followTick);
+    // Two frame deltas: dtRaw for the PHYSICS (a janky frame must integrate its full
+    // travel or the car loses distance and lurches at each fix), dtEase (capped) for
+    // the cosmetic eases so a hitch's catch-up spreads over the next few frames.
+    const dtRaw = followLastMs ? clamp((now - followLastMs) / 1000, 0, 0.5) : 0;
+    followLastMs = now;
+    const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
+    if (!puck.fix || !map3d) return;
+    stepPuck(dtRaw, dtEase, now);
+    applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
+    if (following) applyFollowCamera(dtEase);
+    else cam.seeded = false; // re-attach eases in from wherever the user left the camera
+  }
+
+  function stepPuck(dtRaw, dtEase, now){
+    const fix = puck.fix;
+    const sinceFix = (now - fix.atMs) / 1000;
+    if (puck.engaged && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
+      const path = activeRoutePath, cum = routeCum, total = cum[cum.length - 1];
+      speedKalman.predict(dtRaw);
+      // Past the dead-reckon window with no fix = a measurement outage: decay the speed.
+      if (sinceFix > FOLLOW.DEAD_RECKON_S) speedKalman.decay(dtRaw);
+      const speed = speedKalman.speed;
+      // Dead-reckon the position estimate over THIS frame's slice of the blind window.
+      const tEnd = clamp(sinceFix, 0, FOLLOW.DEAD_RECKON_S);
+      const tStart = clamp(sinceFix - dtRaw, 0, FOLLOW.DEAD_RECKON_S);
+      alongFilter.predict(tEnd > tStart ? speed * (tEnd - tStart) : 0, dtRaw);
+      // Rate-domain correction: the car always advances at the modelled speed and the
+      // estimate error enters as a BOUNDED nudge to that rate. Can't stall, can't lurch,
+      // still monotonic.
+      const err = alongFilter.alongM - puck.progressM;
+      const maxCatchUp = speed * 1.5 + 2;
+      const maxHoldBack = speed * 0.25 + 0.5;
+      const corr = clamp(err / FOLLOW.CORRECT_TIME_S, -maxHoldBack, maxCatchUp);
+      puck.progressM = clamp(puck.progressM + Math.max(0, (speed + corr) * dtRaw), 0, total);
+      // Lateral de-jitter: boxcar average across a speed-scaled along-route window, so
+      // lane-level kinks in the polyline cancel instead of wobbling the whole view. The
+      // window WIDTH eases slowly (it tracks town vs motorway, not per-fix speed noise).
+      const winTarget = clamp(speed * 0.7, 5, 14);
+      puck.smoothWin = Number.isNaN(puck.smoothWin) ? winTarget
+        : puck.smoothWin + (winTarget - puck.smoothWin) * easeK(dtEase, FOLLOW.WIN_TAU);
+      const win = puck.smoothWin;
+      const n = FOLLOW.SMOOTH_SAMPLES;
+      let sLat = 0, sLng = 0;
+      for (let k = 0; k < n; k++) {
+        const p = pointAtMetres(path, cum, puck.progressM - win + 2 * win * k / (n - 1)).point;
+        sLat += p.lat;
+        sLng += p.lng;
+      }
+      puck.lat = sLat / n;
+      puck.lng = sLng / n;
+      // Heading from the window ENDS (chord), not the local segment: the segment bearing
+      // steps at every vertex; the chord barely moves on a straight road.
+      const a = pointAtMetres(path, cum, puck.progressM - win);
+      const b = pointAtMetres(path, cum, puck.progressM + win);
+      const degenerate = Math.abs(a.point.lat - b.point.lat) + Math.abs(a.point.lng - b.point.lng) < 1e-7;
+      const chord = degenerate ? b.bearing : bearingDegrees(a.point, b.point);
+      puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, chord, dtEase, FOLLOW.CAR_BRG_TAU) : chord;
+    } else {
+      // Free follow (no route): the car rolls on under its own modelled speed along its
+      // smoothed heading, and the last fix - dead-reckoned forward along its course
+      // (capped) so it moves like the car - enters as a BOUNDED correction to that
+      // motion. Same rate-domain idea as the route model: at this close a range a plain
+      // ease toward each new fix (Vela's zoomed-out free drive) would show GPS noise as a
+      // visible twitch every second; a capped correction spreads it into a gentle drift.
+      speedKalman.predict(dtRaw);
+      if (sinceFix > FOLLOW.FREE_RECKON_S) speedKalman.decay(dtRaw);
+      const v = speedKalman.speed;
+      const moving = v > 1.5 && Number.isFinite(puck.freeHeading);
+      const reckonM = moving ? v * Math.min(sinceFix, FOLLOW.FREE_RECKON_S) : 0;
+      const tgt = reckonM > 0 ? lookAhead(fix, puck.freeHeading, reckonM) : fix;
+      if (Number.isFinite(puck.freeHeading)) {
+        puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, puck.freeHeading, dtEase, FOLLOW.CAR_BRG_TAU) : puck.freeHeading;
+      }
+      if (moving && sinceFix <= FOLLOW.FREE_RECKON_S && Number.isFinite(puck.heading)) {
+        const rolled = lookAhead({ lat: puck.lat, lng: puck.lng }, puck.heading, v * dtRaw);
+        puck.lat = rolled.lat;
+        puck.lng = rolled.lng;
+      }
+      const errM = distanceMetres({ lat: puck.lat, lng: puck.lng }, tgt);
+      if (errM > 1e-3) {
+        // Correction rate cap: gentle (half the speed) for a noise-sized residual, ramping
+        // up to the route model's 1.5v+2 catch-up by FREE_FULL_M, and never slower than a
+        // ~3 s glide for a huge one (GPS re-lock after an outage, under the teleport cap).
+        const ramp = clamp((errM - FOLLOW.FREE_GENTLE_M) / (FOLLOW.FREE_FULL_M - FOLLOW.FREE_GENTLE_M), 0, 1);
+        const cap = Math.max(Math.max(v * 0.5, 2) + (v + 2) * ramp, ramp * errM / 3);
+        const corrSpeed = Math.min(errM / FOLLOW.CORRECT_TIME_S, cap);
+        const f = Math.min(1, corrSpeed * dtRaw / errM);
+        puck.lat += (tgt.lat - puck.lat) * f;
+        puck.lng += (tgt.lng - puck.lng) * f;
+      }
+    }
+  }
+
+  // ---- Follow camera ----
+
+  function viewTargets(){
+    if (currentView === "high") return { tilt: 62, range: 650, fov: 40, headingUp: true, breathe: false };
+    if (currentView === "top") return { tilt: 0, range: 1300, fov: 35, headingUp: false, breathe: false };
+    return { tilt: CAR_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
+  }
+
+  // Zoom widens with speed (more road ahead on a motorway), tightens as you slow.
+  function rangeFactorForSpeed(v){
+    return 1 + FOLLOW.RANGE_SPEED_MAX * clamp((v - 4) / 26, 0, 1);
+  }
+
+  // Ground distance from the camera's centre point to a point that renders at screen
+  // fraction `frac` (0 = top, 1 = bottom), for a camera orbiting the centre at `range`
+  // with `tilt` degrees from vertical and a vertical field of view `fov`. Aiming the
+  // centre this far AHEAD of the car puts the car at `frac` (Google/Vela's puck-low
+  // framing). Works for any tilt including top-down.
+  function lookAheadForFraction(range, tilt, fov, frac){
+    const tiltR = toRad(clamp(tilt, 0, 89.9));
+    const H = range * Math.cos(tiltR);
+    const L = range * Math.sin(tiltR);
+    const depCentre = Math.PI / 2 - tiltR;
+    const delta = Math.atan(((frac - 0.5) / 0.5) * Math.tan(toRad(clamp(fov, 5, 80)) / 2));
+    const depCar = depCentre + delta;
+    const s = Math.sin(depCar), c = Math.cos(depCar);
+    if (Math.abs(s) < 1e-6) return L;
+    return Math.max(0, L - H * c / s);
+  }
+
+  function numOr(value, fallback){
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function applyFollowCamera(dtEase){
+    const view = viewTargets();
+    if (!cam.seeded) {
+      // (Re)attach: seed from the live camera so the hand-off from a pan, the route
+      // overview or a Re-center is a glide, not a cut.
+      const c = readMapCenter();
+      cam.lat = c.lat;
+      cam.lng = c.lng;
+      cam.heading = numOr(map3d.heading, 0);
+      cam.range = numOr(map3d.range, view.range);
+      cam.tilt = numOr(map3d.tilt, view.tilt);
+      cam.fov = numOr(map3d.fov, view.fov);
+      cam.speedLP = speedKalman.speed;
+      cam.seeded = true;
+    }
+    cam.speedLP += (speedKalman.speed - cam.speedLP) * easeK(dtEase, FOLLOW.SPEED_TAU);
+    const tgtRange = cam.userRange != null ? cam.userRange
+      : view.range * (view.breathe ? rangeFactorForSpeed(cam.speedLP) : 1);
+    const headingTarget = view.headingUp ? (Number.isFinite(puck.heading) ? puck.heading : cam.heading) : 0;
+    const car = { lat: puck.lat, lng: puck.lng };
+    // Flight blend: when the camera is far from where it should be (Re-center after a
+    // pan, overview -> drive) every parameter eases with a longer SHARED time constant so
+    // it reads as one swoop, tightening back to the follow constants as it closes in.
+    const farPos = clamp((distanceMetres({ lat: cam.lat, lng: cam.lng }, car) - tgtRange) / 1200, 0, 1);
+    const farRange = clamp(Math.abs(Math.log(Math.max(cam.range, 1) / Math.max(tgtRange, 1))) / Math.log(4), 0, 1);
+    const flight = Math.max(farPos, farRange);
+    const extra = flight * FOLLOW.FLIGHT_TAU;
+    // Aim along the CAMERA heading (not the car's), so the car stays on the screen's
+    // vertical centre line even while the camera's heading is still catching up in a turn.
+    // The look-ahead comes from the LIVE framing (exact car placement every frame) but
+    // blends toward the TARGET framing while in flight: from a 2 km overview the live
+    // value would aim a kilometre up the road and drop the car off the bottom edge.
+    let lookM = 0;
+    if (view.headingUp) {
+      const lookLive = lookAheadForFraction(cam.range, cam.tilt, cam.fov, FOLLOW.CAR_SCREEN_Y);
+      const lookTarget = lookAheadForFraction(tgtRange, view.tilt, view.fov, FOLLOW.CAR_SCREEN_Y);
+      lookM = lerp(lookLive, lookTarget, flight);
+    }
+    const aim = lookM > 0 ? lookAhead(car, cam.heading, lookM) : car;
+
+    const kPos = easeK(dtEase, FOLLOW.POS_TAU + extra);
+    cam.lat += (aim.lat - cam.lat) * kPos;
+    cam.lng += (aim.lng - cam.lng) * kPos;
+    // Camera heading is adaptively damped: heavy while the error is a few degrees of
+    // road-geometry wiggle, quick once it's turn-sized. Google's grammar: a crisp car
+    // under a heavy camera.
+    const db = ((headingTarget - cam.heading + 540) % 360) - 180;
+    const brgTau = FOLLOW.BRG_TAU_STILL + (FOLLOW.BRG_TAU_TURN - FOLLOW.BRG_TAU_STILL) * Math.min(Math.abs(db) / FOLLOW.BRG_TURN_DEG, 1);
+    // Rate cap: real corners peak well under it; it tames the half-circle swings of a
+    // view switch (heading-up -> north-up) or a re-center after the user spun the map.
+    const maxTurn = FOLLOW.BRG_MAX_RATE * dtEase;
+    cam.heading = normaliseHeading(cam.heading + clamp(db * easeK(dtEase, brgTau + extra), -maxTurn, maxTurn));
+    cam.tilt += (view.tilt - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extra);
+    cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
+    cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extra);
+
+    const center = { lat: cam.lat, lng: cam.lng };
+    const alt = followGroundAltitude(center, dtEase);
+    if (Number.isFinite(alt)) center.altitude = alt;
+    map3d.center = center;
+    if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
+    if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
+    if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
+    if (Math.abs(numOr(map3d.fov, 0) - cam.fov) > 0.005) map3d.fov = cam.fov;
+    applyLiveCarScale();
+  }
+
+  function recenterToCar(){
+    if (!map3d) return;
+    following = true;
+    cam.userRange = null;
+    cam.seeded = false; // seed from the live camera -> the ticker flies it in and hands off to the follow
+    currentView = "drive";
+    setViewSelectValue("drive");
+    const followBtn = document.getElementById("followBtn");
+    if (followBtn) followBtn.textContent = "Following: ON";
+    if (!isDemoRunning()) startGps(); // (startGps stops a running demo - keep a mock drive alive)
+    ensureFollowTicker();
+    updateRecenterButton();
   }
 
   function handleGpsError(err){
@@ -1126,7 +1670,13 @@
     if (!map3d) return;
     currentView = mode;
     if (mode === "overview") {
+      // The overview is a detached look at the whole route: the follow ticker would fight
+      // it every frame, so let go of the car (re-center brings the drive view back).
+      markUserPanned();
       if (activeDestination) showRouteOverview(getRouteOrigin(), activeDestination, activeRoute?.distanceMeters);
+    } else if (following && puck.fix) {
+      // The follow ticker eases tilt/range/fov toward the new view's targets.
+      cam.userRange = null;
     } else if (mode === "drive") {
       map3d.tilt = CAR_REF_TILT; map3d.range = CAR_REF_RANGE; map3d.fov = CAR_REF_FOV;
     } else if (mode === "high") {
@@ -1420,44 +1970,48 @@
     if (freeBtn) freeBtn.textContent = "Free follow";
   }
 
+  // Mock GPS: walks the path at DEMO_SPEED emitting ONE fix per second (position,
+  // course, doppler speed, accuracy) - the cadence a real receiver delivers - so the
+  // follow model is exercised exactly as it will be on the road (Vela's DemoTrace).
+  const DEMO_SPEED = 10;   // m/s (~36 km/h)
+  const DEMO_FIX_MS = 1000;
+  function demoFix(point, heading){
+    applyGpsFix(point, heading, { speed: DEMO_SPEED, accuracy: 4, headingMeasured: true });
+  }
+
   function driveAlongPath(path, onDone){
-    const DEMO_SPEED = 10;
-    const TICK_MS = 50;
     let index = 0;
     let distIntoSeg = 0;
     demoTimer = setInterval(() => {
-      let remaining = DEMO_SPEED * (TICK_MS / 1000);
-      while (remaining > 0) {
-        if (index >= path.length - 1) {
-          const last = path[path.length - 1];
-          applyGpsFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last));
-          if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
-          if (typeof onDone === "function") onDone();
-          else {
-            stopDemo();
-            setMessage("Demo arrived at destination.");
-          }
-          return;
-        }
-        const p1 = path[index];
-        const p2 = path[index + 1];
-        const segLen = Math.max(distanceMetres(p1, p2), 0.05);
+      let remaining = DEMO_SPEED * (DEMO_FIX_MS / 1000);
+      while (remaining > 0 && index < path.length - 1) {
+        const segLen = Math.max(distanceMetres(path[index], path[index + 1]), 0.05);
         const left = segLen - distIntoSeg;
         if (remaining >= left) {
           remaining -= left;
           index += 1;
           distIntoSeg = 0;
-          continue;
+        } else {
+          distIntoSeg += remaining;
+          remaining = 0;
         }
-        distIntoSeg += remaining;
-        remaining = 0;
-        const t = distIntoSeg / segLen;
-        applyGpsFix(
-          { lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) },
-          bearingDegrees(p1, p2)
-        );
       }
-    }, TICK_MS);
+      if (index >= path.length - 1) {
+        const last = path[path.length - 1];
+        demoFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last));
+        if (demoTimer !== null) { clearInterval(demoTimer); demoTimer = null; }
+        if (typeof onDone === "function") onDone();
+        else {
+          stopDemo();
+          setMessage("Demo arrived at destination.");
+        }
+        return;
+      }
+      const p1 = path[index];
+      const p2 = path[index + 1];
+      const t = distIntoSeg / Math.max(distanceMetres(p1, p2), 0.05);
+      demoFix({ lat: lerp(p1.lat, p2.lat, t), lng: lerp(p1.lng, p2.lng, t) }, bearingDegrees(p1, p2));
+    }, DEMO_FIX_MS);
   }
 
   function pickRandomDestination(origin){
@@ -1482,7 +2036,7 @@
     demoActive = true;
     const path = activeRoutePath;
     enterNavigation();
-    applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
+    demoFix(path[0], bearingDegrees(path[0], path[1]));
     document.getElementById("demoBtn").textContent = "Stop drive demo";
     setMessage("Driving along Google's returned road path.");
     driveAlongPath(path);
@@ -1496,7 +2050,7 @@
     try {
       const { path } = await fetchRoutePath(origin, destination);
       if (demoKind !== "free" || !demoActive) return;
-      applyGpsFix(path[0], bearingDegrees(path[0], path[1]));
+      demoFix(path[0], bearingDegrees(path[0], path[1]));
       setMessage("Free follow · " + destination.name);
       driveAlongPath(path, () => {
         continueFreeFollowLeg();
@@ -1555,111 +2109,112 @@
   function toRad(deg){ return deg*Math.PI/180; }
   function toDeg(rad){ return rad*180/Math.PI; }
 
-  function stableFollowAltitude(){
-    const raw = Number(readMapCenter().altitude);
-    if (!Number.isFinite(raw) || raw < 0) return followAlt;
-    if (followAlt == null || !Number.isFinite(followAlt)) {
-      followAlt = raw;
-      return followAlt;
-    }
-    const delta = raw - followAlt;
-    // Photogrammetry cars/buses are sudden 1–4 m spikes; real terrain changes slowly.
-    if (Math.abs(delta) >= 0.9) {
-      followAlt += Math.sign(delta) * 0.04;
-      return followAlt;
-    }
-    followAlt += delta * 0.2;
-    return followAlt;
+  // ---- Ground elevation for the camera's orbit target ----
+  // Map3DElement.center.altitude is metres above SEA LEVEL and has no ground-relative
+  // mode, so a follow camera that omits it orbits a point at sea level: in the Auckland
+  // CBD (15-25 m ASL) that put the camera almost at street level looking up at the car,
+  // and on Mt Eden (160 m) it would sit far underground. The Elevation API isn't enabled
+  // for this key, so ground height comes from the keyless AWS Terrarium DEM tiles (the
+  // same source Vela uses for its terrain), bilinearly sampled and eased.
+  const TERRAIN_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+  const TERRAIN_Z = 14; // ~7.6 m per pixel at Auckland's latitude
+  const TERRAIN_RETRY_MS = 30000;
+  const terrainTiles = new Map(); // "x/y" -> { data, pending, failedAt }
+
+  function terrainTileCoords(lat, lng){
+    const n = 2 ** TERRAIN_Z;
+    const latR = toRad(clamp(lat, -85, 85));
+    const fx = ((lng + 180) / 360) * n;
+    const fy = ((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2) * n;
+    return { x: Math.floor(fx), y: Math.floor(fy), px: (fx - Math.floor(fx)) * 256, py: (fy - Math.floor(fy)) * 256 };
   }
 
-  function followCenter(point, heading){
-    const h = Number.isFinite(heading) ? heading : lastCarHeading;
-    const look = (currentView === "drive" || document.body.classList.contains("navigating"))
-      ? lookAhead(point, h, 12)
-      : { lat: point.lat, lng: point.lng };
-    const center = { lat: look.lat, lng: look.lng };
-    const alt = stableFollowAltitude();
-    if (Number.isFinite(alt) && alt > 0) center.altitude = alt;
-    return center;
-  }
-
-  function isRecentering(){
-    return !!recenterAnim;
-  }
-
-  function stopRecenterAnimation(){
-    if (recenterAnim) {
-      cancelAnimationFrame(recenterAnim);
-      recenterAnim = 0;
-    }
-  }
-
-  function easeOutQuart(t){
-    const u = 1 - clamp(t, 0, 1);
-    return 1 - u * u * u * u;
-  }
-
-  function lerpHeading(a, b, t){
-    const d = ((b - a + 540) % 360) - 180;
-    return normaliseHeading(a + d * t);
-  }
-
-  function animateRecenterToCar(){
-    if (!map3d) return;
-    const from = readMapCenter();
-    const fromHeading = Number(map3d.heading) || 0;
-    const fromRange = Number(map3d.range) || CAR_REF_RANGE;
-    const fromTilt = Number(map3d.tilt) || CAR_REF_TILT;
-    const fromFov = Number(map3d.fov) || CAR_REF_FOV;
-    stopRecenterAnimation();
-    following = true;
-    currentView = "drive";
-    setViewSelectValue("drive");
-    const followBtn = document.getElementById("followBtn");
-    if (followBtn) followBtn.textContent = "Following: ON";
-    startGps();
-    const started = performance.now();
-    const step = (now) => {
-      const point = currentCarPoint();
-      const heading = Number.isFinite(lastCarHeading) ? lastCarHeading : currentCarHeading();
-      const to = followCenter(point, heading);
-      const t = clamp((now - started) / RECENTER_MS, 0, 1);
-      const e = easeOutQuart(t);
-      const nextCenter = {
-        lat: lerp(from.lat, to.lat, e),
-        lng: lerp(from.lng, to.lng, e)
-      };
-      if (Number.isFinite(to.altitude)) {
-        nextCenter.altitude = lerp(from.altitude || to.altitude, to.altitude, e);
+  function requestTerrainTile(x, y){
+    const key = x + "/" + y;
+    const entry = terrainTiles.get(key);
+    if (entry && (entry.data || entry.pending || (entry.failedAt && performance.now() - entry.failedAt < TERRAIN_RETRY_MS))) return entry;
+    const next = { data: null, pending: true, failedAt: 0 };
+    terrainTiles.set(key, next);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const cv = document.createElement("canvas");
+        cv.width = 256; cv.height = 256;
+        const ctx = cv.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        next.data = ctx.getImageData(0, 0, 256, 256).data;
+      } catch (err) {
+        next.failedAt = performance.now();
       }
-      map3d.center = nextCenter;
-      map3d.heading = lerpHeading(fromHeading, heading, e);
-      map3d.range = lerp(fromRange, CAR_REF_RANGE, e);
-      map3d.tilt = lerp(fromTilt, CAR_REF_TILT, e);
-      map3d.fov = lerp(fromFov, CAR_REF_FOV, e);
-      syncCarLod();
-      if (t < 1) {
-        recenterAnim = requestAnimationFrame(step);
-      } else {
-        recenterAnim = 0;
-        map3d.center = to;
-        map3d.heading = heading;
-        map3d.range = CAR_REF_RANGE;
-        map3d.tilt = CAR_REF_TILT;
-        map3d.fov = CAR_REF_FOV;
-        syncCarLod();
-        updateRecenterButton();
-      }
+      next.pending = false;
     };
-    recenterAnim = requestAnimationFrame(step);
-    updateRecenterButton();
+    img.onerror = () => { next.pending = false; next.failedAt = performance.now(); };
+    img.src = TERRAIN_TILE_URL.replace("{z}", TERRAIN_Z).replace("{x}", x).replace("{y}", y);
+    return next;
+  }
+
+  function terrainSample(data, px, py){
+    const i = (py * 256 + px) * 4;
+    return (data[i] * 256 + data[i + 1] + data[i + 2] / 256) - 32768;
+  }
+
+  // Ground elevation (m ASL) at a point, or null while its tile is still loading.
+  function terrainAltitude(lat, lng){
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const t = terrainTileCoords(lat, lng);
+    const tile = requestTerrainTile(t.x, t.y);
+    if (!tile.data) return null;
+    const x0 = clamp(Math.floor(t.px - 0.5), 0, 255), y0 = clamp(Math.floor(t.py - 0.5), 0, 255);
+    const x1 = Math.min(x0 + 1, 255), y1 = Math.min(y0 + 1, 255);
+    const fx = clamp(t.px - 0.5 - x0, 0, 1), fy = clamp(t.py - 0.5 - y0, 0, 1);
+    const top = lerp(terrainSample(tile.data, x0, y0), terrainSample(tile.data, x1, y0), fx);
+    const bottom = lerp(terrainSample(tile.data, x0, y1), terrainSample(tile.data, x1, y1), fx);
+    return lerp(top, bottom, fy);
+  }
+
+  // Warm the tiles under the car and a little way ahead, so the camera never waits.
+  function prefetchTerrain(point, heading){
+    terrainAltitude(point.lat, point.lng);
+    if (Number.isFinite(heading)) {
+      const ahead = lookAhead(point, heading, 700);
+      terrainAltitude(ahead.lat, ahead.lng);
+    }
+  }
+
+  function prefetchRouteTerrain(path, cum){
+    if (path.length < 2) return;
+    const total = cum[cum.length - 1];
+    const step = Math.max(1200, total / 40);
+    for (let m = 0; m <= total; m += step) {
+      const p = pointAtMetres(path, cum, m).point;
+      terrainAltitude(p.lat, p.lng);
+    }
+  }
+
+  // Eased ground altitude for the orbit target (snaps on the first sample / after a teleport).
+  function followGroundAltitude(point, dtEase){
+    const g = terrainAltitude(point.lat, point.lng);
+    if (g == null) return followAlt;
+    if (followAlt == null || !Number.isFinite(followAlt)) {
+      followAlt = g;
+      return g;
+    }
+    followAlt += (g - followAlt) * easeK(dtEase, 1.0);
+    return followAlt;
   }
 
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
     const range = Number(map3d.range) || 260;
-    const next = range / (Number(factor) || 1);
-    map3d.range = clamp(next, 40, 20000);
+    const next = clamp(range / (Number(factor) || 1), 40, 20000);
+    if (following && puck.fix) {
+      // Pinch while following: keep following at the user's range (Re-center clears it).
+      cam.userRange = next;
+      cam.range = next;
+      updateRecenterButton();
+    }
+    map3d.range = next;
     syncCarLod();
     refreshViewSpecs();
   };
@@ -1675,7 +2230,7 @@
     refreshViewSpecs();
   };
   window.__aaRecenter = function(){
-    animateRecenterToCar();
+    recenterToCar();
   };
   window.__aaUserPanned = markUserPanned;
   window.__aaSetDebugOverlay = function(on){
@@ -1697,9 +2252,9 @@
   }
 
   function markUserPanned(){
-    stopRecenterAnimation();
     if (following) {
       following = false;
+      cam.seeded = false; // re-attach eases in from wherever the user leaves the camera
       const followBtn = document.getElementById("followBtn");
       if (followBtn) followBtn.textContent = "Following: OFF";
     }
@@ -1709,7 +2264,8 @@
   function updateRecenterButton(){
     const btn = document.getElementById("recenterBtn");
     if (!btn) return;
-    btn.classList.toggle("visible", !following && !!currentGpsPoint && !isRecentering());
+    // Shown when detached, or when a pinch zoom overrides the follow range.
+    btn.classList.toggle("visible", !!currentGpsPoint && (!following || cam.userRange != null));
   }
   window.__aaInjectGps = function(fix){
     if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;
@@ -1718,6 +2274,8 @@
         latitude: Number(fix.lat),
         longitude: Number(fix.lng),
         heading: Number.isFinite(Number(fix.heading)) ? Number(fix.heading) : null,
+        speed: Number.isFinite(Number(fix.speed)) ? Number(fix.speed) : null,
+        bearingAccuracy: Number.isFinite(Number(fix.bearingAccuracy)) ? Number(fix.bearingAccuracy) : null,
         accuracy: Number.isFinite(Number(fix.accuracy)) ? Number(fix.accuracy) : 0
       }
     });
