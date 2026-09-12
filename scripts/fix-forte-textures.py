@@ -151,11 +151,11 @@ def main():
             "name": "forte-paint",
             "pbrMetallicRoughness": {
                 "baseColorTexture": {"index": 0},
-                "baseColorFactor": [0.86, 0.84, 0.80, 1.0],
+                "baseColorFactor": [0.52, 0.50, 0.46, 1.0],
                 "metallicFactor": 0.0,
-                "roughnessFactor": 0.72,
+                "roughnessFactor": 0.88,
             },
-            "emissiveFactor": [0.05, 0.048, 0.044],
+            "emissiveFactor": [0.0, 0.0, 0.0],
         }
     ]
     js.pop("extensionsUsed", None)

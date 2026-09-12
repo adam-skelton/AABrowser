@@ -48,7 +48,6 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:28px; height:28px; display:block}
     body.has-recenter #infoBtn {bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px))}
-    body:not(.navigating) #infoBtn {display:none !important}
     #speedLimitBadge {display:none; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
     #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -539,7 +538,7 @@
   let infoLevel = 0;
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
-  const NAV_INFO = { IDLE_MS: 15000, RANGE_1: 2.2, RANGE_2: 4.4, OVERHEAD_TILT: 18, OVERHEAD_RANGE: 1.65, OVERHEAD_PAD_M: 520 };
+  const NAV_INFO = { IDLE_MS: 15000, RANGE_1: 2.2, RANGE_2: 4.4, RANGE_3: 8.8, OVERHEAD_TILT: 18, OVERHEAD_RANGE: 1.65, OVERHEAD_PAD_M: 520 };
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
@@ -1359,8 +1358,8 @@
     });
     const img = document.createElement("img");
     img.src = MANEUVER_ICONS[item.type] || MANEUVER_ICONS.straight;
-    img.width = 52;
-    img.height = 52;
+    img.width = 20;
+    img.height = 20;
     img.alt = item.type;
     const template = document.createElement("template");
     template.content.append(img);
@@ -1790,10 +1789,10 @@
     if (routeLive) {
       ingestRouteFix(puck.fix, now);
       checkOffRoute(puck.fix, now);
-      updateSpeedLimit(puck.fix);
     } else if (puck.engaged) {
       disengageRoutePuck();
     }
+    updateSpeedLimit(puck.fix);
     ensureFollowTicker();
   }
 
@@ -1874,7 +1873,7 @@
     "GB:nsl_single": 97, "GB:nsl_dual": 113, "GB:motorway": 113,
     "DE:urban": 50, "DE:rural": 100, "FR:urban": 50, "FR:rural": 80
   };
-  const speedLimit = { ways: [], routeId: 0, current: null, lastHitM: -Infinity };
+  const speedLimit = { ways: [], routeId: 0, current: null, lastHitMs: 0, nearAtMs: 0, nearAt: null };
 
   function parseMaxspeed(raw){
     if (!raw) return null;
@@ -1891,7 +1890,7 @@
     const id = ++speedLimit.routeId;
     speedLimit.ways = [];
     speedLimit.current = null;
-    speedLimit.lastHitM = -Infinity;
+    speedLimit.lastHitMs = 0;
     updateSpeedLimitBadge();
     if (!path || path.length < 2) return;
     const pts = downsamplePath(path, 80).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
@@ -1905,16 +1904,49 @@
       if (!res.ok) throw new Error("Overpass " + res.status);
       const json = await res.json();
       if (id !== speedLimit.routeId) return; // a newer route superseded this query
-      const ways = [];
-      for (const el of json.elements || []) {
-        const kmh = parseMaxspeed(el.tags && el.tags.maxspeed);
-        if (!kmh || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
-        ways.push({ kmh, pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon })) });
-      }
-      speedLimit.ways = ways;
+      speedLimit.ways = ingestSpeedLimitWays(json.elements);
     } catch (err) {
       console.warn("Speed limits unavailable", err);
     }
+  }
+
+  function ingestSpeedLimitWays(elements){
+    const ways = [];
+    for (const el of elements || []) {
+      const kmh = parseMaxspeed(el.tags && el.tags.maxspeed);
+      if (!kmh || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+      ways.push({ kmh, pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon })) });
+    }
+    return ways;
+  }
+
+  async function fetchSpeedLimitsNear(point){
+    if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return;
+    const query = `[out:json][timeout:15];way["highway"]["maxspeed"](around:220,${point.lat.toFixed(5)},${point.lng.toFixed(5)});out geom;`;
+    try {
+      const res = await fetch(OVERPASS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "data=" + encodeURIComponent(query)
+      });
+      if (!res.ok) throw new Error("Overpass " + res.status);
+      const json = await res.json();
+      const ways = ingestSpeedLimitWays(json.elements);
+      if (ways.length) speedLimit.ways = ways;
+    } catch (err) {
+      console.warn("Nearby speed limits unavailable", err);
+    }
+  }
+
+  function maybeFetchNearbySpeedLimits(point){
+    if (isNavigating()) return;
+    const now = performance.now();
+    if (now - speedLimit.nearAtMs < 12000) return;
+    const prev = speedLimit.nearAt;
+    if (prev && distanceMetres(prev, point) < 120 && speedLimit.ways.length) return;
+    speedLimit.nearAtMs = now;
+    speedLimit.nearAt = { lat: point.lat, lng: point.lng };
+    fetchSpeedLimitsNear(point);
   }
 
   function matchSpeedLimit(point, heading){
@@ -1941,15 +1973,15 @@
   }
 
   function updateSpeedLimit(fix){
-    if (!isNavigating()) {
-      if (speedLimit.current != null) { speedLimit.current = null; updateSpeedLimitBadge(); }
-      return;
-    }
-    const hit = matchSpeedLimit(fix, fix.bearingOk ? fix.heading : NaN);
+    if (!fix) return;
+    maybeFetchNearbySpeedLimits(fix);
+    const heading = fix.bearingOk ? fix.heading : (Number.isFinite(puck.heading) ? puck.heading : NaN);
+    const hit = matchSpeedLimit(fix, heading);
+    const now = performance.now();
     if (hit != null) {
       speedLimit.current = hit;
-      speedLimit.lastHitM = puck.progressM;
-    } else if (puck.progressM - speedLimit.lastHitM > SPEED_LIMIT_FORGET_M) {
+      speedLimit.lastHitMs = now;
+    } else if (speedLimit.lastHitMs && now - speedLimit.lastHitMs > 10000) {
       speedLimit.current = null;
     }
     updateSpeedLimitBadge();
@@ -1958,7 +1990,7 @@
   function updateSpeedLimitBadge(){
     const el = document.getElementById("speedLimitBadge");
     if (!el) return;
-    const show = isNavigating() && speedLimit.current != null;
+    const show = speedLimit.current != null;
     el.classList.toggle("visible", show);
     if (show) el.textContent = String(speedLimit.current);
   }
@@ -2179,17 +2211,19 @@
     if (infoLevel === 2) {
       return { range: range0 * NAV_INFO.RANGE_2, tilt: Math.min(baseTilt, 50) };
     }
-    const span = remainingRouteSpan();
-    if (!span) {
-      return { range: Math.max(range0 * 8, 1200), tilt: NAV_INFO.OVERHEAD_TILT, overhead: true };
+    if (isNavigating()) {
+      const span = remainingRouteSpan();
+      if (span) {
+        return {
+          range: clamp(span.remain * NAV_INFO.OVERHEAD_RANGE + NAV_INFO.OVERHEAD_PAD_M, 800, 22000),
+          tilt: NAV_INFO.OVERHEAD_TILT,
+          heading: span.heading,
+          aim: span.mid,
+          overhead: true
+        };
+      }
     }
-    return {
-      range: clamp(span.remain * NAV_INFO.OVERHEAD_RANGE + NAV_INFO.OVERHEAD_PAD_M, 800, 22000),
-      tilt: NAV_INFO.OVERHEAD_TILT,
-      heading: span.heading,
-      aim: span.mid,
-      overhead: true
-    };
+    return { range: range0 * NAV_INFO.RANGE_3, tilt: Math.min(baseTilt, 36) };
   }
 
   // Speed band -> zoom level (Vela's car bands), with hysteresis so a car hovering at a
@@ -2358,7 +2392,7 @@
     }
     const car = { lat: puck.lat, lng: puck.lng };
     const fly = flyoverFrame(now);
-    const info = (!fly && infoLevel > 0 && isNavigating()) ? navInfoPreview(view, tgtRange, tiltTarget) : null;
+    const info = (!fly && infoLevel > 0) ? navInfoPreview(view, tgtRange, tiltTarget) : null;
     if (fly) {
       tgtRange = fly.range;
       tiltTarget = fly.tilt;
@@ -2910,6 +2944,7 @@
     try {
       const { path } = await fetchRoutePath(origin, destination);
       if (demoKind !== "free" || !demoActive) return;
+      fetchSpeedLimits(path);
       demoFix(path[0], bearingDegrees(path[0], path[1]));
       setMessage("Free follow · " + destination.name);
       driveAlongPath(path, () => {
@@ -3408,10 +3443,14 @@
     updateNavInfoButton();
   }
 
+  function infoUiAvailable(){
+    return !!(puck.fix || currentGpsPoint);
+  }
+
   function updateNavInfoButton(){
     const btn = document.getElementById("infoBtn");
     if (!btn) return;
-    btn.classList.toggle("visible", isNavigating() && infoBtnArmed);
+    btn.classList.toggle("visible", infoBtnArmed && infoUiAvailable());
   }
 
   function armNavInfoIdle(){
@@ -3434,7 +3473,7 @@
   }
 
   function onNavMapTap(){
-    if (!isNavigating()) return;
+    if (!infoUiAvailable()) return;
     infoBtnArmed = true;
     updateNavInfoButton();
     armNavInfoIdle();
@@ -3445,12 +3484,12 @@
       event.preventDefault();
       event.stopPropagation();
     }
-    if (!isNavigating()) return;
+    if (!infoUiAvailable()) return;
     infoBtnArmed = true;
     flyover = null;
     if (!following) attachFollow(null);
     infoLevel = (infoLevel + 1) % 4;
-    if (infoLevel === 3) showManeuverMarkers();
+    if (infoLevel === 3 && isNavigating()) showManeuverMarkers();
     else clearManeuverMarkers();
     updateNavInfoButton();
     armNavInfoIdle();
