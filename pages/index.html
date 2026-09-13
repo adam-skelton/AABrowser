@@ -57,29 +57,32 @@
     html.aa-car #navLanes,body.aa-car #navLanes {left:calc(var(--aa-inset-left) + 100px)}
     .nav-lane {width:28px; height:44px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
     .nav-lane.rec {opacity:1}
-    .nav-lane svg {width:26px; height:42px; display:block; fill:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+    .nav-lane svg {width:26px; height:42px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+    .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
     #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); pointer-events:none}
     body.has-lanes #navBanner {top:calc(var(--aa-inset-top) + max(74px, env(safe-area-inset-top) + 64px))}
     html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
-    #navPrimary {display:flex; align-items:center; gap:14px; min-height:72px; padding:10px 22px 10px 12px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
-    #navIconWrap {position:relative; width:56px; height:56px; flex:0 0 auto}
+    #navPrimary {display:flex; align-items:center; gap:10px; min-height:76px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
+    #navIconWrap {position:relative; width:64px; height:64px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
-    #navIcon svg {width:44px; height:44px; display:block; overflow:visible}
-    #navIcon svg path {fill:#fff}
+    #navIcon svg {width:56px; height:56px; display:block; overflow:visible; color:#fff}
+    #navIcon svg path {fill:currentColor}
+    #navIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navPrimaryCopy {min-width:0; display:flex; flex-direction:column; gap:1px}
     #navPrimaryDist {font-size:26px; font-weight:800; letter-spacing:-.4px; line-height:1.05; font-variant-numeric:tabular-nums}
     #navClock {display:none}
     #navClock.visible {display:flex !important}
     #navIconWrap.clock #navIcon {opacity:0}
-    #navClock svg {width:56px; height:56px; display:block}
+    #navClock svg {width:64px; height:64px; display:block}
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
     #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95}
     #navThen {display:none; align-items:center; gap:8px; width:max-content; padding:6px 14px 6px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
     #navThenIcon {width:22px; height:22px; display:flex}
-    #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible}
-    #navThenIcon svg path {fill:#fff}
+    #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible; color:#fff}
+    #navThenIcon svg path {fill:currentColor}
+    #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navEtaBar {display:none; position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); width:300px; max-width:min(300px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 120px)); min-height:52px; padding:0 16px 0 4px; border-radius:26px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
@@ -131,35 +134,35 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(340px,calc(100vw - 160px)); padding:8px 14px 14px; border-radius:22px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto}
+    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto}
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard {display:none !important}
-    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -6px 6px}
+    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -8px 8px}
     #routeCardHeadSpacer {flex:1}
     #routeBack,#routeClose {width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
-    #routeBack svg {width:22px; height:22px; display:block}
-    #routeClose {font-size:28px; line-height:1; font-weight:400}
-    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:start}
-    #routePlace.has-photo {grid-template-columns:72px minmax(0,1fr)}
-    #routePhoto {width:72px; height:72px; border-radius:12px; object-fit:cover; background:#DADCE0}
-    #routeTitleRow {display:flex; align-items:center; gap:4px; min-width:0}
+    #routeBack svg,#routeClose svg {width:22px; height:22px; display:block}
+    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:center}
+    #routePlace.has-photo {grid-template-columns:112px minmax(0,1fr)}
+    #routePhoto {width:112px; height:112px; border-radius:16px; object-fit:cover; background:#DADCE0}
+    #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0}
     #routeTitle {margin:0; flex:1; min-width:0; font-size:22px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
-    #routeTitleChevron {flex:0 0 auto; font-size:26px; font-weight:400; color:#80868B; line-height:1}
-    #routeRating {margin-top:3px; font-size:14px; font-weight:600; color:#5F6368}
+    #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#80868B; display:flex}
+    #routeTitleChevron svg {width:22px; height:22px; display:block}
+    #routeRating {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
     #routeRating .star {color:#F9AB00; margin-right:3px}
-    #routeHours {margin-top:2px; font-size:14px; font-weight:650; color:#E8710A}
+    #routeHours {margin-top:3px; font-size:14px; font-weight:650; color:#E8710A; line-height:1.25}
     #routeHours.soon {color:#E8710A}
     #routeHours.closed {color:#D93025}
     #routeHours.open24 {color:#188038}
-    #routeTime {margin-top:16px; font-size:28px; font-weight:750; letter-spacing:-.6px; line-height:1.1; color:#188038}
+    #routeTime {margin-top:14px; font-size:28px; font-weight:750; letter-spacing:-.6px; line-height:1.1; color:#188038}
     #routeStats {margin-top:2px; font-size:16px; font-weight:550; color:#3C4043; opacity:1}
     #routeSub {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
     #routeSub:empty {display:none}
     #routeSub.traffic-delay {color:#E8710A}
-    #routeGo {position:relative; overflow:hidden; margin-top:14px; width:100%; min-height:52px; border-radius:26px; background:#1A9B8E; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
-    #routeGoProgress {position:absolute; inset:0; pointer-events:none; opacity:0; background:conic-gradient(from -90deg, rgba(255,255,255,.45) var(--go-deg, 0deg), rgba(0,0,0,.14) 0)}
+    #routeGo {position:relative; overflow:hidden; margin-top:14px; width:100%; min-height:52px; border-radius:26px; background:#12756C; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeGoProgress {position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(255,255,255,.28); transform:scaleX(var(--go-p, 0)); transform-origin:left center}
     #routeGo.counting #routeGoProgress {opacity:1}
     #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:18px; font-weight:700}
     #routeGoLabel svg {width:18px; height:18px; display:block}
@@ -333,17 +336,21 @@
   <div id="routeCard">
     <div id="routeCardHead">
       <button id="routeBack" type="button" aria-label="Back">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 19.5L7.9 12l7.5-7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span id="routeCardHeadSpacer"></span>
-      <button id="routeClose" type="button" aria-label="Close">&times;</button>
+      <button id="routeClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <div id="routePlace">
       <img id="routePhoto" alt="" hidden>
       <div id="routePlaceCopy">
         <div id="routeTitleRow">
           <div id="routeTitle"></div>
-          <span id="routeTitleChevron" aria-hidden="true">›</span>
+          <span id="routeTitleChevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M9 5.5L15.5 12 9 18.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
         </div>
         <div id="routeRating" hidden></div>
         <div id="routeHours" hidden></div>
@@ -355,7 +362,7 @@
     <button id="routeGo" type="button">
       <span id="routeGoProgress" aria-hidden="true"></span>
       <span id="routeGoLabel">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.6L4.1 20.1l.85.4L12 17.7l7.05 2.8.85-.4z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3l7.8 16.8-.9.5L12 16.6 5.1 20.3l-.9-.5z"/></svg>
         Start
       </span>
     </button>
@@ -664,7 +671,7 @@
     SWOOP_MS: 1100,
     RANGE: 320,
     TILT: 62,
-    SPIN_MS: 24000
+    SPIN_MS: 56000
   };
   const START_COUNTDOWN_MS = 10000;
   const START_COUNTDOWN_IGNORE_MS = 450;
@@ -1380,7 +1387,11 @@
       const remain = current.close - nowAbs;
       return { text: `Closes at ${formatClockHm(current.close)}`, kind: remain <= 60 ? "soon" : "open" };
     }
-    if (nextOpen) return { text: `Opens at ${formatClockHm(nextOpen.open)}`, kind: "closed" };
+    if (nextOpen) {
+      let text = `Opens at ${formatClockHm(nextOpen.open)}`;
+      if (nextOpen.close) text += ` · Closes at ${formatClockHm(nextOpen.close)}`;
+      return { text, kind: "closed" };
+    }
     return { text: "Closed", kind: "closed" };
   }
 
@@ -1393,7 +1404,7 @@
     if (photos && photos.length) {
       try {
         const photo = photos[0];
-        photoUrl = typeof photo.getURI === "function" ? photo.getURI({ maxWidth: 256 }) : (photo.uri || "");
+        photoUrl = typeof photo.getURI === "function" ? photo.getURI({ maxWidth: 480 }) : (photo.uri || "");
         const attr = photo.authorAttributions && photo.authorAttributions[0];
         photoAttr = (attr && (attr.displayName || attr.name)) || "";
       } catch (err) {}
@@ -1684,15 +1695,15 @@
   function makeManeuverMarker(item){
     const marker = new Marker3DElement({
       position: { lat: item.point.lat, lng: item.point.lng },
-      sizePreserved: false,
+      sizePreserved: true,
       drawsWhenOccluded: true
     });
     const img = document.createElement("img");
     img.src = MANEUVER_ICONS[item.type] || MANEUVER_ICONS.straight;
-    img.width = 36;
-    img.height = 36;
-    img.style.width = "36px";
-    img.style.height = "36px";
+    img.width = 32;
+    img.height = 32;
+    img.style.width = "32px";
+    img.style.height = "32px";
     img.alt = item.type;
     const template = document.createElement("template");
     template.content.append(img);
@@ -1846,15 +1857,24 @@
     const fam = maneuverFamily(maneuver);
     const m = String(maneuver || "").toUpperCase();
     const s = size || 48;
-    let path = "M24 5l13 15h-8v23H19V20h-8z";
-    if (fam === "left" && m.includes("SLIGHT")) path = "M30 42V23L17 10h-7v8H4l16 16v8z";
-    else if (fam === "right" && m.includes("SLIGHT")) path = "M18 42V23L31 10h7v8h6L28 34v8z";
-    else if (fam === "left") path = "M34 42V24c0-4.8-3.8-8.5-8.5-8.5H20V9L7 22l13 13v-6.5h5.5c1.9 0 3.5 1.4 3.5 3.5v10z";
-    else if (fam === "right") path = "M14 42V24c0-4.8 3.8-8.5 8.5-8.5H28V9l13 13-13 13v-6.5h-5.5c-1.9 0-3.5 1.4-3.5 3.5v10z";
-    else if (fam === "uturn") path = "M30 42V23.5c0-5.2-4.3-9.5-9.5-9.5S11 18.3 11 23.5h6c0-1.9 1.6-3.5 3.5-3.5s3.5 1.6 3.5 3.5V42h6zM16 29l-7 7 7 7V29z";
-    else if (fam === "roundabout") path = "M24 8a14 14 0 1 1-9.9 23.9l3.6-3.6A9 9 0 1 0 24 15v5l10-7.5L24 5v3z";
-    else if (fam === "dest") path = "M24 6c7.7 0 14 6.1 14 13.8C38 28.5 24 42 24 42S10 28.5 10 19.8C10 12.1 16.3 6 24 6zm0 18.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z";
-    return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true"><path d="${path}"/></svg>`;
+    const shaft = 'fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"';
+    let body = `<path d="M24 40 V14" ${shaft}/><path d="M24 7 L13.5 21 H34.5 Z" fill="currentColor"/>`;
+    if (fam === "left" && m.includes("SLIGHT")) {
+      body = `<path d="M30 40 L20 18" ${shaft}/><path d="M20 18 L8 24 L24 8 Z" fill="currentColor"/>`;
+    } else if (fam === "right" && m.includes("SLIGHT")) {
+      body = `<path d="M18 40 L28 18" ${shaft}/><path d="M28 18 L40 24 L24 8 Z" fill="currentColor"/>`;
+    } else if (fam === "left") {
+      body = `<path d="M33 40 V24 A12 12 0 0 0 21 12 H18" ${shaft}/><path d="M18 12 L5 18.5 L18 25 Z" fill="currentColor"/>`;
+    } else if (fam === "right") {
+      body = `<path d="M15 40 V24 A12 12 0 0 1 27 12 H30" ${shaft}/><path d="M30 12 L43 18.5 L30 25 Z" fill="currentColor"/>`;
+    } else if (fam === "uturn") {
+      body = `<path d="M32 40 V20 A12 12 0 0 0 8 20 V26" ${shaft}/><path d="M8 26 L2 16 H14 Z" fill="currentColor"/>`;
+    } else if (fam === "roundabout") {
+      body = `<circle cx="24" cy="27" r="9.5" fill="none" stroke="currentColor" stroke-width="6"/><path d="M24 8 V16" ${shaft}/><path d="M24 6 L16 17 H32 Z" fill="currentColor"/>`;
+    } else if (fam === "dest") {
+      body = `<path fill="currentColor" d="M24 6c7.7 0 14 6.1 14 13.8C38 28.5 24 42 24 42S10 28.5 10 19.8C10 12.1 16.3 6 24 6zm0 18.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z"/>`;
+    }
+    return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true">${body}</svg>`;
   }
 
   function laneGlyph(dir){
@@ -2246,7 +2266,7 @@
       const iconKey = current.maneuver;
       if (icon && icon.dataset.maneuver !== iconKey) {
         icon.dataset.maneuver = iconKey;
-        icon.innerHTML = maneuverIconSvg(current.maneuver, 48);
+        icon.innerHTML = maneuverIconSvg(current.maneuver, 56);
       }
       if (next && thenEl && thenIcon && maneuverFamily(next.maneuver) !== "straight") {
         thenEl.hidden = false;
@@ -3658,8 +3678,7 @@
 
   function setGoProgress(p){
     if (!routeGoEl) return;
-    const deg = clamp(p, 0, 1) * 360;
-    routeGoEl.style.setProperty("--go-deg", `${deg}deg`);
+    routeGoEl.style.setProperty("--go-p", String(clamp(p, 0, 1)));
     routeGoEl.classList.toggle("counting", !!startCountdown && p < 1);
   }
 
