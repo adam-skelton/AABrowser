@@ -131,18 +131,38 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(280px,calc(100vw - 180px)); padding:14px 48px 14px 16px; border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.4); pointer-events:auto}
+    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(340px,calc(100vw - 160px)); padding:8px 14px 14px; border-radius:22px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto}
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard {display:none !important}
-    #routeClose {position:absolute; top:10px; right:10px; width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:22px; line-height:1; font-weight:500}
-    #routeTime {font-size:32px; font-weight:750; letter-spacing:-.6px; line-height:1.1}
-    #routeStats {margin-top:4px; font-size:16px; font-weight:550; opacity:.92}
-    #routeSub {margin-top:4px; font-size:14px; font-weight:600; color:rgba(255,255,255,.62)}
-    #routeSub.traffic-delay {color:#FFB74D}
-    #routeTitle {margin-top:10px; font-size:15px; font-weight:600; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-    #routeGo {margin-top:12px; width:100%; min-height:44px; background:#1A73E8; color:#fff; box-shadow:none}
+    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -6px 6px}
+    #routeCardHeadSpacer {flex:1}
+    #routeBack,#routeClose {width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeBack svg {width:22px; height:22px; display:block}
+    #routeClose {font-size:28px; line-height:1; font-weight:400}
+    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:start}
+    #routePlace.has-photo {grid-template-columns:72px minmax(0,1fr)}
+    #routePhoto {width:72px; height:72px; border-radius:12px; object-fit:cover; background:#DADCE0}
+    #routeTitleRow {display:flex; align-items:center; gap:4px; min-width:0}
+    #routeTitle {margin:0; flex:1; min-width:0; font-size:22px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
+    #routeTitleChevron {flex:0 0 auto; font-size:26px; font-weight:400; color:#80868B; line-height:1}
+    #routeRating {margin-top:3px; font-size:14px; font-weight:600; color:#5F6368}
+    #routeRating .star {color:#F9AB00; margin-right:3px}
+    #routeHours {margin-top:2px; font-size:14px; font-weight:650; color:#E8710A}
+    #routeHours.soon {color:#E8710A}
+    #routeHours.closed {color:#D93025}
+    #routeHours.open24 {color:#188038}
+    #routeTime {margin-top:16px; font-size:28px; font-weight:750; letter-spacing:-.6px; line-height:1.1; color:#188038}
+    #routeStats {margin-top:2px; font-size:16px; font-weight:550; color:#3C4043; opacity:1}
+    #routeSub {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
+    #routeSub:empty {display:none}
+    #routeSub.traffic-delay {color:#E8710A}
+    #routeGo {position:relative; overflow:hidden; margin-top:14px; width:100%; min-height:52px; border-radius:26px; background:#1A9B8E; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeGoProgress {position:absolute; inset:0; pointer-events:none; opacity:0; background:conic-gradient(from -90deg, rgba(255,255,255,.45) var(--go-deg, 0deg), rgba(0,0,0,.14) 0)}
+    #routeGo.counting #routeGoProgress {opacity:1}
+    #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:18px; font-weight:700}
+    #routeGoLabel svg {width:18px; height:18px; display:block}
     #status {display:none}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
@@ -225,6 +245,7 @@
       <button id="turnCueTestBtn" type="button">Turn cue test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
+      <button id="navCardTestBtn" type="button">Nav card</button>
       <button id="viewSpecBtn" type="button">View controls</button>
       <button id="carApiBtn" type="button">API level</button>
       <button id="carModelBtn" type="button">Car model</button>
@@ -310,12 +331,34 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.57-.2l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.5.5 0 0 0-.48-.38h-4.04a.5.5 0 0 0-.48.38l-.33 1.76c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.57.2L2.67 8.07c-.11.2-.07.46.12.61l2.03 1.58c-.05.3-.08.63-.08.95 0 .31.03.63.08.93l-2.03 1.59c-.18.14-.23.4-.12.6l1.92 3.32c.11.2.36.28.57.2l2.39-.96c.5.38 1.03.7 1.62.94l.33 1.76c.05.22.25.38.48.38h4.04c.23 0 .43-.16.48-.38l.33-1.76c.59-.24 1.13-.56 1.62-.94l2.39.96c.21.08.46 0 .57-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.03-1.59zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
   </button>
   <div id="routeCard">
-    <button id="routeClose" type="button" aria-label="Stop navigation">&times;</button>
+    <div id="routeCardHead">
+      <button id="routeBack" type="button" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 19.5L7.9 12l7.5-7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="routeCardHeadSpacer"></span>
+      <button id="routeClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="routePlace">
+      <img id="routePhoto" alt="" hidden>
+      <div id="routePlaceCopy">
+        <div id="routeTitleRow">
+          <div id="routeTitle"></div>
+          <span id="routeTitleChevron" aria-hidden="true">›</span>
+        </div>
+        <div id="routeRating" hidden></div>
+        <div id="routeHours" hidden></div>
+      </div>
+    </div>
     <div id="routeTime">--</div>
     <div id="routeStats"></div>
     <div id="routeSub"></div>
-    <div id="routeTitle"></div>
-    <button id="routeGo" type="button">Go</button>
+    <button id="routeGo" type="button">
+      <span id="routeGoProgress" aria-hidden="true"></span>
+      <span id="routeGoLabel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.6L4.1 20.1l.85.4L12 17.7l7.05 2.8.85-.4z"/></svg>
+        Start
+      </span>
+    </button>
   </div>
   <div id="status">
     <div id="message">Loading Google 3D map...</div>
@@ -616,6 +659,15 @@
     RISE_MS: 1400,         // zoom out from the pin to path altitude before the sweep
     PATH_HOLD_MS: 1100     // let HYBRID labels settle before the camera starts moving again
   };
+  // Place-selected preview: swoop onto the pin, then slowly orbit it until Start.
+  const DEST_PREVIEW = {
+    SWOOP_MS: 1100,
+    RANGE: 320,
+    TILT: 62,
+    SPIN_MS: 24000
+  };
+  const START_COUNTDOWN_MS = 10000;
+  const START_COUNTDOWN_IGNORE_MS = 450;
   // Shift the route (and the car that follows it) into the left driving lane.
   const ROUTE_LANE_OFFSET_M = 1.9;
 
@@ -676,6 +728,13 @@
   const routeStatsEl = document.getElementById("routeStats");
   const routeSubEl = document.getElementById("routeSub");
   const routeTimeEl = document.getElementById("routeTime");
+  const routePlaceEl = document.getElementById("routePlace");
+  const routePhotoEl = document.getElementById("routePhoto");
+  const routeRatingEl = document.getElementById("routeRating");
+  const routeHoursEl = document.getElementById("routeHours");
+  const routeGoEl = document.getElementById("routeGo");
+  let destPreview = null;
+  let startCountdown = null;
 
   function setMessage(text){ messageEl.textContent = text; }
 
@@ -1086,11 +1145,9 @@
       try {
         setMessage("Loading selected destination...");
         const place = placePrediction.toPlace();
-        await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
-        if (!place.location) throw new Error("Selected place has no location.");
-        const destination = { lat: place.location.lat(), lng: place.location.lng() };
-        const name = place.displayName || place.formattedAddress || "Selected destination";
-        await calculateRoute(getRouteOrigin(), destination, name);
+        const destination = await fetchPlaceDestination(place, "Selected destination");
+        if (!destination) throw new Error("Selected place has no location.");
+        await calculateRoute(getRouteOrigin(), destination, destination.name);
       } catch (err) {
         console.error(err);
         setMessage("Could not route to that destination.");
@@ -1236,11 +1293,9 @@
     try {
       const { Place } = await google.maps.importLibrary("places");
       const place = new Place({ id });
-      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
-      if (!place.location) throw new Error("Selected place has no location.");
-      const destination = { lat: place.location.lat(), lng: place.location.lng() };
-      const name = place.displayName || place.formattedAddress || label || "Selected destination";
-      await calculateRoute(getRouteOrigin(), destination, name);
+      const destination = await fetchPlaceDestination(place, label || "Selected destination");
+      if (!destination) throw new Error("Selected place has no location.");
+      await calculateRoute(getRouteOrigin(), destination, destination.name);
     } catch (err) {
       console.error(err);
       setMessage("Could not route to that destination.");
@@ -1253,6 +1308,127 @@
   };
   window.__aaSubmitSearch = searchDestinationFromQuery;
   window.__aaPickSearchResult = pickSearchResult;
+
+  const PLACE_CORE_FIELDS = ["id", "displayName", "formattedAddress", "location"];
+  const PLACE_EXTRA_FIELDS = ["rating", "userRatingCount", "photos", "regularOpeningHours", "currentOpeningHours", "businessStatus", "utcOffsetMinutes"];
+
+  function latLngOf(loc){
+    if (!loc) return null;
+    const lat = typeof loc.lat === "function" ? loc.lat() : loc.lat;
+    const lng = typeof loc.lng === "function" ? loc.lng() : loc.lng;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }
+
+  function placeNameOf(place, fallback){
+    const n = place && place.displayName;
+    if (typeof n === "string" && n.trim()) return n.trim();
+    if (n && typeof n.text === "string" && n.text.trim()) return n.text.trim();
+    const addr = place && place.formattedAddress;
+    if (typeof addr === "string" && addr.trim()) return addr.trim();
+    return fallback || "Destination";
+  }
+
+  function formatClockHm(minutes){
+    const mins = ((Math.round(minutes) % 1440) + 1440) % 1440;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function placeLocalNow(place){
+    const now = new Date();
+    const offset = Number(place && place.utcOffsetMinutes);
+    if (!Number.isFinite(offset)) {
+      return { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
+    }
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const local = new Date(utc + offset * 60000);
+    return { day: local.getDay(), minutes: local.getHours() * 60 + local.getMinutes() };
+  }
+
+  function describeOpeningHours(place){
+    const status = place && place.businessStatus;
+    if (status === "CLOSED_PERMANENTLY") return { text: "Permanently closed", kind: "closed" };
+    if (status === "CLOSED_TEMPORARILY") return { text: "Temporarily closed", kind: "closed" };
+    const hours = (place && (place.currentOpeningHours || place.regularOpeningHours)) || null;
+    const periods = hours && hours.periods;
+    if (!periods || !periods.length) return null;
+    if (periods.length === 1 && periods[0].open && !periods[0].close) {
+      return { text: "Open 24 hours", kind: "open24" };
+    }
+    const now = placeLocalNow(place);
+    const nowAbs = now.day * 1440 + now.minutes;
+    const week = 7 * 1440;
+    function pointAbs(pt){
+      return (Number(pt.day) || 0) * 1440 + (Number(pt.hour) || 0) * 60 + (Number(pt.minute) || 0);
+    }
+    let current = null;
+    let nextOpen = null;
+    for (let wrap = 0; wrap <= 1; wrap++) {
+      for (let i = 0; i < periods.length; i++) {
+        const p = periods[i];
+        if (!p || !p.open) continue;
+        let open = pointAbs(p.open) + wrap * week;
+        let close = p.close ? pointAbs(p.close) + wrap * week : open + 1440;
+        if (p.close && close <= open) close += 1440;
+        if (nowAbs >= open && nowAbs < close) current = { open, close };
+        else if (open > nowAbs && (!nextOpen || open < nextOpen.open)) nextOpen = { open, close };
+      }
+    }
+    if (current) {
+      const remain = current.close - nowAbs;
+      return { text: `Closes at ${formatClockHm(current.close)}`, kind: remain <= 60 ? "soon" : "open" };
+    }
+    if (nextOpen) return { text: `Opens at ${formatClockHm(nextOpen.open)}`, kind: "closed" };
+    return { text: "Closed", kind: "closed" };
+  }
+
+  function snapshotPlace(place, fallbackName){
+    const loc = latLngOf(place && place.location);
+    if (!loc) return null;
+    let photoUrl = "";
+    let photoAttr = "";
+    const photos = place && place.photos;
+    if (photos && photos.length) {
+      try {
+        const photo = photos[0];
+        photoUrl = typeof photo.getURI === "function" ? photo.getURI({ maxWidth: 256 }) : (photo.uri || "");
+        const attr = photo.authorAttributions && photo.authorAttributions[0];
+        photoAttr = (attr && (attr.displayName || attr.name)) || "";
+      } catch (err) {}
+    }
+    const rating = Number(place.rating);
+    const reviews = Number(place.userRatingCount);
+    return {
+      name: placeNameOf(place, fallbackName),
+      lat: loc.lat,
+      lng: loc.lng,
+      placeId: place.id || "",
+      address: place.formattedAddress || "",
+      rating: Number.isFinite(rating) && rating > 0 ? rating : 0,
+      userRatingCount: Number.isFinite(reviews) && reviews > 0 ? reviews : 0,
+      photoUrl,
+      photoAttr,
+      hours: describeOpeningHours(place)
+    };
+  }
+
+  async function fetchPlaceDestination(place, fallbackName){
+    if (!place) return null;
+    try {
+      await place.fetchFields({ fields: PLACE_CORE_FIELDS });
+    } catch (err) {
+      console.warn("Place core fields failed", err);
+      return null;
+    }
+    try {
+      await place.fetchFields({ fields: PLACE_EXTRA_FIELDS });
+    } catch (err) {
+      console.warn("Place extra fields failed", err);
+    }
+    return snapshotPlace(place, fallbackName);
+  }
 
   const ROUTE_FIELDS = ["path", "distanceMeters", "durationMillis", "staticDurationMillis", "legs"];
   // "speedPaths" is the JS library's shorthand that also populates travelAdvisory.speedReadingIntervals.
@@ -1332,16 +1508,21 @@
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
   }
 
-  async function calculateRoute(origin, destination, destinationName){
+  async function calculateRoute(origin, destination, destinationName, opts){
     stopDemo();
     if (!RouteClass || !map3d) return;
     setMessage(`Calculating route to ${destinationName}...`);
 
     try {
       const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, destination);
-      adoptRoute(route, path, intervals, { name: destinationName, lat: destination.lat, lng: destination.lng }, false);
-      showRoutePreview(origin, destination, route.distanceMeters);
-      setMessage("Route ready. Tap Go to start, or X to cancel.");
+      const dest = Object.assign({}, destination, {
+        name: destinationName || destination.name,
+        lat: destination.lat,
+        lng: destination.lng
+      });
+      adoptRoute(route, path, intervals, dest, false);
+      if (!opts || opts.preview !== false) showRoutePreview(origin, dest, route.distanceMeters);
+      setMessage("Route ready. Tap Start, or wait for the countdown.");
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
@@ -2432,9 +2613,11 @@
   function updateRouteInfo(route, destinationName, keepNav){
     const mins = Math.max(1, Math.round(route.durationMillis / 60000));
     const eta = new Date(Date.now() + route.durationMillis);
+    const dest = activeDestination || {};
     routeTimeEl.textContent = formatDuration(route.durationMillis);
     routeStatsEl.textContent = `${formatDistance(route.distanceMeters)} · ${formatTime(eta)}`;
-    routeTitleEl.textContent = destinationName;
+    routeTitleEl.textContent = destinationName || dest.name || "";
+    fillRouteCardExtras(dest);
 
     if (Number.isFinite(route.staticDurationMillis) && route.staticDurationMillis > 0) {
       const staticMins = Math.round(route.staticDurationMillis / 60000);
@@ -2443,11 +2626,11 @@
         routeSubEl.textContent = `+${trafficDifference} min traffic`;
         routeSubEl.className = "traffic-delay";
       } else {
-        routeSubEl.textContent = "Usual traffic";
+        routeSubEl.textContent = "";
         routeSubEl.className = "";
       }
     } else {
-      routeSubEl.textContent = "Traffic-aware route";
+      routeSubEl.textContent = "";
       routeSubEl.className = "";
     }
     document.body.classList.add("has-route");
@@ -2459,18 +2642,70 @@
     syncCarLod();
   }
 
+  function fillRouteCardExtras(dest){
+    const rating = dest && dest.rating;
+    if (routeRatingEl) {
+      if (rating) {
+        const count = dest.userRatingCount;
+        const countText = count ? ` (${count.toLocaleString("en-NZ")})` : "";
+        routeRatingEl.innerHTML = `<span class="star">★</span> ${rating.toFixed(1)}${countText}`;
+        routeRatingEl.hidden = false;
+      } else {
+        routeRatingEl.textContent = "";
+        routeRatingEl.hidden = true;
+      }
+    }
+    const hours = dest && dest.hours;
+    if (routeHoursEl) {
+      if (hours && hours.text) {
+        routeHoursEl.textContent = hours.text;
+        routeHoursEl.className = hours.kind || "";
+        routeHoursEl.hidden = false;
+      } else {
+        routeHoursEl.textContent = "";
+        routeHoursEl.className = "";
+        routeHoursEl.hidden = true;
+      }
+    }
+    if (routePhotoEl && routePlaceEl) {
+      const url = dest && dest.photoUrl;
+      if (url) {
+        routePhotoEl.src = url;
+        routePhotoEl.alt = dest.photoAttr ? `Photo: ${dest.photoAttr}` : "";
+        routePhotoEl.title = dest.photoAttr ? `Photo: ${dest.photoAttr}` : "";
+        routePhotoEl.hidden = false;
+        routePlaceEl.classList.add("has-photo");
+      } else {
+        routePhotoEl.removeAttribute("src");
+        routePhotoEl.alt = "";
+        routePhotoEl.title = "";
+        routePhotoEl.hidden = true;
+        routePlaceEl.classList.remove("has-photo");
+      }
+    }
+  }
+
+  function clearRouteCardExtras(){
+    fillRouteCardExtras({});
+  }
+
   function showRoutePreview(origin, destination, distanceMeters){
     following = false;
+    autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     updateRecenterButton();
     setMapLabels(true);
-    showRouteOverview(origin, destination, distanceMeters);
+    startDestPreview(destination || origin);
+    startStartCountdown();
   }
 
   // `opts.flyover` (default true): sweep the route from the destination back to the car
   // before diving into the drive view.
   function enterNavigation(opts){
     if (!activeRoutePath || activeRoutePath.length < 2) return;
+    const fromPreview = !!destPreview;
+    cancelStartCountdown();
+    stopDestPreview();
     document.body.classList.add("navigating");
     document.documentElement.classList.add("navigating");
     following = true;
@@ -2478,7 +2713,7 @@
     autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: ON";
     // Re-acquire the car onto this route at the next fix (the ticker glides the
-    // camera from wherever it is - typically the route overview - into the drive view).
+    // camera from wherever it is - typically the dest preview - into the drive view).
     disengageRoutePuck();
     currentView = "drive";
     setViewSelectValue("drive");
@@ -2492,7 +2727,7 @@
     // read as "zero metres since the last fix" and briefly stall the car / zoom.
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
     setMapLabels(true);
-    if (!opts || opts.flyover !== false) startFlyover();
+    if (!opts || opts.flyover !== false) startFlyover({ fromPreview });
     if (activeDestination) traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
     syncCarLod();
     updateRecenterButton();
@@ -2506,6 +2741,8 @@
     stopDemo();
     removeRouteLines();
     flyover = null;
+    cancelStartCountdown();
+    stopDestPreview();
     offRoute.hits = 0;
     if (destinationMarker) { destinationMarker.remove(); destinationMarker = null; }
     resetNavInfo(true);
@@ -2531,6 +2768,7 @@
     routeStatsEl.textContent = "";
     routeSubEl.textContent = "";
     routeTitleEl.textContent = "";
+    clearRouteCardExtras();
     setMessage("Navigation ended.");
   }
 
@@ -2548,10 +2786,76 @@
     return currentGpsPoint ? { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng } : { lat: TEST_ORIGIN.lat, lng: TEST_ORIGIN.lng };
   }
 
-  async function randomRoute(){
+  async function randomRoute(opts){
     const destination = TEST_DESTINATIONS[Math.floor(Math.random() * TEST_DESTINATIONS.length)];
-    await calculateRoute(getRouteOrigin(), destination, destination.name);
+    await calculateRoute(getRouteOrigin(), destination, destination.name, opts);
   }
+
+  async function startNavCardTest(){
+    if (!map3d) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    setMessage("Finding a nearby place...");
+    const origin = getRouteOrigin();
+    let found = [];
+    try {
+      const { Place } = await google.maps.importLibrary("places");
+      try {
+        const nearby = await Place.searchNearby({
+          fields: PLACE_CORE_FIELDS.concat(PLACE_EXTRA_FIELDS),
+          locationRestriction: { center: { lat: origin.lat, lng: origin.lng }, radius: 8000 },
+          includedTypes: ["restaurant", "cafe", "tourist_attraction"],
+          maxResultCount: 10
+        });
+        found = nearby.places || [];
+      } catch (err) {
+        console.warn("Nearby place search failed", err);
+      }
+      if (!found.length) {
+        try {
+          const nearby = await Place.searchNearby({
+            fields: PLACE_CORE_FIELDS.concat(PLACE_EXTRA_FIELDS),
+            locationRestriction: { center: { lat: origin.lat, lng: origin.lng }, radius: 12000 },
+            maxResultCount: 10
+          });
+          found = nearby.places || [];
+        } catch (err) {
+          console.warn("Nearby place search retry failed", err);
+        }
+      }
+      if (!found.length) {
+        const sample = TEST_DESTINATIONS[Math.floor(Math.random() * TEST_DESTINATIONS.length)];
+        const text = await Place.searchByText({
+          textQuery: `${sample.name} Auckland`,
+          fields: PLACE_CORE_FIELDS.concat(PLACE_EXTRA_FIELDS),
+          locationBias: { center: { lat: sample.lat, lng: sample.lng }, radius: 4000 },
+          maxResultCount: 5,
+          region: "nz"
+        });
+        found = text.places || [];
+      }
+    } catch (err) {
+      console.warn("Place search failed", err);
+    }
+    let dest = null;
+    if (found.length) {
+      const withPhoto = found.filter(p => p.photos && p.photos.length);
+      const farEnough = found.filter(p => {
+        const loc = latLngOf(p.location);
+        return loc && distanceMetres(origin, loc) > 900;
+      });
+      const pool = (withPhoto.length ? withPhoto.filter(p => farEnough.indexOf(p) >= 0) : farEnough);
+      const pickFrom = pool.length ? pool : (withPhoto.length ? withPhoto : found);
+      const picked = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+      dest = await fetchPlaceDestination(picked, "Nearby place") || snapshotPlace(picked, "Nearby place");
+    }
+    if (!dest) {
+      dest = TEST_DESTINATIONS[Math.floor(Math.random() * TEST_DESTINATIONS.length)];
+    }
+    await calculateRoute(origin, dest, dest.name);
+  }
+  window.__aaStartNavCardTest = startNavCardTest;
 
   function startGps(){
     stopDemo();
@@ -3099,15 +3403,20 @@
     const dtRaw = followLastMs ? clamp((now - followLastMs) / 1000, 0, 0.5) : 0;
     followLastMs = now;
     const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
-    if (!puck.fix || !map3d) return;
+    if (!map3d) return;
+    if (destPreview) applyDestPreviewCamera(dtEase, now);
+    tickStartCountdown(now);
+    if (!puck.fix) return;
     stepPuck(dtRaw, dtEase, now);
     applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
     updateTraversedRoute();
     // Car mode: a pan let go of the car; re-attach once the screen has been untouched long enough.
-    if (!following && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
+    if (!following && !destPreview && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
       attachFollow(currentView === "overview" ? "drive" : null);
     }
-    if (following) applyFollowCamera(dtEase, now);
+    if (destPreview) {
+      // preview owns the camera until Start or a pan
+    } else if (following) applyFollowCamera(dtEase, now);
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
     updateSpeedLimitBadge();
     updateNavHud();
@@ -3290,6 +3599,102 @@
     return Math.pow(2, ZOOM_BANDS[0][1] - zoom);
   }
 
+  // ---- Destination preview orbit ----
+
+  function startDestPreview(destination){
+    if (!map3d || !destination || !Number.isFinite(destination.lat) || !Number.isFinite(destination.lng)) return;
+    const c = readMapCenter();
+    const heading = numOr(map3d.heading, 0);
+    const range = numOr(map3d.range, 0);
+    destPreview = {
+      dest: { lat: destination.lat, lng: destination.lng },
+      from: {
+        lat: c.lat,
+        lng: c.lng,
+        heading,
+        range: range > 0 ? range : 1600,
+        tilt: numOr(map3d.tilt, 55)
+      },
+      startMs: performance.now()
+    };
+    cam.lat = destPreview.from.lat;
+    cam.lng = destPreview.from.lng;
+    cam.heading = destPreview.from.heading;
+    cam.range = destPreview.from.range;
+    cam.tilt = destPreview.from.tilt;
+    cam.seeded = true;
+    ensureFollowTicker();
+  }
+
+  function stopDestPreview(){
+    destPreview = null;
+  }
+
+  function applyDestPreviewCamera(dtEase, now){
+    if (!destPreview || !map3d) return;
+    const dest = destPreview.dest;
+    const from = destPreview.from;
+    const u = clamp((now - destPreview.startMs) / DEST_PREVIEW.SWOOP_MS, 0, 1);
+    const e = u * u * (3 - 2 * u);
+    cam.lat = lerp(from.lat, dest.lat, e);
+    cam.lng = lerp(from.lng, dest.lng, e);
+    cam.range = lerp(from.range, DEST_PREVIEW.RANGE, e);
+    cam.tilt = lerp(from.tilt, DEST_PREVIEW.TILT, e);
+    if (u < 1) {
+      cam.heading = from.heading;
+    } else {
+      const spinU = ((now - destPreview.startMs - DEST_PREVIEW.SWOOP_MS) / DEST_PREVIEW.SPIN_MS) % 1;
+      cam.heading = normaliseHeading(from.heading + spinU * 360);
+    }
+    const center = { lat: cam.lat, lng: cam.lng };
+    const alt = followGroundAltitude(center, dtEase);
+    if (Number.isFinite(alt)) center.altitude = alt;
+    map3d.center = center;
+    if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
+    if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
+    if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
+    updateCompassNeedle(cam.heading);
+  }
+
+  function setGoProgress(p){
+    if (!routeGoEl) return;
+    const deg = clamp(p, 0, 1) * 360;
+    routeGoEl.style.setProperty("--go-deg", `${deg}deg`);
+    routeGoEl.classList.toggle("counting", !!startCountdown && p < 1);
+  }
+
+  function startStartCountdown(){
+    if (!routeGoEl) return;
+    startCountdown = {
+      startMs: performance.now() + START_COUNTDOWN_IGNORE_MS,
+      durMs: START_COUNTDOWN_MS
+    };
+    setGoProgress(0);
+    routeGoEl.classList.add("counting");
+    ensureFollowTicker();
+  }
+
+  function cancelStartCountdown(){
+    startCountdown = null;
+    setGoProgress(0);
+    if (routeGoEl) routeGoEl.classList.remove("counting");
+  }
+
+  function tickStartCountdown(now){
+    if (!startCountdown) return;
+    if (now < startCountdown.startMs) {
+      setGoProgress(0);
+      if (routeGoEl) routeGoEl.classList.add("counting");
+      return;
+    }
+    const p = clamp((now - startCountdown.startMs) / startCountdown.durMs, 0, 1);
+    setGoProgress(p);
+    if (p >= 1) {
+      startCountdown = null;
+      enterNavigation();
+    }
+  }
+
   // ---- Route-start fly-over ----
 
   // Original intro: sweep the route from the destination back to the car, then dive in.
@@ -3322,7 +3727,7 @@
     return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.range, tilt: 55 };
   }
 
-  function startFlyover(){
+  function startFlyover(opts){
     flyover = null;
     cam.rejoin = false;
     if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
@@ -3332,24 +3737,31 @@
     const last = activeRoutePath[activeRoutePath.length - 1];
     const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
     const arrivalBrg = bearingDegrees(prev, last);
+    const fromPreview = !!(opts && opts.fromPreview);
     flyover = {
       kind: "destPath",
-      phase: "dollyIn",
+      phase: fromPreview ? "risePath" : "dollyIn",
       dest: { lat: dest.lat, lng: dest.lng },
       total,
       dollyStartMs: performance.now(),
+      riseStartMs: fromPreview ? performance.now() : 0,
       holdUntil: 0,
       pathStartMs: 0,
       pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
-      pathRange: clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
+      pathRange: clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE),
+      fromRange: fromPreview ? (Number.isFinite(cam.range) && cam.range > 0 ? cam.range : DEST_PREVIEW.RANGE) : FLYOVER.DEST_RANGE,
+      fromTilt: fromPreview ? (Number.isFinite(cam.tilt) ? cam.tilt : DEST_PREVIEW.TILT) : FLYOVER.DEST_TILT,
+      fromHeading: fromPreview ? (Number.isFinite(cam.heading) ? cam.heading : arrivalBrg) : arrivalBrg
     };
     cam.lat = dest.lat;
     cam.lng = dest.lng;
-    cam.range = FLYOVER.DEST_START_RANGE;
-    cam.tilt = FLYOVER.DEST_START_TILT;
-    cam.heading = arrivalBrg;
+    if (!fromPreview) {
+      cam.range = FLYOVER.DEST_START_RANGE;
+      cam.tilt = FLYOVER.DEST_START_TILT;
+      cam.heading = arrivalBrg;
+    }
     cam.seeded = true;
-    if (map3d) {
+    if (map3d && !fromPreview) {
       map3d.center = { lat: dest.lat, lng: dest.lng };
       map3d.range = FLYOVER.DEST_START_RANGE;
       map3d.tilt = FLYOVER.DEST_START_TILT;
@@ -3392,11 +3804,15 @@
         flyover.phase = "holdPath";
         flyover.holdUntil = now + FLYOVER.PATH_HOLD_MS;
       }
+      const fromRange = Number.isFinite(flyover.fromRange) ? flyover.fromRange : FLYOVER.DEST_RANGE;
+      const fromTilt = Number.isFinite(flyover.fromTilt) ? flyover.fromTilt : FLYOVER.DEST_TILT;
+      const fromHeading = Number.isFinite(flyover.fromHeading) ? flyover.fromHeading : arrivalBrg;
+      const dH = ((arrivalBrg - fromHeading + 540) % 360) - 180;
       return {
         point: destPt,
-        bearing: arrivalBrg,
-        range: lerp(FLYOVER.DEST_RANGE, flyover.pathRange, e),
-        tilt: lerp(FLYOVER.DEST_TILT, FLYOVER.PATH_TILT, e)
+        bearing: normaliseHeading(fromHeading + dH * e),
+        range: lerp(fromRange, flyover.pathRange, e),
+        tilt: lerp(fromTilt, FLYOVER.PATH_TILT, e)
       };
     }
     if (flyover.phase === "holdPath") {
@@ -3577,6 +3993,8 @@
   // null keeps the current one. The ticker seeds from the live camera and flies it in.
   function attachFollow(view){
     if (!map3d) return;
+    cancelStartCountdown();
+    stopDestPreview();
     following = true;
     cam.userRange = null;
     cam.seeded = false;
@@ -3633,7 +4051,10 @@
   function toggleFollow(){
     following = !following;
     autoRefollowArmed = false; // an explicit toggle is not a pan: no timed re-attach
-    if (!following) flyover = null;
+    if (following) {
+      cancelStartCountdown();
+      stopDestPreview();
+    } else flyover = null;
     document.getElementById("followBtn").textContent = `Following: ${following ? "ON" : "OFF"}`;
     updateRecenterButton();
     setMessage(following ? "Camera will follow the next GPS/demo position." : "Camera unlocked. Drag around the photorealistic map.");
@@ -4040,7 +4461,7 @@
     if (isDemoRunning()) stopDemo();
     if (!activeRoutePath || activeRoutePath.length < 2) {
       setMessage("Picking a random route...");
-      await randomRoute();
+      await randomRoute({ preview: false });
       if (!activeRoutePath || activeRoutePath.length < 2) {
         setMessage("Could not load a route.");
         return;
@@ -4404,7 +4825,7 @@
     const start = { lat: first[1], lng: first[2], heading: Number.isFinite(first[3]) ? first[3] : NaN };
     if (trace.dest && Number.isFinite(trace.dest.lat) && Number.isFinite(trace.dest.lng)) {
       // Recorded while navigating: rebuild the route from the trace start (current traffic).
-      await calculateRoute({ lat: start.lat, lng: start.lng }, trace.dest, trace.dest.name || "Destination");
+      await calculateRoute({ lat: start.lat, lng: start.lng }, trace.dest, trace.dest.name || "Destination", { preview: false });
       if (activeRoutePath.length >= 2) {
         currentGpsPoint = start;
         enterNavigation();
@@ -4686,6 +5107,8 @@
   // route overview). In car mode that arms the timed re-follow from the LAST touch.
   function markUserPanned(fromTouch){
     flyover = null;
+    cancelStartCountdown();
+    stopDestPreview();
     if (fromTouch && isAndroidAuto()) {
       lastTouchMs = performance.now();
       autoRefollowArmed = true;
@@ -4815,6 +5238,11 @@
   document.getElementById("freeFollowBtn").addEventListener("click",startFreeFollow);
   document.addEventListener("pointerdown", () => { resumeNavAudio(); }, { capture: true, passive: true });
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
+  document.getElementById("navCardTestBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    startNavCardTest();
+  });
   document.getElementById("viewSelectBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -4921,6 +5349,11 @@
     event.stopPropagation();
     clearNavigation();
   });
+  document.getElementById("routeBack").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearNavigation();
+  });
   document.getElementById("navExit").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -4931,6 +5364,13 @@
     event.stopPropagation();
     enterNavigation();
   });
+  if (routePhotoEl) {
+    routePhotoEl.addEventListener("error", () => {
+      routePhotoEl.removeAttribute("src");
+      routePhotoEl.hidden = true;
+      if (routePlaceEl) routePlaceEl.classList.remove("has-photo");
+    });
+  }
 
   const CHROME_HIDE_MS = 3500;
   let chromeHideTimer = null;
@@ -4960,6 +5400,9 @@
 
   let mapDragStart = null;
   window.addEventListener("pointerdown", event => {
+    if (startCountdown && performance.now() >= startCountdown.startMs && !(event.target.closest && event.target.closest("#routeGo"))) {
+      cancelStartCountdown();
+    }
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
     if (isChromeUiTarget(event.target)) {
       mapDragStart = null;
