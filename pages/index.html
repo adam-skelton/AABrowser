@@ -154,6 +154,7 @@
     body:not(.map-ready) #compassBtn,
     body:not(.map-ready) #speedLimitBadge,
     body:not(.map-ready) #navHud,
+    body:not(.map-ready) #turnCueHud,
     body:not(.map-ready) #routeCard,
     body:not(.map-ready) #viewSpecPanel {
       display:none !important;
@@ -163,6 +164,14 @@
     #carApiHud {display:none; position:absolute; z-index:45; left:50%; top:50%; transform:translate(-50%,-50%); min-width:140px; padding:14px 22px; border-radius:18px; background:#1C1C1E; color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.45); text-align:center; pointer-events:none}
     #carApiHud.visible {display:grid; gap:2px}
     html.aa-car:not(.debug-open) #carApiHud,body.aa-car:not(.debug-open) #carApiHud {display:none !important}
+    #turnCueHud {display:none; position:absolute; z-index:46; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + 188px); width:min(420px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); padding:12px 16px; border-radius:16px; background:rgba(28,28,30,.92); color:#fff; box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:none; gap:3px}
+    #turnCueHud.visible {display:grid}
+    html.aa-car:not(.debug-open) #turnCueHud,body.aa-car:not(.debug-open) #turnCueHud {display:none !important}
+    #turnCueHud .cue-title {font-size:13px; font-weight:750; letter-spacing:.2px}
+    #turnCueHud .cue-row {font-size:14px; font-weight:600; opacity:.92; font-variant-numeric:tabular-nums}
+    #turnCueHud .cue-pass {color:#81C995}
+    #turnCueHud .cue-fail {color:#F28B82}
+    #turnCueHud .cue-wait {color:#FDD663}
     #carApiHud .car-api-label {font-size:13px; font-weight:650; opacity:.72}
     #carApiHud .car-api-value {font-size:42px; font-weight:750; line-height:1.1; font-variant-numeric:tabular-nums}
     #carModelOverlay {display:none; position:absolute; inset:0; z-index:47; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto}
@@ -205,6 +214,7 @@
       <button id="followBtn" type="button">Following: ON</button>
       <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
+      <button id="turnCueTestBtn" type="button">Turn cue test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
       <button id="viewSpecBtn" type="button">View controls</button>
@@ -281,6 +291,12 @@
   <div id="carApiHud" hidden>
     <div class="car-api-label">Car API</div>
     <div class="car-api-value" id="carApiValue">unknown</div>
+  </div>
+  <div id="turnCueHud" hidden>
+    <div class="cue-title" id="turnCueTitle">Turn cue test</div>
+    <div class="cue-row" id="turnCueLogic">Logic: —</div>
+    <div class="cue-row" id="turnCueLive">Live: —</div>
+    <div class="cue-row" id="turnCueDetail">—</div>
   </div>
   <button id="carDebugBtn" type="button" aria-label="Debug">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.57-.2l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.5.5 0 0 0-.48-.38h-4.04a.5.5 0 0 0-.48.38l-.33 1.76c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.57.2L2.67 8.07c-.11.2-.07.46.12.61l2.03 1.58c-.05.3-.08.63-.08.95 0 .31.03.63.08.93l-2.03 1.59c-.18.14-.23.4-.12.6l1.92 3.32c.11.2.36.28.57.2l2.39-.96c.5.38 1.03.7 1.62.94l.33 1.76c.05.22.25.38.48.38h4.04c.23 0 .43-.16.48-.38l.33-1.76c.59-.24 1.13-.56 1.62-.94l2.39.96c.21.08.46 0 .57-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.03-1.59zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
@@ -1574,6 +1590,10 @@
 
   let navSteps = [];
   let navHudKey = "";
+  let osmSideStreets = [];
+  let extraSideStreets = [];
+  let cueDecor = [];
+  const turnCue = { played: new Set(), ignoreOsm: false, test: null, ctx: null };
   const NAV_CLOCK_S = 10;
   const NAV_LANE_AHEAD_M = 220;
   const CLOCK_RING = 2 * Math.PI * 22;
@@ -1857,6 +1877,8 @@
     if (googleGuidanceOk(google)) {
       navStepsFromGoogle = true;
       navSteps = appendDestinationStep(google, destM, destName);
+      turnCue.played.clear();
+      rebuildOsmSideStreets();
       return;
     }
     navStepsFromGoogle = false;
@@ -1866,6 +1888,8 @@
       instructions: "",
       source: "geometry"
     })), destM, destName);
+    turnCue.played.clear();
+    rebuildOsmSideStreets();
   }
 
   async function ensureGoogleNavSteps(path, cum, destination){
@@ -1878,6 +1902,8 @@
     const destName = (destination && destination.name) || "Destination";
     navStepsFromGoogle = true;
     navSteps = appendDestinationStep(google, destM, destName);
+    turnCue.played.clear();
+    rebuildOsmSideStreets();
     updateNavHud();
   }
 
@@ -2065,6 +2091,305 @@
     }
   }
 
+  const TURN_CUE = {
+    LEAD_S: 12,
+    MIN_M: 70,
+    MAX_M: 140,
+    AFTER_DECOY_M: 16,
+    MIN_BEFORE_TURN_M: 18,
+    LATE_M: 10,
+    DECOY_WINDOW_M: 170,
+    DECOY_CLEAR_M: 22,
+    SIDE_MATCH_M: 16
+  };
+
+  function turnCueSpeaker(maneuver){
+    const fam = maneuverFamily(maneuver);
+    if (fam === "left") return "left";
+    if (fam === "right") return "right";
+    return "both";
+  }
+
+  function resumeNavAudio(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!turnCue.ctx) {
+      try { turnCue.ctx = new AC(); } catch (err) { return null; }
+    }
+    if (turnCue.ctx.state === "suspended") {
+      try { turnCue.ctx.resume(); } catch (err) {}
+    }
+    try { if (turnCue.ctx.destination.channelCount > 1) turnCue.ctx.destination.channelCount = 2; } catch (err) {}
+    return turnCue.ctx;
+  }
+
+  function connectCueToSpeakers(ctx, node, side){
+    const stereo = (ctx.destination.channelCount || 2) > 1;
+    if (!stereo || side === "both") {
+      node.connect(ctx.destination);
+      return;
+    }
+    const merger = ctx.createChannelMerger(2);
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    node.connect(mute);
+    if (side === "left") {
+      node.connect(merger, 0, 0);
+      mute.connect(merger, 0, 1);
+    } else {
+      mute.connect(merger, 0, 0);
+      node.connect(merger, 0, 1);
+    }
+    merger.connect(ctx.destination);
+  }
+
+  function playTurnCue(side){
+    const ctx = resumeNavAudio();
+    if (!ctx) return;
+    const t0 = ctx.currentTime + 0.03;
+    const notes = [196, 147];
+    for (let i = 0; i < notes.length; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = "sine";
+      const start = t0 + i * 0.18;
+      const dur = 0.14;
+      osc.frequency.setValueAtTime(notes[i], start);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(80, notes[i] * 0.84), start + dur);
+      filter.type = "lowpass";
+      filter.frequency.value = 900;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.07, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(filter);
+      filter.connect(gain);
+      connectCueToSpeakers(ctx, gain, side);
+      osc.start(start);
+      osc.stop(start + dur + 0.03);
+    }
+  }
+
+  function signedTurnDeg(fromBearing, toBearing){
+    return ((toBearing - fromBearing + 540) % 360) - 180;
+  }
+
+  function sideStreetFamily(routeBearing, streetBearing){
+    const turn = signedTurnDeg(routeBearing, streetBearing);
+    const abs = Math.abs(turn);
+    if (abs < 42 || abs > 145) return null;
+    return turn > 0 ? "right" : "left";
+  }
+
+  function isSideStreetHighway(highway, name){
+    const hw = String(highway || "");
+    if (!hw || /^(footway|cycleway|path|steps|pedestrian|track|bridleway|corridor|platform)$/.test(hw)) return false;
+    if (hw === "service" && !name) return false;
+    return true;
+  }
+
+  function rebuildOsmSideStreets(){
+    osmSideStreets = [];
+    if (turnCue.ignoreOsm) return;
+    const path = activeRoutePath;
+    const cum = routeCum;
+    if (!path || path.length < 2 || !cum || cum.length !== path.length) return;
+    const turns = (navSteps || []).filter(step => {
+      const fam = maneuverFamily(step.maneuver);
+      return fam === "left" || fam === "right";
+    });
+    if (!turns.length) return;
+    const samples = [];
+    for (const step of turns) {
+      const lo = Math.max(0, step.m - TURN_CUE.DECOY_WINDOW_M);
+      const hi = Math.max(lo, step.m - TURN_CUE.DECOY_CLEAR_M);
+      for (let m = lo; m <= hi; m += 10) {
+        const at = pointAtMetres(path, cum, m);
+        samples.push({ m, point: at.point, bearing: at.bearing, turnM: step.m });
+      }
+    }
+    if (!samples.length) return;
+    const hits = [];
+    for (const way of speedLimit.ways) {
+      if (!isSideStreetHighway(way.highway, way.name) || !way.pts || way.pts.length < 2) continue;
+      for (let i = 1; i < way.pts.length; i++) {
+        const a = way.pts[i - 1], b = way.pts[i];
+        const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+        const wayBrg = bearingDegrees(a, b);
+        let best = null, bestD = TURN_CUE.SIDE_MATCH_M;
+        for (const s of samples) {
+          const d = distanceMetres(mid, s.point);
+          if (d < bestD) { bestD = d; best = s; }
+        }
+        if (!best) continue;
+        const fam = sideStreetFamily(best.bearing, wayBrg);
+        if (!fam) continue;
+        hits.push({ m: best.m, family: fam, name: way.name || "side street" });
+      }
+    }
+    hits.sort((a, b) => a.m - b.m);
+    for (const hit of hits) {
+      const last = osmSideStreets[osmSideStreets.length - 1];
+      if (last && last.family === hit.family && Math.abs(hit.m - last.m) < 18) continue;
+      osmSideStreets.push(hit);
+    }
+  }
+
+  function decoysForStep(step, decoys){
+    const fam = maneuverFamily(step && step.maneuver);
+    if (fam !== "left" && fam !== "right") return [];
+    const list = decoys || extraSideStreets.concat(turnCue.ignoreOsm ? [] : osmSideStreets);
+    const out = [];
+    for (const item of list) {
+      if (!item || item.family !== fam) continue;
+      if (item.m < step.m - TURN_CUE.DECOY_WINDOW_M || item.m > step.m - TURN_CUE.DECOY_CLEAR_M) continue;
+      out.push(item);
+    }
+    out.sort((a, b) => a.m - b.m);
+    return out;
+  }
+
+  function turnCueLeadM(speedMps){
+    return clamp((Number(speedMps) > 0.8 ? speedMps : 8) * TURN_CUE.LEAD_S, TURN_CUE.MIN_M, TURN_CUE.MAX_M);
+  }
+
+  function turnCueArmedM(step, speedMps, decoys){
+    if (!step) return Infinity;
+    const lead = turnCueLeadM(speedMps);
+    let armed = step.m - lead;
+    const last = decoysForStep(step, decoys);
+    if (last.length) armed = Math.max(armed, last[last.length - 1].m + TURN_CUE.AFTER_DECOY_M);
+    return Math.min(armed, step.m - TURN_CUE.MIN_BEFORE_TURN_M);
+  }
+
+  function turnCueShouldPlay(step, progressM, speedMps, decoys){
+    if (!step) return false;
+    const fam = maneuverFamily(step.maneuver);
+    if (fam === "dest") return false;
+    const dist = step.m - progressM;
+    if (dist < TURN_CUE.LATE_M || dist > TURN_CUE.MAX_M + 40) return false;
+    if (fam === "straight") return false;
+    return progressM + 0.01 >= turnCueArmedM(step, speedMps, decoys);
+  }
+
+  function evaluateTurnCueLogic(){
+    const step = { m: 180, maneuver: "TURN_RIGHT", instructions: "Second Ave" };
+    const decoys = [{ m: 90, family: "right", name: "First Ave" }];
+    const speed = 10;
+    const naive = step.m - turnCueLeadM(speed);
+    let played = null;
+    for (let m = 0; m < step.m; m += 1) {
+      if (turnCueShouldPlay(step, m, speed, decoys)) { played = m; break; }
+    }
+    const afterDecoy = decoys[0].m + TURN_CUE.AFTER_DECOY_M;
+    const pass = played != null && played >= afterDecoy - 1 && played < step.m - TURN_CUE.LATE_M && naive < decoys[0].m;
+    return { pass, played, naive, decoyM: decoys[0].m, turnM: step.m, afterDecoy, speaker: turnCueSpeaker(step.maneuver) };
+  }
+
+  function clearCueDecor(){
+    for (const item of cueDecor) {
+      try { item.remove(); } catch (err) {}
+    }
+    cueDecor = [];
+  }
+
+  function resetTurnCue(){
+    turnCue.played.clear();
+    turnCue.ignoreOsm = false;
+    turnCue.test = null;
+    extraSideStreets = [];
+    clearCueDecor();
+    hideTurnCueHud();
+  }
+
+  function hideTurnCueHud(){
+    const hud = document.getElementById("turnCueHud");
+    if (!hud) return;
+    hud.hidden = true;
+    hud.classList.remove("visible");
+  }
+
+  function showTurnCueHud(){
+    const hud = document.getElementById("turnCueHud");
+    if (!hud) return;
+    hud.hidden = false;
+    hud.classList.add("visible");
+  }
+
+  function setTurnCueHud(logicText, liveText, detailText, logicOk, liveOk){
+    const logicEl = document.getElementById("turnCueLogic");
+    const liveEl = document.getElementById("turnCueLive");
+    const detailEl = document.getElementById("turnCueDetail");
+    if (logicEl) {
+      logicEl.textContent = logicText;
+      logicEl.className = "cue-row " + (logicOk === true ? "cue-pass" : logicOk === false ? "cue-fail" : "cue-wait");
+    }
+    if (liveEl) {
+      liveEl.textContent = liveText;
+      liveEl.className = "cue-row " + (liveOk === true ? "cue-pass" : liveOk === false ? "cue-fail" : "cue-wait");
+    }
+    if (detailEl) detailEl.textContent = detailText;
+  }
+
+  function judgeTurnCueDrive(progressM){
+    const test = turnCue.test;
+    if (!test) return;
+    const played = test.playedM;
+    if (played == null) {
+      if (progressM >= test.turnM - TURN_CUE.LATE_M) {
+        test.liveOk = false;
+        setTurnCueHud(test.logicLine, "Live: FAIL — cue never played", test.detail, test.logicOk, false);
+      }
+      return;
+    }
+    const ok = played >= test.decoyM + TURN_CUE.AFTER_DECOY_M - 2 && played < test.turnM - TURN_CUE.LATE_M && test.side === "right";
+    test.liveOk = ok;
+    setTurnCueHud(
+      test.logicLine,
+      ok ? `Live: PASS — dun-dun at ${Math.round(played)} m on ${test.side}` : `Live: FAIL — played at ${Math.round(played)} m (${test.side})`,
+      test.detail,
+      test.logicOk,
+      ok
+    );
+  }
+
+  function updateTurnCue(){
+    if (!isNavigating() || !navSteps.length || !activeRoutePath.length) return;
+    const total = routeCum.length ? routeCum[routeCum.length - 1] : 0;
+    let progressM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
+    if (!puck.engaged && currentGpsPoint && activeRoutePath.length >= 2) {
+      progressM = nearestAlongRoute(currentGpsPoint, activeRoutePath, routeCum);
+    }
+    const speed = speedKalman.speed;
+    const ahead = upcomingNavSteps(progressM);
+    const current = ahead[0];
+    if (!current) return;
+    const decoys = decoysForStep(current);
+    const lastDecoy = decoys.length ? decoys[decoys.length - 1] : null;
+    const armedM = turnCueArmedM(current, speed, decoys);
+    const key = Math.round(current.m) + ":" + current.maneuver;
+    const fam = maneuverFamily(current.maneuver);
+    if (turnCue.test) {
+      const waiting = lastDecoy && progressM < lastDecoy.m + TURN_CUE.AFTER_DECOY_M;
+      const live = turnCue.test.playedM == null
+        ? (waiting ? `Live: holding for ${lastDecoy.name || "side street"} (${Math.round(lastDecoy.m)} m)` : `Live: ${Math.round(progressM)} m · cue at ${Math.round(armedM)} m`)
+        : null;
+      if (live) setTurnCueHud(turnCue.test.logicLine, live, turnCue.test.detail, turnCue.test.logicOk, null);
+      judgeTurnCueDrive(progressM);
+    }
+    if (fam === "dest" || fam === "straight") return;
+    if (turnCue.played.has(key)) return;
+    if (!turnCueShouldPlay(current, progressM, speed, decoys)) return;
+    const side = turnCueSpeaker(current.maneuver);
+    playTurnCue(side);
+    turnCue.played.add(key);
+    if (turnCue.test) {
+      turnCue.test.playedM = progressM;
+      turnCue.test.side = side;
+      judgeTurnCueDrive(progressM);
+    }
+  }
+
   function updateRouteInfo(route, destinationName, keepNav){
     const mins = Math.max(1, Math.round(route.durationMillis / 60000));
     const eta = new Date(Date.now() + route.durationMillis);
@@ -2134,6 +2459,7 @@
     updateRecenterButton();
     updateSpeedLimitBadge();
     updateNavHud();
+    resumeNavAudio();
     setMessage("Navigation started.");
   }
 
@@ -2157,6 +2483,7 @@
     document.body.classList.remove("has-route", "navigating");
     document.documentElement.classList.remove("has-route", "navigating");
     hideNavHud();
+    resetTurnCue();
     setMapLabels(false);
     hideUserCar();
     hideHeadingArrow();
@@ -2524,7 +2851,7 @@
     updateSpeedLimitBadge();
     if (!path || path.length < 2) return;
     const pts = downsamplePath(path, 80).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
-    const query = `[out:json][timeout:22];(way["highway"]["maxspeed"](around:20,${pts});way["highway"]["turn:lanes"](around:20,${pts});way["highway"]["turn:lanes:forward"](around:20,${pts}););out geom;`;
+    const query = `[out:json][timeout:22];(way["highway"]["maxspeed"](around:20,${pts});way["highway"]["turn:lanes"](around:20,${pts});way["highway"]["turn:lanes:forward"](around:20,${pts});way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"](around:22,${pts}););out geom;`;
     try {
       const res = await fetch(OVERPASS_URL, {
         method: "POST",
@@ -2535,6 +2862,7 @@
       const json = await res.json();
       if (id !== speedLimit.routeId) return; // a newer route superseded this query
       speedLimit.ways = ingestSpeedLimitWays(json.elements);
+      rebuildOsmSideStreets();
     } catch (err) {
       console.warn("Speed limits unavailable", err);
     }
@@ -2547,12 +2875,16 @@
       const kmh = parseMaxspeed(tags.maxspeed);
       const turnLanes = tags["turn:lanes"] || tags["turn:lanes:forward"] || "";
       const laneCount = parseInt(tags.lanes, 10);
+      const highway = tags.highway || "";
+      const name = tags.name || "";
       if (!Array.isArray(el.geometry) || el.geometry.length < 2) continue;
-      if (!kmh && !turnLanes && !(laneCount > 0)) continue;
+      if (!kmh && !turnLanes && !(laneCount > 0) && !isSideStreetHighway(highway, name)) continue;
       ways.push({
         kmh: kmh || 0,
         turnLanes,
         lanes: Number.isFinite(laneCount) && laneCount > 0 ? laneCount : 0,
+        highway,
+        name,
         pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon }))
       });
     }
@@ -2740,6 +3072,7 @@
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
     updateSpeedLimitBadge();
     updateNavHud();
+    updateTurnCue();
     updateNavInfoButton();
   }
 
@@ -3587,6 +3920,8 @@
     if (freeBtn) freeBtn.textContent = "Free follow";
     const tracesBtn = document.getElementById("tracesBtn");
     if (tracesBtn) tracesBtn.textContent = "Traces";
+    const cueBtn = document.getElementById("turnCueTestBtn");
+    if (cueBtn) cueBtn.textContent = "Turn cue test";
   }
 
   // Mock GPS: walks the path emitting ONE fix per second (position, course, doppler
@@ -3614,14 +3949,14 @@
     applyGpsFix(point, heading, { speed, accuracy: 4, headingMeasured: true });
   }
 
-  function driveAlongPath(path, onDone){
+  function driveAlongPath(path, onDone, speedOverrideMps){
     let index = 0;
     let distIntoSeg = 0;
     const cum = cumulativeLengths(path);
     const totalM = cum[cum.length - 1] || 1;
     demoTimer = setInterval(() => {
       const alongM = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
-      const speed = demoSpeedMps(alongM, totalM);
+      const speed = Number.isFinite(speedOverrideMps) ? speedOverrideMps : demoSpeedMps(alongM, totalM);
       let remaining = speed * (DEMO_FIX_MS / 1000);
       while (remaining > 0 && index < path.length - 1) {
         const segLen = Math.max(distanceMetres(path[index], path[index + 1]), 0.05);
@@ -3636,7 +3971,7 @@
         }
       }
       const nowAlong = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
-      const nowSpeed = demoSpeedMps(nowAlong, totalM);
+      const nowSpeed = Number.isFinite(speedOverrideMps) ? speedOverrideMps : demoSpeedMps(nowAlong, totalM);
       if (index >= path.length - 1) {
         const last = path[path.length - 1];
         demoFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last), nowSpeed);
@@ -3682,6 +4017,119 @@
     document.getElementById("demoBtn").textContent = "Stop drive demo";
     setMessage("Driving the test route. Orange = moderate traffic, red = heavy.");
     driveAlongPath(path);
+  }
+
+  function addCueDecor(item){
+    if (!item) return;
+    cueDecor.push(item);
+    try { map3d.append(item); } catch (err) {}
+  }
+
+  function startTurnCueTest(){
+    if (demoKind === "turncue" && isDemoRunning()) {
+      stopDemo();
+      clearNavigation();
+      setMessage("Turn cue test stopped.");
+      return;
+    }
+    if (!map3d) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    if (isDemoRunning()) stopDemo();
+    if (watchId !== null) stopGps();
+    clearNavigation();
+    resumeNavAudio();
+
+    const logic = evaluateTurnCueLogic();
+    const origin = currentGpsPoint || AUCKLAND;
+    const heading = Number.isFinite(origin.heading) ? origin.heading : 12;
+    const start = { lat: origin.lat, lng: origin.lng };
+    const decoyM = 90;
+    const turnM = 180;
+    const afterM = 90;
+    const path = [];
+    for (let m = 0; m <= turnM; m += 8) path.push(lookAhead(start, heading, m));
+    const turnPt = lookAhead(start, heading, turnM);
+    for (let m = 8; m <= afterM; m += 8) path.push(lookAhead(turnPt, heading + 90, m));
+    const dest = path[path.length - 1];
+    const decoyPt = lookAhead(start, heading, decoyM);
+    const decoyPath = [decoyPt];
+    for (let m = 10; m <= 90; m += 10) decoyPath.push(lookAhead(decoyPt, heading + 90, m));
+
+    activeRoute = {
+      durationMillis: ((turnM + afterM) / 10) * 1000,
+      distanceMeters: turnM + afterM,
+      staticDurationMillis: ((turnM + afterM) / 10) * 1000
+    };
+    activeDestination = { name: "Second Ave", lat: dest.lat, lng: dest.lng };
+    activeRoutePath = path;
+    setRouteGeometry(path);
+    drawRoute(path);
+    drawDestination(activeDestination);
+    updateRouteInfo(activeRoute, "Second Ave", true);
+    navStepsFromGoogle = true;
+    navSteps = [
+      { m: turnM, maneuver: "TURN_RIGHT", instructions: "Second Ave", source: "test", lanes: null },
+      { m: turnM + afterM, maneuver: "DESTINATION", instructions: "Second Ave", source: "test" }
+    ];
+    extraSideStreets = [{ m: decoyM, family: "right", name: "First Ave" }];
+    turnCue.ignoreOsm = true;
+    turnCue.played.clear();
+    osmSideStreets = [];
+
+    try {
+      const decoyLine = new Polyline3DElement({
+        path: decoyPath,
+        strokeColor: "#9AA0A6",
+        outerColor: "#FFFFFF",
+        strokeWidth: 6,
+        outerWidth: 0.28,
+        altitudeMode: MODEL_ALTITUDE_MODE,
+        drawsOccludedSegments: true,
+        zIndex: 18
+      });
+      addCueDecor(decoyLine);
+    } catch (err) {}
+    if (Marker3DElement) {
+      try {
+        const skip = new Marker3DElement({ position: decoyPt, label: "1st right (skip)", sizePreserved: true });
+        const take = new Marker3DElement({ position: turnPt, label: "Turn here", sizePreserved: true });
+        addCueDecor(skip);
+        addCueDecor(take);
+      } catch (err) {}
+    }
+
+    const naive = turnM - turnCueLeadM(10);
+    const logicLine = logic.pass
+      ? `Logic: PASS — wait until ${Math.round(logic.afterDecoy)} m (naive would be ${Math.round(naive)} m)`
+      : `Logic: FAIL — played at ${logic.played == null ? "never" : Math.round(logic.played) + " m"}`;
+    turnCue.test = {
+      decoyM,
+      turnM,
+      playedM: null,
+      side: null,
+      logicOk: logic.pass,
+      liveOk: null,
+      logicLine,
+      detail: `Right turn at ${turnM} m · decoy First Ave at ${decoyM} m · right speaker only`
+    };
+    showTurnCueHud();
+    setTurnCueHud(logicLine, "Live: driving — silent until after First Ave", turnCue.test.detail, logic.pass, null);
+
+    demoKind = "turncue";
+    demoActive = true;
+    const cueBtn = document.getElementById("turnCueTestBtn");
+    if (cueBtn) cueBtn.textContent = "Stop cue test";
+    enterNavigation({ flyover: false });
+    demoFix(path[0], heading, 12);
+    setMessage("Turn cue test: pass the grey First Ave, then listen for dun-dun on the right.");
+    driveAlongPath(path, () => {
+      judgeTurnCueDrive(turnM);
+      stopDemo();
+      const ok = turnCue.test && turnCue.test.liveOk;
+      setMessage(ok ? "Turn cue test PASS." : "Turn cue test finished — check the overlay.");
+    }, 12);
   }
 
   async function continueFreeFollowLeg(){
@@ -4175,6 +4623,7 @@
     motion.north = n;
     motion.atMs = performance.now();
   };
+  window.__aaStartTurnCueTest = startTurnCueTest;
   window.__aaSetDebugOverlay = function(on){
     document.documentElement.classList.toggle("debug-open", !!on);
     document.body.classList.toggle("debug-open", !!on);
@@ -4327,7 +4776,9 @@
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
+  document.getElementById("turnCueTestBtn").addEventListener("click",startTurnCueTest);
   document.getElementById("freeFollowBtn").addEventListener("click",startFreeFollow);
+  document.addEventListener("pointerdown", () => { resumeNavAudio(); }, { capture: true, passive: true });
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
   document.getElementById("viewSelectBtn").addEventListener("click", event => {
     event.preventDefault();
