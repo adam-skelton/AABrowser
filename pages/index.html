@@ -8,7 +8,6 @@
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0)}
     #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
-    #mapLoader::before {content:""; position:absolute; inset:0; z-index:-1; background:radial-gradient(ellipse at 50% 38%, rgba(28,58,114,.94) 0%, rgba(18,36,76,.95) 34%, rgba(11,20,40,.96) 62%, rgba(7,11,20,.97) 100%); pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45))}
@@ -315,6 +314,7 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
+  const FREE_REF_TILT = 80;   // free follow: more looking-out, camera closer to the road
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
   const MODEL_ALTITUDE_MODE = "CLAMP_TO_GROUND";
   const USE_HEADING_ARROW = false;
@@ -355,6 +355,7 @@
   // ---------------------------------------------------------------------------
   const FOLLOW = {
     CAR_SCREEN_Y: 0.72,     // where the car sits on screen while heading-up (0 = top, 1 = bottom)
+    FREE_CAR_SCREEN_Y: 0.84, // free follow: car lower in frame, more road/horizon ahead
     POS_TAU: 0.25,          // camera position ease time-constant (s)
     BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
     BRG_TAU_TURN: 0.35,     // ...and through a genuine turn
@@ -397,7 +398,8 @@
     const top = viewSafe.top || 0;
     const visH = Math.max(1, h - top - (viewSafe.bottom || 0));
     const split = (viewSafe.left + viewSafe.right + viewSafe.top + viewSafe.bottom) > 24;
-    return (top + visH * (split ? 0.55 : FOLLOW.CAR_SCREEN_Y)) / h;
+    const frac = split ? 0.55 : (!isNavigating() ? FOLLOW.FREE_CAR_SCREEN_Y : FOLLOW.CAR_SCREEN_Y);
+    return (top + visH * frac) / h;
   }
 
   // Vela CarMapRenderer.navZoom: one zoom level per speed band (km/h upper bound -> zoom).
@@ -409,7 +411,7 @@
   const ZOOM_PLUS_FACTOR = 1.25;
   const ZOOM_PLUS_STEP = Math.log(ZOOM_PLUS_FACTOR) / Math.log(2);
   const FOLLOW_ZOOM_IN_CLICKS_NAV = 1;   // nav follow (e.g. 50-60 km/h) vs the band table
-  const FOLLOW_ZOOM_IN_CLICKS_FREE = 2;  // free follow
+  const FOLLOW_ZOOM_IN_CLICKS_FREE = 3;  // free follow: one extra + click (~25% closer than before)
   let zoomBandIdx = 0;
 
   // Car mode: a pan detaches the camera; it re-attaches this long after the LAST touch (Vela: 6 s).
@@ -516,14 +518,15 @@
     DEST_TILT: 58,
     DEST_IN_MS: 1700,
     DEST_HOLD_MS: 700,
-    PATH_TILT: 44,         // more top-down while flowing along the route
-    PATH_ZOOM_U: 0.24,     // first slice of the sweep zooms out from dest to path range
-    PATH_MIN_RANGE: 700,
-    PATH_MAX_RANGE: 2800,
+    PATH_TILT: 32,         // flatter so locality labels sit on the imagery, not behind buildings
+    PATH_MIN_RANGE: 1600,  // suburb/locality names need more altitude than the dest pin shot
+    PATH_MAX_RANGE: 7200,
     PATH_DUR_BASE_MS: 4200,
     PATH_M_PER_MS: 0.85,   // metres of route per ms of sweep (lower = slower)
     PATH_DUR_MIN_MS: 5200,
-    PATH_DUR_MAX_MS: 10000
+    PATH_DUR_MAX_MS: 10000,
+    RISE_MS: 1400,         // zoom out from the pin to path altitude before the sweep
+    PATH_HOLD_MS: 1100     // let HYBRID labels settle before the camera starts moving again
   };
   // Shift the route (and the car that follows it) into the left driving lane.
   const ROUTE_LANE_OFFSET_M = 1.9;
@@ -555,11 +558,20 @@
   let infoLevel = 0;
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
-  const NAV_INFO = { IDLE_MS: 15000, RANGE_1: 2.2, RANGE_2: 4.4, RANGE_3: 8.8, OVERHEAD_TILT: 18, OVERHEAD_RANGE: 1.65, OVERHEAD_PAD_M: 520 };
+  const NAV_INFO = {
+    IDLE_MS: 15000,
+    MAX_LEVEL: 5,
+    RANGE_STEPS: [2.2, 4.4, 8.8, 17.6, 35.2],
+    TILT_CAPS: [62, 50, 42, 34, 26],
+    TURN_TILT_MIN: 28,
+    TURN_PAD_M: 90,
+    TURN_EDGE_FRAC: 0.14,
+    TURN_SKIP_M: 40
+  };
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
   let activeRoutePath = [];
-  let currentView = "high";
+  let currentView = "drive";
   let carModelReady = false;
 
   const messageEl = document.getElementById("message");
@@ -1386,6 +1398,16 @@
     return marker;
   }
 
+  let builtManeuvers = [];
+  let builtManeuversPath = null;
+  function routeManeuvers(){
+    if (builtManeuversPath !== activeRoutePath) {
+      builtManeuversPath = activeRoutePath;
+      builtManeuvers = buildManeuvers(activeRoutePath, routeCum);
+    }
+    return builtManeuvers;
+  }
+
   function buildManeuvers(path, cum){
     const raw = [];
     if (!path || path.length < 3 || !cum || cum.length !== path.length) return raw;
@@ -1430,7 +1452,7 @@
     clearManeuverMarkers();
     if (!Marker3DElement || !map3d || activeRoutePath.length < 3) return;
     const startM = Number.isFinite(puck.progressM) ? puck.progressM - 20 : 0;
-    const items = buildManeuvers(activeRoutePath, routeCum).filter(item => item.m >= startM);
+    const items = routeManeuvers().filter(item => item.m >= startM);
     const max = 24;
     const step = items.length > max ? Math.ceil(items.length / max) : 1;
     for (let i = 0; i < items.length; i += step) {
@@ -1491,6 +1513,7 @@
     following = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     updateRecenterButton();
+    setMapLabels(true);
     showRouteOverview(origin, destination, distanceMeters);
   }
 
@@ -1518,8 +1541,8 @@
     // Synthetic re-injection of the current point: carry the modelled speed so it isn't
     // read as "zero metres since the last fix" and briefly stall the car / zoom.
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
-    if (!opts || opts.flyover !== false) startFlyover();
     setMapLabels(true);
+    if (!opts || opts.flyover !== false) startFlyover();
     if (activeDestination) traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
     syncCarLod();
     updateRecenterButton();
@@ -2207,6 +2230,7 @@
     let v;
     if (currentView === "high") v = { tilt: 62, range: 650, fov: 40, headingUp: true, breathe: false };
     else if (currentView === "top") v = { tilt: 0, range: 1300, fov: 35, headingUp: false, breathe: false };
+    else if (!isNavigating()) v = { tilt: FREE_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
     else v = { tilt: CAR_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
     if (northUp && v.headingUp) {
       // North-up: fixed heading with the car centred, a little flatter and wider so the
@@ -2216,39 +2240,66 @@
     return v;
   }
 
-  function remainingRouteSpan(){
-    if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return null;
-    const total = routeCum[routeCum.length - 1];
-    if (!(total > 0)) return null;
+  function visibleAheadMetres(range, tilt, fov){
+    const y = carScreenY();
+    return Math.max(40, lookAheadForFraction(range, tilt, fov, y) - lookAheadForFraction(range, tilt, fov, NAV_INFO.TURN_EDGE_FRAC));
+  }
+
+  function rangeToFitAhead(aheadM, tilt, fov){
+    const need = Math.max(aheadM, 80) + Math.max(NAV_INFO.TURN_PAD_M, aheadM * 0.18);
+    let lo = 50, hi = 24000;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (visibleAheadMetres(mid, tilt, fov) < need) lo = mid;
+      else hi = mid;
+    }
+    return clamp(hi, 80, 24000);
+  }
+
+  function navTurnCoverTargets(){
+    const total = routeCum.length ? routeCum[routeCum.length - 1] : 0;
     const startM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
-    const remain = Math.max(total - startM, 180);
-    const a = pointAtMetres(activeRoutePath, routeCum, startM).point;
-    const b = pointAtMetres(activeRoutePath, routeCum, total).point;
-    const mid = pointAtMetres(activeRoutePath, routeCum, startM + remain * 0.5).point;
-    return { startM, total, remain, a, b, mid, heading: bearingDegrees(a, b) };
+    const view = viewTargets();
+    const zoom = Number.isFinite(cam.zoom) ? cam.zoom : zoomBandForSpeed(cam.speedLP);
+    const baseRange = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
+    const baseAhead = visibleAheadMetres(baseRange, view.tilt, view.fov);
+    const turns = routeManeuvers().filter(t => t.m > startM + 25);
+    const targets = [];
+    let coverM = startM + baseAhead * 0.88;
+    for (const t of turns) {
+      if (t.m > coverM + NAV_INFO.TURN_SKIP_M) {
+        targets.push(t.m);
+        coverM = t.m;
+      }
+    }
+    if (total > coverM + 80) targets.push(total);
+    while (targets.length < NAV_INFO.MAX_LEVEL && total > startM + 50) {
+      const last = targets.length ? targets[targets.length - 1] : coverM;
+      const next = Math.min(total, startM + Math.max(last - startM, baseAhead) * 1.85);
+      if (next <= last + 30) break;
+      targets.push(next);
+    }
+    if (!targets.length) targets.push(Math.min(total, startM + Math.max(baseAhead * 1.8, 220)));
+    return { startM, total, targets };
   }
 
   function navInfoPreview(view, baseRange, baseTilt){
     const range0 = Math.max(Number(baseRange) || view.range, 40);
-    if (infoLevel === 1) {
-      return { range: range0 * NAV_INFO.RANGE_1, tilt: Math.min(baseTilt, 62) };
+    const level = clamp(infoLevel, 0, NAV_INFO.MAX_LEVEL);
+    if (level <= 0) return null;
+    if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
+      const span = navTurnCoverTargets();
+      const idx = Math.min(level - 1, Math.max(0, span.targets.length - 1));
+      const endM = span.targets[idx];
+      const aheadM = Math.max(endM - span.startM, 80);
+      const tilt = clamp(baseTilt - Math.log2(Math.max(aheadM / 90, 1)) * 7, NAV_INFO.TURN_TILT_MIN, baseTilt);
+      return { range: rangeToFitAhead(aheadM, tilt, view.fov), tilt };
     }
-    if (infoLevel === 2) {
-      return { range: range0 * NAV_INFO.RANGE_2, tilt: Math.min(baseTilt, 50) };
-    }
-    if (isNavigating()) {
-      const span = remainingRouteSpan();
-      if (span) {
-        return {
-          range: clamp(span.remain * NAV_INFO.OVERHEAD_RANGE + NAV_INFO.OVERHEAD_PAD_M, 800, 22000),
-          tilt: NAV_INFO.OVERHEAD_TILT,
-          heading: span.heading,
-          aim: span.mid,
-          overhead: true
-        };
-      }
-    }
-    return { range: range0 * NAV_INFO.RANGE_3, tilt: Math.min(baseTilt, 36) };
+    const stepIdx = Math.min(level - 1, NAV_INFO.RANGE_STEPS.length - 1);
+    return {
+      range: range0 * NAV_INFO.RANGE_STEPS[stepIdx],
+      tilt: Math.min(baseTilt, NAV_INFO.TILT_CAPS[stepIdx])
+    };
   }
 
   // Speed band -> zoom level (Vela's car bands), with hysteresis so a car hovering at a
@@ -2319,7 +2370,7 @@
       holdUntil: 0,
       pathStartMs: 0,
       pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
-      pathRange: clamp(total * 0.45, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
+      pathRange: clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE)
     };
     cam.lat = dest.lat;
     cam.lng = dest.lng;
@@ -2358,10 +2409,31 @@
     }
     if (flyover.phase === "holdDest") {
       if (now >= flyover.holdUntil) {
+        flyover.phase = "risePath";
+        flyover.riseStartMs = now;
+      }
+      return { point: destPt, bearing: arrivalBrg, range: FLYOVER.DEST_RANGE, tilt: FLYOVER.DEST_TILT };
+    }
+    if (flyover.phase === "risePath") {
+      const u = clamp((now - flyover.riseStartMs) / FLYOVER.RISE_MS, 0, 1);
+      const e = u * u * (3 - 2 * u);
+      if (u >= 1) {
+        flyover.phase = "holdPath";
+        flyover.holdUntil = now + FLYOVER.PATH_HOLD_MS;
+      }
+      return {
+        point: destPt,
+        bearing: arrivalBrg,
+        range: lerp(FLYOVER.DEST_RANGE, flyover.pathRange, e),
+        tilt: lerp(FLYOVER.DEST_TILT, FLYOVER.PATH_TILT, e)
+      };
+    }
+    if (flyover.phase === "holdPath") {
+      if (now >= flyover.holdUntil) {
         flyover.phase = "alongPath";
         flyover.pathStartMs = now;
       }
-      return { point: destPt, bearing: arrivalBrg, range: FLYOVER.DEST_RANGE, tilt: FLYOVER.DEST_TILT };
+      return { point: destPt, bearing: arrivalBrg, range: flyover.pathRange, tilt: FLYOVER.PATH_TILT };
     }
     const u = (now - flyover.pathStartMs) / flyover.pathDurMs;
     if (u >= 1) { flyover = null; return null; }
@@ -2372,13 +2444,11 @@
     const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
     const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
     const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
-    const zoomU = clamp(u / FLYOVER.PATH_ZOOM_U, 0, 1);
-    const zoomE = zoomU * zoomU * (3 - 2 * zoomU);
     return {
       point: at.point,
       bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead),
-      range: lerp(FLYOVER.DEST_RANGE, flyover.pathRange, zoomE),
-      tilt: lerp(FLYOVER.DEST_TILT, FLYOVER.PATH_TILT, zoomE)
+      range: flyover.pathRange,
+      tilt: FLYOVER.PATH_TILT
     };
   }
 
@@ -2604,7 +2674,10 @@
   function setMapLabels(on){
     labelsOn = !!on;
     if (map3d) {
-      try { map3d.mode = labelsOn ? "HYBRID" : "SATELLITE"; } catch (err) {}
+      try {
+        if (labelsOn && GOOGLE_MAPS_MAP_ID) map3d.mapId = GOOGLE_MAPS_MAP_ID;
+        map3d.mode = labelsOn ? "HYBRID" : "SATELLITE";
+      } catch (err) {}
     }
     const btn = document.getElementById("labelsBtn");
     if (btn) btn.textContent = `Labels: ${labelsOn ? "ON" : "OFF"}`;
@@ -3541,12 +3614,12 @@
   function updateRecenterButton(){
     const btn = document.getElementById("recenterBtn");
     if (!btn) return;
-    const show = !!currentGpsPoint && (!following || cam.userRange != null);
+    updateNavInfoButton();
+    const show = !!currentGpsPoint && (!following || cam.userRange != null || infoLevel >= NAV_INFO.MAX_LEVEL);
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-recenter", show);
     document.documentElement.classList.toggle("has-recenter", show);
     updateCompassButton();
-    updateNavInfoButton();
   }
 
   function infoUiAvailable(){
@@ -3567,7 +3640,7 @@
       }
       clearManeuverMarkers();
     }
-    const show = infoBtnArmed && infoUiAvailable();
+    const show = infoBtnArmed && infoUiAvailable() && infoLevel < NAV_INFO.MAX_LEVEL;
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-info", show);
     document.documentElement.classList.toggle("has-info", show);
@@ -3575,6 +3648,10 @@
 
   function armNavInfoIdle(){
     if (infoIdleTimer) window.clearTimeout(infoIdleTimer);
+    if (infoLevel >= NAV_INFO.MAX_LEVEL) {
+      infoIdleTimer = 0;
+      return;
+    }
     infoIdleTimer = window.setTimeout(() => {
       infoIdleTimer = 0;
       resetNavInfo(true);
@@ -3589,7 +3666,7 @@
       infoIdleTimer = 0;
     }
     clearManeuverMarkers();
-    updateNavInfoButton();
+    updateRecenterButton();
   }
 
   function onNavMapTap(){
@@ -3608,10 +3685,15 @@
     infoBtnArmed = true;
     flyover = null;
     if (!following) attachFollow(null);
-    infoLevel = (infoLevel + 1) % 4;
-    if (infoLevel === 3 && isNavigating()) showManeuverMarkers();
+    if (infoLevel >= NAV_INFO.MAX_LEVEL) {
+      updateRecenterButton();
+      armNavInfoIdle();
+      return;
+    }
+    infoLevel += 1;
+    if (isNavigating() && infoLevel > 0) showManeuverMarkers();
     else clearManeuverMarkers();
-    updateNavInfoButton();
+    updateRecenterButton();
     armNavInfoIdle();
   }
   window.__aaInjectGps = function(fix){
