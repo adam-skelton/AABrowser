@@ -8,6 +8,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+.env
+.env.*
+!.env.example
 /app/build/
 *.jks
 *.keystore
