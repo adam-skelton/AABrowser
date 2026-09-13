@@ -49,6 +49,42 @@
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
     #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
+    body.navigating #speedLimitBadge.visible {bottom:calc(var(--aa-inset-bottom) + 108px)}
+    #navHud {display:none; pointer-events:none}
+    body.navigating #navHud {display:block}
+    #navLanes {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); justify-content:center; align-items:flex-end; gap:6px; min-height:52px; padding:8px 18px 10px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden}
+    #navLanes.visible {display:flex !important}
+    html.aa-car #navLanes,body.aa-car #navLanes {left:calc(var(--aa-inset-left) + 100px)}
+    .nav-lane {width:28px; height:44px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
+    .nav-lane.rec {opacity:1}
+    .nav-lane svg {width:26px; height:42px; display:block; fill:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); pointer-events:none}
+    body.has-lanes #navBanner {top:calc(var(--aa-inset-top) + max(74px, env(safe-area-inset-top) + 64px))}
+    html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
+    #navBanner.visible {display:grid !important; gap:8px}
+    #navPrimary {display:flex; align-items:center; gap:14px; min-height:72px; padding:10px 22px 10px 12px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
+    #navIconWrap {position:relative; width:56px; height:56px; flex:0 0 auto}
+    #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
+    #navIcon svg {width:48px; height:48px; fill:#fff}
+    #navClock {display:none}
+    #navClock.visible {display:flex !important}
+    #navIconWrap.clock #navIcon {opacity:0}
+    #navClock svg {width:56px; height:56px; display:block}
+    #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+    #navPrimaryText {font-size:22px; font-weight:700; line-height:1.15; letter-spacing:-.2px}
+    #navThen {display:none; align-items:center; gap:8px; width:max-content; padding:6px 14px 6px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
+    #navThen.visible {display:flex !important}
+    #navThenIcon {width:22px; height:22px; display:flex}
+    #navThenIcon svg {width:22px; height:22px; fill:#fff}
+    #navEtaBar {display:none; position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); min-height:64px; padding:0 20px 0 8px; border-radius:22px; background:#2E3134; color:#fff; align-items:center; gap:10px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto}
+    #navEtaBar.visible {display:flex !important}
+    body.has-recenter #navEtaBar {right:calc(var(--aa-inset-right) + 178px)}
+    body.has-info #navEtaBar {right:calc(var(--aa-inset-right) + 108px)}
+    body.has-info.has-recenter #navEtaBar {right:calc(var(--aa-inset-right) + 196px)}
+    #navExit {width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:32px; line-height:1; font-weight:400; flex:0 0 auto}
+    #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:22px; font-weight:650; letter-spacing:-.2px}
+    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    #navEtaClock {flex:0 0 auto; opacity:.95}
     #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #compassBtn.visible {display:none !important}
     #compassBtn svg {width:38px; height:38px; display:block}
@@ -117,6 +153,7 @@
     body:not(.map-ready) #infoBtn,
     body:not(.map-ready) #compassBtn,
     body:not(.map-ready) #speedLimitBadge,
+    body:not(.map-ready) #navHud,
     body:not(.map-ready) #routeCard,
     body:not(.map-ready) #viewSpecPanel {
       display:none !important;
@@ -279,6 +316,35 @@
     </svg>
   </button>
   <div id="speedLimitBadge" aria-live="polite"></div>
+  <div id="navHud">
+    <div id="navLanes" hidden></div>
+    <div id="navBanner" hidden>
+      <div id="navPrimary">
+        <div id="navIconWrap">
+          <div id="navIcon"></div>
+          <div id="navClock" hidden>
+            <svg viewBox="0 0 56 56" aria-hidden="true">
+              <circle cx="28" cy="28" r="26" fill="#fff"/>
+              <circle id="navClockRing" cx="28" cy="28" r="22" fill="none" stroke="#1A73E8" stroke-width="4" stroke-linecap="round" transform="rotate(-90 28 28)"/>
+            </svg>
+            <span id="navClockNum">10</span>
+          </div>
+        </div>
+        <div id="navPrimaryText"></div>
+      </div>
+      <div id="navThen" hidden>
+        <span>Then</span>
+        <span id="navThenIcon"></span>
+      </div>
+    </div>
+    <div id="navEtaBar" hidden>
+      <button type="button" id="navExit" aria-label="Stop navigation">&times;</button>
+      <div id="navEtaCopy">
+        <span id="navEtaRemain"></span>
+        <span id="navEtaClock"></span>
+      </div>
+    </div>
+  </div>
 
 <script>
   // Injected at GitHub Pages deploy from the GOOGLE_MAPS_API_KEY repo secret.
@@ -1159,9 +1225,10 @@
   window.__aaSubmitSearch = searchDestinationFromQuery;
   window.__aaPickSearchResult = pickSearchResult;
 
-  const ROUTE_FIELDS = ["path", "distanceMeters", "durationMillis", "staticDurationMillis"];
+  const ROUTE_FIELDS = ["path", "distanceMeters", "durationMillis", "staticDurationMillis", "legs"];
   // "speedPaths" is the JS library's shorthand that also populates travelAdvisory.speedReadingIntervals.
   const ROUTE_TRAFFIC_FIELDS = ["speedPaths"];
+  const ROUTE_NAV_EXTRAS = ["HTML_FORMATTED_NAVIGATION_INSTRUCTIONS"];
 
   // One traffic-aware route. `origin` may carry a `heading` (DirectionalLocation) so a
   // reroute departs the way the car is already pointing. The traffic-on-polyline extra
@@ -1176,14 +1243,37 @@
       units: google.maps.UnitSystem.METRIC,
       fields: wantTraffic ? ROUTE_FIELDS.concat(ROUTE_TRAFFIC_FIELDS) : ROUTE_FIELDS
     };
-    if (wantTraffic) request.extraComputations = ["TRAFFIC_ON_POLYLINE"];
+    if (wantTraffic) request.extraComputations = ["TRAFFIC_ON_POLYLINE"].concat(ROUTE_NAV_EXTRAS);
+    else request.extraComputations = ROUTE_NAV_EXTRAS.slice();
     let result;
     try {
       result = await RouteClass.computeRoutes(request);
     } catch (err) {
-      if (!wantTraffic) throw err;
-      console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
-      return requestRoute(origin, destination, false);
+      if (wantTraffic) {
+        console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
+        return requestRoute(origin, destination, false);
+      }
+      if (request.extraComputations && request.extraComputations.length) {
+        console.warn("Nav instruction extra failed, retrying without it", err);
+        request.extraComputations = [];
+        try {
+          result = await RouteClass.computeRoutes(request);
+        } catch (err2) {
+          if (request.fields.includes("legs")) {
+            console.warn("Route legs request failed, retrying without steps", err2);
+            request.fields = request.fields.filter(name => name !== "legs");
+            result = await RouteClass.computeRoutes(request);
+          } else {
+            throw err2;
+          }
+        }
+      } else if (request.fields.includes("legs")) {
+        console.warn("Route legs request failed, retrying without steps", err);
+        request.fields = request.fields.filter(name => name !== "legs");
+        result = await RouteClass.computeRoutes(request);
+      } else {
+        throw err;
+      }
     }
     if (!result.routes || !result.routes.length) throw new Error("Google returned no route.");
     const route = result.routes[0];
@@ -1203,6 +1293,8 @@
     activeRoutePath = driven;
     activeDestination = destination;
     setRouteGeometry(driven);
+    rebuildNavSteps(route, driven, routeCum);
+    ensureGoogleNavSteps(driven, routeCum, destination);
     drawRoute(driven, intervals);
     drawDestination(destination);
     updateRouteInfo(route, destination.name, keepNav);
@@ -1475,8 +1567,502 @@
 
   function formatDistance(meters){
     const km = meters / 1000;
+    if (meters < 1000) return `${Math.max(1, Math.round(meters / 10) * 10)} m`;
     if (km < 10) return `${km.toFixed(1)} km`;
     return `${Math.round(km)} km`;
+  }
+
+  let navSteps = [];
+  let navHudKey = "";
+  const NAV_CLOCK_S = 10;
+  const NAV_LANE_AHEAD_M = 220;
+  const CLOCK_RING = 2 * Math.PI * 22;
+
+  function readLatLng(value){
+    if (!value) return null;
+    const loc = value.latLng || value.location || value;
+    const lat = typeof loc.lat === "function" ? loc.lat() : (loc.lat ?? loc.latitude);
+    const lng = typeof loc.lng === "function" ? loc.lng() : (loc.lng ?? loc.longitude);
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+    return { lat: Number(lat), lng: Number(lng) };
+  }
+
+  function nearestAlongRoute(point, path, cum){
+    if (!point || !path || path.length < 2 || !cum || cum.length !== path.length) return 0;
+    let best = 0, bestD = Infinity;
+    for (let i = 1; i < path.length; i++) {
+      const proj = projectOnSegment(point, path[i - 1], path[i]);
+      const d = distanceMetres(point, proj.point);
+      if (d < bestD) {
+        bestD = d;
+        best = cum[i - 1] + proj.t * (cum[i] - cum[i - 1]);
+      }
+    }
+    return best;
+  }
+
+  function maneuverFamily(maneuver){
+    const m = String(maneuver || "").toUpperCase();
+    if (m.includes("UTURN") || m.includes("REVERSE")) return "uturn";
+    if (m.includes("ROUNDABOUT")) return "roundabout";
+    if (m.includes("LEFT") || m.includes("WEST")) return "left";
+    if (m.includes("RIGHT") || m.includes("EAST")) return "right";
+    if (m.includes("DESTINATION") || m.includes("ARRIVE")) return "dest";
+    return "straight";
+  }
+
+  function typeToManeuver(type){
+    if (type === "left") return "TURN_LEFT";
+    if (type === "right") return "TURN_RIGHT";
+    if (type === "slight-left") return "TURN_SLIGHT_LEFT";
+    if (type === "slight-right") return "TURN_SLIGHT_RIGHT";
+    if (type === "uturn") return "UTURN_LEFT";
+    if (type === "roundabout") return "ROUNDABOUT_LEFT";
+    if (type === "dest") return "DESTINATION";
+    return "STRAIGHT";
+  }
+
+  function maneuverIconSvg(maneuver, size){
+    const fam = maneuverFamily(maneuver);
+    const m = String(maneuver || "").toUpperCase();
+    const s = size || 48;
+    let path = "M24 6l14 16h-9v20h-10V22h-9z";
+    if (fam === "left" && m.includes("SLIGHT")) path = "M38 42V22L22 8h-8v8H8L24 32v10z";
+    else if (fam === "right" && m.includes("SLIGHT")) path = "M10 42V22L26 8h8v8h6L24 32v10z";
+    else if (fam === "left") path = "M38 42V24c0-6-5-10-10-10h-6V6L6 22l16 16v-8h6c2 0 4 1 4 3v9z";
+    else if (fam === "right") path = "M10 42V24c0-6 5-10 10-10h6V6l16 16-16 16v-8h-6c-2 0-4 1-4 3v9z";
+    else if (fam === "uturn") path = "M32 42V22c0-6-5-10-10-10S12 16 12 22h6c0-2.5 2-4.5 4-4.5s4 2 4 4.5v20h6zM16 28l-6 6 6 6V28z";
+    else if (fam === "roundabout") path = "M24 8a14 14 0 1 1-10 24l3.2-3.2A9.5 9.5 0 1 0 24 14v5l11-8-11-8v5z";
+    else if (fam === "dest") path = "M24 4c8.3 0 15 6.5 15 14.6C39 29 24 44 24 44S9 29 9 18.6C9 10.5 15.7 4 24 4zm0 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12z";
+    return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true"><path d="${path}"/></svg>`;
+  }
+
+  function laneGlyph(dir){
+    const d = String(dir || "through").toLowerCase();
+    if (d === "left" || d === "sharp_left") return "M14 40V22c0-5-3-8-8-8H4v-6l14 12-14 12v-6h2c2 0 4 1 4 3v11z";
+    if (d === "slight_left" || d === "merge_to_left") return "M30 42V24L16 10h-6v7H4L20 34v8z";
+    if (d === "right" || d === "sharp_right") return "M18 40V22c0-5 3-8 8-8h2v-6l14 12-14 12v-6h-2c-2 0-4 1-4 3v11z";
+    if (d === "slight_right" || d === "merge_to_right") return "M6 42V24L20 10h6v7h6L18 34v8z";
+    if (d === "reverse") return "M22 42V24c0-5-3-8-7-8s-7 3-7 8h5c0-2 1-3 2-3s2 1 2 3v18h5zM9 30L4 36l5 6V30z";
+    return "M16 6l10 12h-6v20h-8V18H6z";
+  }
+
+  function laneColumnSvg(dirs){
+    const list = (dirs && dirs.length ? dirs : ["through"]).slice(0, 2);
+    const paths = list.map((dir, i) => {
+      const y = list.length === 2 ? (i === 0 ? -6 : 6) : 0;
+      return `<g transform="translate(0 ${y})"><path d="${laneGlyph(dir)}"/></g>`;
+    }).join("");
+    return `<svg viewBox="0 0 32 44" aria-hidden="true">${paths}</svg>`;
+  }
+
+  function shortInstruction(text, maneuver){
+    const raw = String(text || "").replace(/\s+/g, " ").trim();
+    if (!raw) {
+      const fam = maneuverFamily(maneuver);
+      if (fam === "dest") return activeDestination?.name || "Destination";
+      if (fam === "left") return "Turn left";
+      if (fam === "right") return "Turn right";
+      if (fam === "uturn") return "Make a u-turn";
+      if (fam === "roundabout") return "Roundabout";
+      return "Continue";
+    }
+    return raw
+      .replace(/^(Turn slightly left|Turn slightly right|Turn sharp left|Turn sharp right|Turn left|Turn right|Keep left|Keep right|Bear left|Bear right|Merge|Continue|Head|Take the ramp|Take the slip road|At the roundabout)( onto | on | toward | towards | to )?/i, "")
+      .replace(/^onto /i, "")
+      .trim() || raw;
+  }
+
+  function parseTurnLanes(tag){
+    if (!tag) return null;
+    return String(tag).split("|").map(cell => ({
+      dirs: cell.split(";").map(s => s.trim().toLowerCase()).filter(Boolean),
+      rec: false
+    })).filter(lane => lane.dirs.length);
+  }
+
+  function laneMatches(dir, family, maneuver){
+    const d = String(dir || "").toLowerCase();
+    const m = String(maneuver || "").toUpperCase();
+    if (family === "left") return d.includes("left") && !d.includes("right");
+    if (family === "right") return d.includes("right") && !d.includes("left");
+    if (family === "uturn") return d.includes("reverse") || d === "left";
+    if (family === "roundabout") return true;
+    if (m.includes("SLIGHT_LEFT")) return d === "slight_left" || d === "through" || d === "left";
+    if (m.includes("SLIGHT_RIGHT")) return d === "slight_right" || d === "through" || d === "right";
+    return d === "through" || d === "none" || d === "";
+  }
+
+  function markRecommendedLanes(lanes, maneuver){
+    const family = maneuverFamily(maneuver);
+    let any = false;
+    for (const lane of lanes) {
+      lane.rec = lane.dirs.some(dir => laneMatches(dir, family, maneuver));
+      if (lane.rec) any = true;
+    }
+    if (!any && lanes.length) {
+      if (family === "left") lanes[0].rec = true;
+      else if (family === "right") lanes[lanes.length - 1].rec = true;
+      else {
+        const mid = Math.floor((lanes.length - 1) / 2);
+        lanes[mid].rec = true;
+        if (lanes[mid + 1]) lanes[mid + 1].rec = true;
+      }
+    }
+    return lanes;
+  }
+
+  function googleShapeToDir(shape){
+    const s = String(shape || "").toUpperCase().replace(/-/g, "_");
+    if (s.includes("U_TURN") || s.includes("UTURN") || s.includes("REVERSE")) return "reverse";
+    if (s.includes("SLIGHT_LEFT") || s.includes("SLIGHTLY_LEFT")) return "slight_left";
+    if (s.includes("SLIGHT_RIGHT") || s.includes("SLIGHTLY_RIGHT")) return "slight_right";
+    if (s.includes("LEFT")) return "left";
+    if (s.includes("RIGHT")) return "right";
+    return "through";
+  }
+
+  function parseGoogleLanes(step){
+    if (!step) return null;
+    const ni = step.navigationInstruction || {};
+    const raw = step.lanes || step.laneGuidance || ni.lanes || step.travelAdvisory?.lanes;
+    if (!raw || !raw.length) return null;
+    const lanes = [];
+    for (const lane of raw) {
+      if (!lane) continue;
+      if (typeof lane === "string") {
+        const dirs = lane.split(";").map(googleShapeToDir);
+        if (dirs.length) lanes.push({ dirs, rec: false });
+        continue;
+      }
+      const shapes = lane.laneDirections || lane.directions || lane.laneShapes || null;
+      const dirs = [];
+      let rec = !!(lane.isRecommended || lane.recommended);
+      if (Array.isArray(shapes) && shapes.length) {
+        for (const item of shapes) {
+          if (item == null) continue;
+          if (typeof item === "string") dirs.push(googleShapeToDir(item));
+          else {
+            dirs.push(googleShapeToDir(item.laneShape || item.shape || item.direction || item.maneuver));
+            if (item.isRecommended || item.recommended) rec = true;
+          }
+        }
+      } else if (lane.laneShape || lane.shape) {
+        dirs.push(googleShapeToDir(lane.laneShape || lane.shape));
+      }
+      if (dirs.length) lanes.push({ dirs, rec });
+    }
+    return lanes.length >= 2 ? lanes : null;
+  }
+
+  function stripNavHtml(text){
+    return String(text || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function stepManeuver(step){
+    const ni = step && step.navigationInstruction;
+    return String((step && (step.maneuver || step.maneuverType)) || (ni && ni.maneuver) || "STRAIGHT").toUpperCase();
+  }
+
+  function stepInstructions(step){
+    const ni = step && step.navigationInstruction;
+    const loc = step && step.localizedValues;
+    return stripNavHtml(
+      (step && (step.instructions || step.instruction)) ||
+      (ni && ni.instructions) ||
+      (loc && loc.instructions) ||
+      ""
+    );
+  }
+
+  function stepStartPoint(step){
+    if (!step) return null;
+    return readLatLng(step.startLocation) ||
+      readLatLng(step.start_location) ||
+      (step.path && step.path[0] ? readLatLng(step.path[0]) : null) ||
+      (step.lat_lngs && step.lat_lngs[0] ? readLatLng(step.lat_lngs[0]) : null);
+  }
+
+  function googleStepsFromLegs(legs, path, cum){
+    const out = [];
+    for (const leg of legs || []) {
+      for (const step of leg.steps || []) {
+        const start = stepStartPoint(step);
+        const m = start ? nearestAlongRoute(start, path, cum) : (out.length ? out[out.length - 1].m : 0);
+        out.push({
+          m,
+          maneuver: stepManeuver(step),
+          instructions: stepInstructions(step),
+          lanes: parseGoogleLanes(step),
+          source: "google"
+        });
+      }
+    }
+    out.sort((a, b) => a.m - b.m);
+    return out;
+  }
+
+  function stepsFromGoogleRoute(route, path, cum){
+    try {
+      return googleStepsFromLegs(route && route.legs, path, cum);
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async function stepsFromDirections(origin, destination, path, cum){
+    if (!origin || !destination || !google || !google.maps) return [];
+    try {
+      if (!google.maps.DirectionsService) await google.maps.importLibrary("maps");
+      if (!google.maps.DirectionsService) return [];
+      const svc = new google.maps.DirectionsService();
+      const result = await svc.route({
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.METRIC,
+        region: "NZ",
+        drivingOptions: { departureTime: new Date() }
+      });
+      const legs = result && result.routes && result.routes[0] && result.routes[0].legs;
+      return googleStepsFromLegs(legs, path, cum);
+    } catch (err) {
+      console.warn("Directions turn steps unavailable", err);
+      return [];
+    }
+  }
+
+  function googleGuidanceOk(steps){
+    return (steps || []).some(step => {
+      if (step.instructions) return true;
+      const m = String(step.maneuver || "");
+      return m && m !== "STRAIGHT" && m !== "MANEUVER_UNSPECIFIED" && m !== "DEPART" && m !== "NAME_CHANGE";
+    });
+  }
+
+  function appendDestinationStep(steps, destM, destName){
+    if (!steps.length || Math.abs((steps[steps.length - 1].m || 0) - destM) > 40) {
+      steps.push({ m: destM, maneuver: "DESTINATION", instructions: destName, source: steps.length ? steps[0].source : "google" });
+    }
+    return steps;
+  }
+
+  let navStepsFromGoogle = false;
+
+  function rebuildNavSteps(route, path, cum){
+    navHudKey = "";
+    const destM = cum && cum.length ? cum[cum.length - 1] : 0;
+    const destName = (activeDestination && activeDestination.name) || "Destination";
+    const google = stepsFromGoogleRoute(route, path, cum);
+    if (googleGuidanceOk(google)) {
+      navStepsFromGoogle = true;
+      navSteps = appendDestinationStep(google, destM, destName);
+      return;
+    }
+    navStepsFromGoogle = false;
+    navSteps = appendDestinationStep(routeManeuvers().map(item => ({
+      m: item.m,
+      maneuver: typeToManeuver(item.type),
+      instructions: "",
+      source: "geometry"
+    })), destM, destName);
+  }
+
+  async function ensureGoogleNavSteps(path, cum, destination){
+    if (navStepsFromGoogle || !path || path.length < 2) return;
+    const dest = destination || path[path.length - 1];
+    const google = await stepsFromDirections(path[0], dest, path, cum);
+    if (!googleGuidanceOk(google)) return;
+    if (activeRoutePath !== path) return;
+    const destM = cum && cum.length ? cum[cum.length - 1] : 0;
+    const destName = (destination && destination.name) || "Destination";
+    navStepsFromGoogle = true;
+    navSteps = appendDestinationStep(google, destM, destName);
+    updateNavHud();
+  }
+
+  function synthLanes(maneuver){
+    const family = maneuverFamily(maneuver);
+    const n = 4;
+    const lanes = [];
+    for (let i = 0; i < n; i++) {
+      let dir = "through";
+      if (family === "left" && i === 0) dir = "left";
+      else if (family === "right" && i === n - 1) dir = "right";
+      else if (family === "left" && i === 1 && String(maneuver).includes("SLIGHT")) dir = "slight_left";
+      else if (family === "right" && i === n - 2) dir = "slight_right";
+      lanes.push({ dirs: [dir], rec: false });
+    }
+    return markRecommendedLanes(lanes, maneuver);
+  }
+
+  function matchTurnLanes(point, heading){
+    if (!point || !speedLimit.ways.length) return null;
+    let best = null, bestD = 28;
+    const latTol = 0.0012, lngTol = 0.0016;
+    for (const way of speedLimit.ways) {
+      if (!way.turnLanes && !(way.lanes > 1)) continue;
+      const pts = way.pts;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        if (Math.abs(a.lat - point.lat) > latTol && Math.abs(b.lat - point.lat) > latTol) continue;
+        if (Math.abs(a.lng - point.lng) > lngTol && Math.abs(b.lng - point.lng) > lngTol) continue;
+        const d = distanceMetres(point, projectOnSegment(point, a, b).point);
+        if (d >= bestD) continue;
+        if (Number.isFinite(heading)) {
+          const diff = angleDelta(bearingDegrees(a, b), heading);
+          if (Math.min(diff, 180 - diff) > 50) continue;
+        }
+        bestD = d;
+        best = way;
+      }
+    }
+    return best;
+  }
+
+  function upcomingNavSteps(progressM){
+    const m = Number.isFinite(progressM) ? progressM : 0;
+    const ahead = navSteps.filter(step => step.m > m + 12);
+    return ahead.length ? ahead : navSteps.slice(-1);
+  }
+
+  function hideNavHud(){
+    const lanes = document.getElementById("navLanes");
+    const banner = document.getElementById("navBanner");
+    const thenEl = document.getElementById("navThen");
+    const eta = document.getElementById("navEtaBar");
+    const clock = document.getElementById("navClock");
+    const wrap = document.getElementById("navIconWrap");
+    if (lanes) { lanes.hidden = true; lanes.classList.remove("visible"); lanes.innerHTML = ""; lanes.dataset.sig = ""; }
+    if (banner) { banner.hidden = true; banner.classList.remove("visible"); }
+    if (thenEl) { thenEl.hidden = true; thenEl.classList.remove("visible"); }
+    if (eta) { eta.hidden = true; eta.classList.remove("visible"); }
+    if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
+    if (wrap) wrap.classList.remove("clock");
+    document.body.classList.remove("has-lanes");
+    document.documentElement.classList.remove("has-lanes");
+    navHudKey = "";
+  }
+
+  function renderLaneBar(lanes){
+    const host = document.getElementById("navLanes");
+    if (!host) return;
+    if (!lanes || lanes.length < 2) {
+      host.hidden = true;
+      host.classList.remove("visible");
+      host.innerHTML = "";
+      document.body.classList.remove("has-lanes");
+      document.documentElement.classList.remove("has-lanes");
+      return;
+    }
+    const sig = lanes.map(l => l.dirs.join(";") + (l.rec ? "*" : "")).join("|");
+    if (host.dataset.sig === sig && host.classList.contains("visible")) return;
+    host.dataset.sig = sig;
+    host.innerHTML = lanes.map(lane => `<div class="nav-lane${lane.rec ? " rec" : ""}">${laneColumnSvg(lane.dirs)}</div>`).join("");
+    host.hidden = false;
+    host.classList.add("visible");
+    document.body.classList.add("has-lanes");
+    document.documentElement.classList.add("has-lanes");
+  }
+
+  function updateNavHud(){
+    if (!isNavigating() || !activeRoutePath.length) {
+      hideNavHud();
+      return;
+    }
+    const total = routeCum.length ? routeCum[routeCum.length - 1] : 0;
+    const progressM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
+    const remainM = Math.max(0, total - progressM);
+    const durationMs = Number(activeRoute?.durationMillis) || 0;
+    const remainMs = total > 0 && durationMs > 0 ? remainM / total * durationMs : remainM / Math.max(speedKalman.speed, 8) * 1000;
+    const eta = new Date(Date.now() + remainMs);
+    const remainEl = document.getElementById("navEtaRemain");
+    const clockEl = document.getElementById("navEtaClock");
+    const etaBar = document.getElementById("navEtaBar");
+    if (etaBar) {
+      etaBar.hidden = false;
+      etaBar.classList.add("visible");
+    }
+    if (remainEl) remainEl.textContent = `${formatDuration(remainMs)} · ${formatDistance(remainM)}`;
+    if (clockEl) clockEl.textContent = formatTime(eta);
+
+    const ahead = upcomingNavSteps(progressM);
+    const current = ahead[0];
+    const next = ahead[1];
+    const banner = document.getElementById("navBanner");
+    const icon = document.getElementById("navIcon");
+    const text = document.getElementById("navPrimaryText");
+    const thenEl = document.getElementById("navThen");
+    const thenIcon = document.getElementById("navThenIcon");
+    const clock = document.getElementById("navClock");
+    const clockNum = document.getElementById("navClockNum");
+    const clockRing = document.getElementById("navClockRing");
+    const wrap = document.getElementById("navIconWrap");
+    if (banner && current) {
+      banner.hidden = false;
+      banner.classList.add("visible");
+      const title = shortInstruction(current.instructions, current.maneuver);
+      if (text && text.textContent !== title) text.textContent = title;
+      const iconKey = current.maneuver;
+      if (icon && icon.dataset.maneuver !== iconKey) {
+        icon.dataset.maneuver = iconKey;
+        icon.innerHTML = maneuverIconSvg(current.maneuver, 48);
+      }
+      if (next && thenEl && thenIcon && maneuverFamily(next.maneuver) !== "straight") {
+        thenEl.hidden = false;
+        thenEl.classList.add("visible");
+        if (thenIcon.dataset.maneuver !== next.maneuver) {
+          thenIcon.dataset.maneuver = next.maneuver;
+          thenIcon.innerHTML = maneuverIconSvg(next.maneuver, 22);
+        }
+      } else if (thenEl) {
+        thenEl.hidden = true;
+        thenEl.classList.remove("visible");
+      }
+      const dist = Math.max(0, current.m - progressM);
+      const speed = speedKalman.speed;
+      const etaS = dist / Math.max(speed, 0.35);
+      const showClock = speed > 0.8 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
+      if (clock && wrap && clockNum) {
+        if (showClock) {
+          const secs = Math.max(1, Math.ceil(etaS));
+          clock.hidden = false;
+          clock.classList.add("visible");
+          wrap.classList.add("clock");
+          if (clockNum.textContent !== String(secs)) clockNum.textContent = String(secs);
+          if (clockRing) {
+            const frac = clamp(etaS / NAV_CLOCK_S, 0, 1);
+            clockRing.setAttribute("stroke-dasharray", String(CLOCK_RING));
+            clockRing.setAttribute("stroke-dashoffset", String((1 - frac) * CLOCK_RING));
+          }
+        } else {
+          clock.hidden = true;
+          clock.classList.remove("visible");
+          wrap.classList.remove("clock");
+        }
+      }
+      const fam = maneuverFamily(current.maneuver);
+      const showLanes = dist < NAV_LANE_AHEAD_M && fam !== "dest" && (fam !== "straight" || dist < 80);
+      if (showLanes) {
+        const turnPt = pointAtMetres(activeRoutePath, routeCum, current.m).point;
+        const googleLanes = current.lanes && current.lanes.length >= 2
+          ? (current.lanes.some(l => l.rec) ? current.lanes : markRecommendedLanes(current.lanes, current.maneuver))
+          : null;
+        const osm = googleLanes ? null : matchTurnLanes(turnPt, puck.heading);
+        let osmLanes = osm && osm.turnLanes ? parseTurnLanes(osm.turnLanes) : null;
+        if (!osmLanes && osm && osm.lanes > 1) {
+          osmLanes = Array.from({ length: osm.lanes }, () => ({ dirs: ["through"], rec: false }));
+        }
+        const lanes = googleLanes || (osmLanes ? markRecommendedLanes(osmLanes, current.maneuver) : synthLanes(current.maneuver));
+        renderLaneBar(lanes);
+      } else {
+        renderLaneBar(null);
+      }
+    } else if (banner) {
+      banner.hidden = true;
+      banner.classList.remove("visible");
+      renderLaneBar(null);
+    }
   }
 
   function updateRouteInfo(route, destinationName, keepNav){
@@ -1547,6 +2133,7 @@
     syncCarLod();
     updateRecenterButton();
     updateSpeedLimitBadge();
+    updateNavHud();
     setMessage("Navigation started.");
   }
 
@@ -1569,6 +2156,7 @@
     traceRec.dest = null;
     document.body.classList.remove("has-route", "navigating");
     document.documentElement.classList.remove("has-route", "navigating");
+    hideNavHud();
     setMapLabels(false);
     hideUserCar();
     hideHeadingArrow();
@@ -1936,7 +2524,7 @@
     updateSpeedLimitBadge();
     if (!path || path.length < 2) return;
     const pts = downsamplePath(path, 80).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
-    const query = `[out:json][timeout:20];way["highway"]["maxspeed"](around:20,${pts});out geom;`;
+    const query = `[out:json][timeout:22];(way["highway"]["maxspeed"](around:20,${pts});way["highway"]["turn:lanes"](around:20,${pts});way["highway"]["turn:lanes:forward"](around:20,${pts}););out geom;`;
     try {
       const res = await fetch(OVERPASS_URL, {
         method: "POST",
@@ -1955,9 +2543,18 @@
   function ingestSpeedLimitWays(elements){
     const ways = [];
     for (const el of elements || []) {
-      const kmh = parseMaxspeed(el.tags && el.tags.maxspeed);
-      if (!kmh || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
-      ways.push({ kmh, pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon })) });
+      const tags = el.tags || {};
+      const kmh = parseMaxspeed(tags.maxspeed);
+      const turnLanes = tags["turn:lanes"] || tags["turn:lanes:forward"] || "";
+      const laneCount = parseInt(tags.lanes, 10);
+      if (!Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+      if (!kmh && !turnLanes && !(laneCount > 0)) continue;
+      ways.push({
+        kmh: kmh || 0,
+        turnLanes,
+        lanes: Number.isFinite(laneCount) && laneCount > 0 ? laneCount : 0,
+        pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon }))
+      });
     }
     return ways;
   }
@@ -1995,6 +2592,7 @@
     let best = null, bestD = SPEED_LIMIT_MATCH_M;
     const latTol = 0.0012, lngTol = 0.0016; // ~130 m coarse reject before projecting
     for (const way of speedLimit.ways) {
+      if (!way.kmh) continue;
       const pts = way.pts;
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -2008,7 +2606,7 @@
           if (Math.min(diff, 180 - diff) > 40) continue;
         }
         bestD = d;
-        best = way.kmh;
+        best = way;
       }
     }
     return best;
@@ -2020,8 +2618,8 @@
     const heading = fix.bearingOk ? fix.heading : (Number.isFinite(puck.heading) ? puck.heading : NaN);
     const hit = matchSpeedLimit(fix, heading);
     const now = performance.now();
-    if (hit != null) {
-      speedLimit.current = hit;
+    if (hit != null && hit.kmh) {
+      speedLimit.current = hit.kmh;
       speedLimit.lastHitMs = now;
     } else if (speedLimit.lastHitMs && now - speedLimit.lastHitMs > 10000) {
       speedLimit.current = null;
@@ -2141,6 +2739,7 @@
     if (following) applyFollowCamera(dtEase, now);
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
     updateSpeedLimitBadge();
+    updateNavHud();
     updateNavInfoButton();
   }
 
@@ -3566,6 +4165,7 @@
     };
     apply(document.documentElement);
     apply(document.body);
+    updateNavHud();
   };
   // Host accelerometer: world-frame horizontal acceleration (m/s^2, East/North).
   window.__aaInjectMotion = function(east, north){
@@ -3835,6 +4435,11 @@
     event.stopPropagation();
     clearNavigation();
   });
+  document.getElementById("navExit").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearNavigation();
+  });
   document.getElementById("routeGo").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -3864,7 +4469,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navHud, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay"));
   }
 
   let mapDragStart = null;
