@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Gravity
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.Surface
@@ -349,8 +350,9 @@ class CarWebViewHost(
             container.addView(
                 overlay,
                 FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
                 )
             )
             bootOverlay = overlay

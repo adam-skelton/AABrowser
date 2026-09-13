@@ -6,11 +6,11 @@
   <title>Auckland 3D Route Demo</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
-    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0)}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:auto}
+    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
-    .gmaps-pin svg {width:96px; height:128px; display:block; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45))}
+    .gmaps-pin svg {width:96px; height:128px; display:block; overflow:visible; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45)); shape-rendering:geometricPrecision}
     .gmaps-pin::after {content:""; position:absolute; left:50%; top:34%; width:108px; height:108px; margin:-54px 0 0 -54px; border-radius:50%; background:rgba(66,133,244,.22); animation:gmapsRipple 1.4s ease-out infinite; z-index:-1}
     .gmaps-shadow {width:48px; height:12px; border-radius:50%; background:rgba(0,0,0,.45); animation:gmapsShadow 1.1s ease-in-out infinite}
     .gmaps-status {color:#fff; font-weight:650; letter-spacing:.2px; font-size:15px; opacity:.88; max-width:70%; text-align:center}
@@ -65,24 +65,25 @@
     #navPrimary {display:flex; align-items:center; gap:14px; min-height:72px; padding:10px 22px 10px 12px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
     #navIconWrap {position:relative; width:56px; height:56px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
-    #navIcon svg {width:48px; height:48px; fill:#fff}
+    #navIcon svg {width:44px; height:44px; display:block; overflow:visible}
+    #navIcon svg path {fill:#fff}
+    #navPrimaryCopy {min-width:0; display:flex; flex-direction:column; gap:1px}
+    #navPrimaryDist {font-size:26px; font-weight:800; letter-spacing:-.4px; line-height:1.05; font-variant-numeric:tabular-nums}
     #navClock {display:none}
     #navClock.visible {display:flex !important}
     #navIconWrap.clock #navIcon {opacity:0}
     #navClock svg {width:56px; height:56px; display:block}
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
-    #navPrimaryText {font-size:22px; font-weight:700; line-height:1.15; letter-spacing:-.2px}
+    #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95}
     #navThen {display:none; align-items:center; gap:8px; width:max-content; padding:6px 14px 6px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
     #navThenIcon {width:22px; height:22px; display:flex}
-    #navThenIcon svg {width:22px; height:22px; fill:#fff}
-    #navEtaBar {display:none; position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); min-height:64px; padding:0 20px 0 8px; border-radius:22px; background:#2E3134; color:#fff; align-items:center; gap:10px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto}
+    #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible}
+    #navThenIcon svg path {fill:#fff}
+    #navEtaBar {display:none; position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); width:300px; max-width:min(300px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 120px)); min-height:52px; padding:0 16px 0 4px; border-radius:26px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box}
     #navEtaBar.visible {display:flex !important}
-    body.has-recenter #navEtaBar {right:calc(var(--aa-inset-right) + 178px)}
-    body.has-info #navEtaBar {right:calc(var(--aa-inset-right) + 108px)}
-    body.has-info.has-recenter #navEtaBar {right:calc(var(--aa-inset-right) + 196px)}
-    #navExit {width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:32px; line-height:1; font-weight:400; flex:0 0 auto}
-    #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:22px; font-weight:650; letter-spacing:-.2px}
+    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
+    #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:18px; font-weight:650; letter-spacing:-.2px}
     #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #navEtaClock {flex:0 0 auto; opacity:.95}
     #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -192,12 +193,19 @@
   <div id="map"></div>
   <div id="mapLoader" aria-live="polite">
     <div class="gmaps-pin" aria-hidden="true">
-      <svg viewBox="0 0 92.3 132.3" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
-        <path fill="#EA4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
-        <path fill="#4285F4" d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3"/>
-        <path fill="#FBBC04" d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3"/>
-        <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
+      <svg viewBox="0 0 96 128" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="gmapsDrop">
+            <path d="M48 6c18.8 0 34 15.5 34 36.2C82 67.4 48 122 48 122S14 67.4 14 42.2C14 21.5 29.2 6 48 6z"/>
+          </clipPath>
+        </defs>
+        <g clip-path="url(#gmapsDrop)" shape-rendering="geometricPrecision">
+          <path fill="#EA4335" stroke="#EA4335" stroke-width="1.2" d="M48 6C31.4 6 17.6 17.6 15 33.2L48 42.2V6z"/>
+          <path fill="#FBBC05" stroke="#FBBC05" stroke-width="1.2" d="M15 33.2C14.3 36 14 39.1 14 42.2 14 58.6 26.2 82.2 48 122V42.2L15 33.2z"/>
+          <path fill="#34A853" stroke="#34A853" stroke-width="1.2" d="M48 42.2V122c21.8-39.8 34-63.4 34-79.8 0-3.1-.3-6.2-1-9L48 42.2z"/>
+          <path fill="#4285F4" stroke="#4285F4" stroke-width="1.2" d="M48 6v36.2l33 9C78.4 17.6 64.6 6 48 6z"/>
+          <circle cx="48" cy="42.2" r="15.2" fill="#fff"/>
+        </g>
       </svg>
     </div>
     <div class="gmaps-shadow"></div>
@@ -346,7 +354,10 @@
             <span id="navClockNum">10</span>
           </div>
         </div>
-        <div id="navPrimaryText"></div>
+        <div id="navPrimaryCopy">
+          <div id="navPrimaryDist"></div>
+          <div id="navPrimaryText"></div>
+        </div>
       </div>
       <div id="navThen" hidden>
         <span>Then</span>
@@ -367,12 +378,6 @@
   const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
   // Cloud-based 3D Hybrid style: roads + locality labels, POIs/transit/landmarks off.
   const GOOGLE_MAPS_MAP_ID = "a6855643070a44926567285b";
-  try {
-    if (sessionStorage.getItem("aaMapRevealed") === "1") {
-      document.body.classList.add("map-ready");
-      document.documentElement.classList.add("map-ready");
-    }
-  } catch (err) {}
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
@@ -463,6 +468,7 @@
     RECENTER_ZOOM_EXTRA: 0.12,
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
+    MIN_DRIVE_RANGE: 125,   // parked extra-zoom-in must not dive inside this on follow / re-center
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
     HOLD_MPS: 2.0           // ...and the course keeps updating while latched only above this
   };
@@ -632,6 +638,13 @@
     { name: "Auckland Zoo", lat: -36.864250, lng: 174.719620 },
     { name: "Cornwall Park", lat: -36.897820, lng: 174.785000 },
     { name: "Wynyard Quarter", lat: -36.841990, lng: 174.757200 }
+  ];
+  const CUE_TEST_CASES = [
+    { origin: { name: "Richmond Rd", lat: -36.85755, lng: 174.74335 }, dest: { name: "Dryden St", lat: -36.85920, lng: 174.74760 } },
+    { origin: { name: "Williamson Ave", lat: -36.85835, lng: 174.75055 }, dest: { name: "Crummer Rd", lat: -36.86085, lng: 174.75355 } },
+    { origin: { name: "Khyber Pass Rd", lat: -36.86635, lng: 174.77085 }, dest: { name: "Middleton Rd", lat: -36.86935, lng: 174.77540 } },
+    { origin: { name: "Dominion Rd", lat: -36.87485, lng: 174.75855 }, dest: { name: "Ewington Ave", lat: -36.87755, lng: 174.76190 } },
+    { origin: { name: "Ponsonby Rd", lat: -36.85620, lng: 174.74710 }, dest: { name: "Pollen St", lat: -36.85840, lng: 174.74980 } }
   ];
 
   let map3d, Polyline3DElement, Marker3DElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
@@ -1588,6 +1601,12 @@
     return `${Math.round(km)} km`;
   }
 
+  function formatTurnDistance(meters){
+    const m = Math.max(0, meters);
+    if (m < 1000) return `${Math.max(0, Math.round(m / 10) * 10)} m`;
+    return formatDistance(m);
+  }
+
   let navSteps = [];
   let navHudKey = "";
   let osmSideStreets = [];
@@ -1646,34 +1665,47 @@
     const fam = maneuverFamily(maneuver);
     const m = String(maneuver || "").toUpperCase();
     const s = size || 48;
-    let path = "M24 6l14 16h-9v20h-10V22h-9z";
-    if (fam === "left" && m.includes("SLIGHT")) path = "M38 42V22L22 8h-8v8H8L24 32v10z";
-    else if (fam === "right" && m.includes("SLIGHT")) path = "M10 42V22L26 8h8v8h6L24 32v10z";
-    else if (fam === "left") path = "M38 42V24c0-6-5-10-10-10h-6V6L6 22l16 16v-8h6c2 0 4 1 4 3v9z";
-    else if (fam === "right") path = "M10 42V24c0-6 5-10 10-10h6V6l16 16-16 16v-8h-6c-2 0-4 1-4 3v9z";
-    else if (fam === "uturn") path = "M32 42V22c0-6-5-10-10-10S12 16 12 22h6c0-2.5 2-4.5 4-4.5s4 2 4 4.5v20h6zM16 28l-6 6 6 6V28z";
-    else if (fam === "roundabout") path = "M24 8a14 14 0 1 1-10 24l3.2-3.2A9.5 9.5 0 1 0 24 14v5l11-8-11-8v5z";
-    else if (fam === "dest") path = "M24 4c8.3 0 15 6.5 15 14.6C39 29 24 44 24 44S9 29 9 18.6C9 10.5 15.7 4 24 4zm0 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12z";
+    let path = "M24 5l13 15h-8v23H19V20h-8z";
+    if (fam === "left" && m.includes("SLIGHT")) path = "M30 42V23L17 10h-7v8H4l16 16v8z";
+    else if (fam === "right" && m.includes("SLIGHT")) path = "M18 42V23L31 10h7v8h6L28 34v8z";
+    else if (fam === "left") path = "M34 42V24c0-4.8-3.8-8.5-8.5-8.5H20V9L7 22l13 13v-6.5h5.5c1.9 0 3.5 1.4 3.5 3.5v10z";
+    else if (fam === "right") path = "M14 42V24c0-4.8 3.8-8.5 8.5-8.5H28V9l13 13-13 13v-6.5h-5.5c-1.9 0-3.5 1.4-3.5 3.5v10z";
+    else if (fam === "uturn") path = "M30 42V23.5c0-5.2-4.3-9.5-9.5-9.5S11 18.3 11 23.5h6c0-1.9 1.6-3.5 3.5-3.5s3.5 1.6 3.5 3.5V42h6zM16 29l-7 7 7 7V29z";
+    else if (fam === "roundabout") path = "M24 8a14 14 0 1 1-9.9 23.9l3.6-3.6A9 9 0 1 0 24 15v5l10-7.5L24 5v3z";
+    else if (fam === "dest") path = "M24 6c7.7 0 14 6.1 14 13.8C38 28.5 24 42 24 42S10 28.5 10 19.8C10 12.1 16.3 6 24 6zm0 18.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z";
     return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true"><path d="${path}"/></svg>`;
   }
 
   function laneGlyph(dir){
     const d = String(dir || "through").toLowerCase();
-    if (d === "left" || d === "sharp_left") return "M14 40V22c0-5-3-8-8-8H4v-6l14 12-14 12v-6h2c2 0 4 1 4 3v11z";
-    if (d === "slight_left" || d === "merge_to_left") return "M30 42V24L16 10h-6v7H4L20 34v8z";
-    if (d === "right" || d === "sharp_right") return "M18 40V22c0-5 3-8 8-8h2v-6l14 12-14 12v-6h-2c-2 0-4 1-4 3v11z";
-    if (d === "slight_right" || d === "merge_to_right") return "M6 42V24L20 10h6v7h6L18 34v8z";
-    if (d === "reverse") return "M22 42V24c0-5-3-8-7-8s-7 3-7 8h5c0-2 1-3 2-3s2 1 2 3v18h5zM9 30L4 36l5 6V30z";
-    return "M16 6l10 12h-6v20h-8V18H6z";
+    if (d === "left" || d === "sharp_left") return "M18 40V22c0-4 2.8-7 7-7h2V9L13 21l14 12v-6h-2c-2 0-4 1.2-4 3.5V40z";
+    if (d === "slight_left" || d === "merge_to_left") return "M28 40V24L16 12h-6v7H5l15 15v6z";
+    if (d === "right" || d === "sharp_right") return "M14 40V22c0-4 2.8-7 7-7h2V9l14 12-14 12v-6h-2c-2 0-4 1.2-4 3.5V40z";
+    if (d === "slight_right" || d === "merge_to_right") return "M4 40V24L16 12h6v7h5L12 34v6z";
+    if (d === "reverse") return "M22 40V24c0-4.5-3.2-8-7.5-8S7 19.5 7 24h5c0-1.7 1.4-3 3-3s3 1.3 3 3v16h4zM12 28L6 34l6 6V28z";
+    return "M16 6l11 13h-7v21h-8V19H5z";
+  }
+
+  function dirToManeuver(dir){
+    const d = String(dir || "").toLowerCase();
+    if (d.includes("slight") && d.includes("left")) return "TURN_SLIGHT_LEFT";
+    if (d.includes("slight") && d.includes("right")) return "TURN_SLIGHT_RIGHT";
+    if (d.includes("left") || d.includes("west")) return "TURN_LEFT";
+    if (d.includes("right") || d.includes("east")) return "TURN_RIGHT";
+    if (d.includes("reverse") || d.includes("uturn")) return "UTURN_LEFT";
+    return "STRAIGHT";
   }
 
   function laneColumnSvg(dirs){
     const list = (dirs && dirs.length ? dirs : ["through"]).slice(0, 2);
     const paths = list.map((dir, i) => {
-      const y = list.length === 2 ? (i === 0 ? -6 : 6) : 0;
-      return `<g transform="translate(0 ${y})"><path d="${laneGlyph(dir)}"/></g>`;
+      const dual = list.length === 2;
+      const y = dual ? (i === 0 ? -8 : 8) : 0;
+      const inner = maneuverIconSvg(dirToManeuver(dir), 48).replace(/<\/?svg[^>]*>/g, "");
+      const scale = dual ? 0.82 : 1;
+      return `<g transform="translate(24 24) scale(${scale}) translate(-24 ${y - 24})">${inner}</g>`;
     }).join("");
-    return `<svg viewBox="0 0 32 44" aria-hidden="true">${paths}</svg>`;
+    return `<svg viewBox="0 0 48 48" aria-hidden="true">${paths}</svg>`;
   }
 
   function shortInstruction(text, maneuver){
@@ -2018,6 +2050,7 @@
     const banner = document.getElementById("navBanner");
     const icon = document.getElementById("navIcon");
     const text = document.getElementById("navPrimaryText");
+    const distEl = document.getElementById("navPrimaryDist");
     const thenEl = document.getElementById("navThen");
     const thenIcon = document.getElementById("navThenIcon");
     const clock = document.getElementById("navClock");
@@ -2046,6 +2079,10 @@
         thenEl.classList.remove("visible");
       }
       const dist = Math.max(0, current.m - progressM);
+      if (distEl) {
+        const label = formatTurnDistance(dist);
+        if (distEl.textContent !== label) distEl.textContent = label;
+      }
       const speed = speedKalman.speed;
       const etaS = dist / Math.max(speed, 0.35);
       const showClock = speed > 0.8 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
@@ -2342,7 +2379,9 @@
       }
       return;
     }
-    const ok = played >= test.decoyM + TURN_CUE.AFTER_DECOY_M - 2 && played < test.turnM - TURN_CUE.LATE_M && test.side === "right";
+    const expect = test.expectSide || "right";
+    const afterDecoy = Number.isFinite(test.decoyM) ? test.decoyM + TURN_CUE.AFTER_DECOY_M - 2 : 0;
+    const ok = played >= afterDecoy && played < test.turnM - TURN_CUE.LATE_M && test.side === expect;
     test.liveOk = ok;
     setTurnCueHud(
       test.logicLine,
@@ -3436,6 +3475,7 @@
     cam.zoom += (zoomBandForSpeed(cam.speedLP) - cam.zoom) * easeK(dtEase, FOLLOW.ZOOM_TAU);
     let tgtRange = cam.userRange != null ? cam.userRange
       : view.range * (view.breathe ? rangeFactorForZoom(cam.zoom) : 1);
+    if (cam.userRange == null && view.breathe) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
     let tiltTarget = view.tilt;
     // Heading-up latch (Vela): the camera takes the car's course only once the car is
     // genuinely moving; parked, it holds where it is instead of spinning with GPS noise.
@@ -4025,107 +4065,106 @@
     try { map3d.append(item); } catch (err) {}
   }
 
-  function startTurnCueTest(){
+  async function startTurnCueTest(){
     if (demoKind === "turncue" && isDemoRunning()) {
       stopDemo();
       clearNavigation();
       setMessage("Turn cue test stopped.");
       return;
     }
-    if (!map3d) {
+    if (!map3d || !RouteClass) {
       setMessage("Map is not ready.");
       return;
     }
     if (isDemoRunning()) stopDemo();
     if (watchId !== null) stopGps();
-    clearNavigation();
     resumeNavAudio();
-
     const logic = evaluateTurnCueLogic();
-    const origin = currentGpsPoint || AUCKLAND;
-    const heading = Number.isFinite(origin.heading) ? origin.heading : 12;
-    const start = { lat: origin.lat, lng: origin.lng };
-    const decoyM = 90;
-    const turnM = 180;
-    const afterM = 90;
-    const path = [];
-    for (let m = 0; m <= turnM; m += 8) path.push(lookAhead(start, heading, m));
-    const turnPt = lookAhead(start, heading, turnM);
-    for (let m = 8; m <= afterM; m += 8) path.push(lookAhead(turnPt, heading + 90, m));
-    const dest = path[path.length - 1];
-    const decoyPt = lookAhead(start, heading, decoyM);
-    const decoyPath = [decoyPt];
-    for (let m = 10; m <= 90; m += 10) decoyPath.push(lookAhead(decoyPt, heading + 90, m));
+    const logicLine = logic.pass
+      ? `Logic: PASS — wait until ${Math.round(logic.afterDecoy)} m (naive ${Math.round(logic.naive)} m)`
+      : `Logic: FAIL — played at ${logic.played == null ? "never" : Math.round(logic.played) + " m"}`;
+    showTurnCueHud();
+    setTurnCueHud(logicLine, "Live: routing on real streets…", "Google route + OSM side street", logic.pass, null);
+    setMessage("Turn cue test: routing on real Auckland streets...");
 
-    activeRoute = {
-      durationMillis: ((turnM + afterM) / 10) * 1000,
-      distanceMeters: turnM + afterM,
-      staticDurationMillis: ((turnM + afterM) / 10) * 1000
-    };
-    activeDestination = { name: "Second Ave", lat: dest.lat, lng: dest.lng };
-    activeRoutePath = path;
-    setRouteGeometry(path);
-    drawRoute(path);
-    drawDestination(activeDestination);
-    updateRouteInfo(activeRoute, "Second Ave", true);
-    navStepsFromGoogle = true;
-    navSteps = [
-      { m: turnM, maneuver: "TURN_RIGHT", instructions: "Second Ave", source: "test", lanes: null },
-      { m: turnM + afterM, maneuver: "DESTINATION", instructions: "Second Ave", source: "test" }
-    ];
-    extraSideStreets = [{ m: decoyM, family: "right", name: "First Ave" }];
-    turnCue.ignoreOsm = true;
+    let picked = null;
+    for (const c of CUE_TEST_CASES) {
+      try {
+        const { route, path, intervals } = await requestRoute(c.origin, c.dest, false);
+        adoptRoute(route, path, intervals, { name: c.dest.name, lat: c.dest.lat, lng: c.dest.lng }, false);
+        await fetchSpeedLimits(activeRoutePath);
+        rebuildOsmSideStreets();
+        const step = (navSteps || []).find(s => {
+          const fam = maneuverFamily(s.maneuver);
+          return fam === "left" || fam === "right";
+        });
+        if (!step) continue;
+        const decoys = decoysForStep(step);
+        picked = { dest: c.dest, step, decoys };
+        if (decoys.length) break;
+      } catch (err) {
+        console.warn("Cue test route failed", err);
+      }
+    }
+    if (!picked || !activeRoutePath.length) {
+      setTurnCueHud(logicLine, "Live: FAIL — could not load a real road route", "", logic.pass, false);
+      setMessage("Turn cue test could not get a Google route.");
+      return;
+    }
+    const step = picked.step;
+    const decoy = picked.decoys.length ? picked.decoys[picked.decoys.length - 1] : null;
+    extraSideStreets = decoy ? [decoy] : [];
+    turnCue.ignoreOsm = false;
     turnCue.played.clear();
-    osmSideStreets = [];
-
-    try {
-      const decoyLine = new Polyline3DElement({
-        path: decoyPath,
-        strokeColor: "#9AA0A6",
-        outerColor: "#FFFFFF",
-        strokeWidth: 6,
-        outerWidth: 0.28,
-        altitudeMode: MODEL_ALTITUDE_MODE,
-        drawsOccludedSegments: true,
-        zIndex: 18
-      });
-      addCueDecor(decoyLine);
-    } catch (err) {}
     if (Marker3DElement) {
       try {
-        const skip = new Marker3DElement({ position: decoyPt, label: "1st right (skip)", sizePreserved: true });
-        const take = new Marker3DElement({ position: turnPt, label: "Turn here", sizePreserved: true });
-        addCueDecor(skip);
-        addCueDecor(take);
+        if (decoy) {
+          addCueDecor(new Marker3DElement({
+            position: pointAtMetres(activeRoutePath, routeCum, decoy.m).point,
+            label: (decoy.name || "Side street") + " (skip)",
+            sizePreserved: true
+          }));
+        }
+        addCueDecor(new Marker3DElement({
+          position: pointAtMetres(activeRoutePath, routeCum, step.m).point,
+          label: "Turn here",
+          sizePreserved: true
+        }));
       } catch (err) {}
     }
-
-    const naive = turnM - turnCueLeadM(10);
-    const logicLine = logic.pass
-      ? `Logic: PASS — wait until ${Math.round(logic.afterDecoy)} m (naive would be ${Math.round(naive)} m)`
-      : `Logic: FAIL — played at ${logic.played == null ? "never" : Math.round(logic.played) + " m"}`;
+    const expectSide = turnCueSpeaker(step.maneuver);
     turnCue.test = {
-      decoyM,
-      turnM,
+      decoyM: decoy ? decoy.m : null,
+      turnM: step.m,
       playedM: null,
       side: null,
+      expectSide,
       logicOk: logic.pass,
       liveOk: null,
       logicLine,
-      detail: `Right turn at ${turnM} m · decoy First Ave at ${decoyM} m · right speaker only`
+      detail: decoy
+        ? `${step.maneuver} at ${Math.round(step.m)} m · skip ${decoy.name || "side street"} at ${Math.round(decoy.m)} m · ${expectSide} speaker`
+        : `Real Google route · ${step.maneuver} at ${Math.round(step.m)} m · ${expectSide} speaker`
     };
-    showTurnCueHud();
-    setTurnCueHud(logicLine, "Live: driving — silent until after First Ave", turnCue.test.detail, logic.pass, null);
-
+    setTurnCueHud(
+      logicLine,
+      decoy ? "Live: driving — silent until after the first same-direction street" : "Live: driving a real Google route",
+      turnCue.test.detail,
+      logic.pass,
+      null
+    );
     demoKind = "turncue";
     demoActive = true;
     const cueBtn = document.getElementById("turnCueTestBtn");
     if (cueBtn) cueBtn.textContent = "Stop cue test";
     enterNavigation({ flyover: false });
-    demoFix(path[0], heading, 12);
-    setMessage("Turn cue test: pass the grey First Ave, then listen for dun-dun on the right.");
-    driveAlongPath(path, () => {
-      judgeTurnCueDrive(turnM);
+    const heading = bearingDegrees(activeRoutePath[0], activeRoutePath[1]);
+    demoFix(activeRoutePath[0], heading, 12);
+    setMessage(decoy
+      ? "Turn cue test: stay on the Google route, pass the skip street, then listen for dun-dun."
+      : "Turn cue test: driving a real Google route.");
+    driveAlongPath(activeRoutePath, () => {
+      judgeTurnCueDrive(step.m);
       stopDemo();
       const ok = turnCue.test && turnCue.test.liveOk;
       setMessage(ok ? "Turn cue test PASS." : "Turn cue test finished — check the overlay.");
@@ -4760,10 +4799,6 @@
     });
   };
   window.__aaWakeMap = function(){
-    if (mapRevealDone || sessionAlreadyRevealed()) {
-      document.body.classList.add("map-ready");
-      document.documentElement.classList.add("map-ready");
-    }
     window.dispatchEvent(new Event("resize"));
     if (!map3d) return;
     const heading = Number(map3d.heading);
@@ -5044,12 +5079,14 @@
       status.hidden = false;
       status.textContent = text;
     }
+    const loader = document.getElementById("mapLoader");
+    if (loader) loader.style.pointerEvents = "auto";
   }
 
   let mapRevealDone = false;
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
-  const MAP_REVEAL_MS = 2000;
+  const MAP_REVEAL_MS = 8000;
   function sessionAlreadyRevealed(){
     try { return sessionStorage.getItem(MAP_REVEAL_KEY) === "1"; } catch (err) { return false; }
   }
@@ -5070,10 +5107,6 @@
   }
 
   function armMapReveal(){
-    if (sessionAlreadyRevealed()) {
-      revealMap();
-      return;
-    }
     let pokeTimer = 0;
     const pokeMap = () => {
       if (mapRevealDone) return;
@@ -5087,10 +5120,19 @@
       pokeTimer = window.setTimeout(pokeMap, 280);
     };
     pokeMap();
-    mapRevealTimer = window.setTimeout(() => {
+    const finish = () => {
       window.clearTimeout(pokeTimer);
       revealMap();
-    }, MAP_REVEAL_MS);
+    };
+    try {
+      map3d.addEventListener("gmp-steadychange", finish, { once: true });
+    } catch (err) {}
+    try {
+      map3d.addEventListener("gmp-centerchange", () => {
+        window.setTimeout(finish, 1200);
+      }, { once: true });
+    } catch (err) {}
+    mapRevealTimer = window.setTimeout(finish, MAP_REVEAL_MS);
   }
 
   function mapsKeyIsMissing(key){
@@ -5112,7 +5154,41 @@
     document.head.append(script);
   }
 
-  loadGoogleMaps();
+  function showUiPreview(){
+    document.body.classList.add("map-ready", "navigating", "has-lanes", "debug-open");
+    document.documentElement.classList.add("map-ready", "navigating", "has-lanes", "debug-open");
+    const banner = document.getElementById("navBanner");
+    const icon = document.getElementById("navIcon");
+    const text = document.getElementById("navPrimaryText");
+    const distEl = document.getElementById("navPrimaryDist");
+    const thenEl = document.getElementById("navThen");
+    const thenIcon = document.getElementById("navThenIcon");
+    const eta = document.getElementById("navEtaBar");
+    const remainEl = document.getElementById("navEtaRemain");
+    const clockEl = document.getElementById("navEtaClock");
+    if (banner) { banner.hidden = false; banner.classList.add("visible"); }
+    if (icon) icon.innerHTML = maneuverIconSvg("TURN_RIGHT", 48);
+    if (distEl) distEl.textContent = "250 m";
+    if (text) text.textContent = "W 5th Ave";
+    if (thenEl && thenIcon) {
+      thenEl.hidden = false;
+      thenEl.classList.add("visible");
+      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 22);
+    }
+    if (eta) { eta.hidden = false; eta.classList.add("visible"); }
+    if (remainEl) remainEl.textContent = "14 min · 3.9 km";
+    if (clockEl) clockEl.textContent = "5:31 pm";
+    renderLaneBar([
+      { dirs: ["left"], rec: false },
+      { dirs: ["through"], rec: false },
+      { dirs: ["through", "right"], rec: true },
+      { dirs: ["right"], rec: true }
+    ]);
+  }
+
+  const pageQuery = new URLSearchParams(location.search);
+  if (pageQuery.has("uiPreview")) showUiPreview();
+  else loadGoogleMaps();
 </script>
 </body>
 </html>
