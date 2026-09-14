@@ -83,20 +83,22 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:34px; height:34px; display:block}
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
-    #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
+    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); display:flex; align-items:center; gap:12px; pointer-events:none}
+    #speedLimitBadge {display:none; position:relative; left:auto; bottom:auto; z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; flex:0 0 auto}
     #speedLimitBadge.visible {display:flex}
-    body.navigating #speedLimitBadge.visible {bottom:calc(var(--aa-inset-bottom) + 108px)}
     #navHud {display:none; pointer-events:none}
     body.navigating #navHud {display:block}
-    #navLanes {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); justify-content:center; align-items:flex-end; gap:6px; min-height:52px; padding:8px 18px 10px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden}
+    #navLanes {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); width:max-content; max-width:min(200px,46vw); justify-content:flex-end; align-items:flex-end; gap:3px; min-height:0; padding:6px 7px 7px; border-radius:14px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden}
     #navLanes.visible {display:flex !important}
-    html.aa-car #navLanes,body.aa-car #navLanes {left:calc(var(--aa-inset-left) + 100px)}
-    .nav-lane {width:28px; height:44px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
+    body:not(.chrome-hidden) #navLanes,
+    body:not(.chrome-hidden) #navLanes.visible {display:none !important}
+    html.aa-car #navLanes,body.aa-car #navLanes {left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)))}
+    .nav-lane {width:20px; height:34px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
     .nav-lane.rec {opacity:1}
-    .nav-lane svg {width:26px; height:42px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+    .nav-lane svg {width:18px; height:32px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
     .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
-    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); pointer-events:none}
-    body.has-lanes #navBanner {top:calc(var(--aa-inset-top) + max(74px, env(safe-area-inset-top) + 64px))}
+    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(480px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 168px)); pointer-events:none}
+    body:not(.chrome-hidden) #navBanner {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
     html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
     #navPrimary {display:flex; align-items:center; gap:10px; min-height:76px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
@@ -119,7 +121,7 @@
     #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); width:300px; max-width:min(300px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 120px)); min-height:52px; padding:0 16px 0 4px; border-radius:26px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:min(300px, calc(100vw - var(--aa-inset-left) - var(--aa-inset-right) - 200px)); min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 1 auto}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
     #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:18px; font-weight:650; letter-spacing:-.2px}
@@ -217,7 +219,7 @@
     body:not(.map-ready) #recenterBtn,
     body:not(.map-ready) #infoBtn,
     body:not(.map-ready) #compassBtn,
-    body:not(.map-ready) #speedLimitBadge,
+    body:not(.map-ready) #navBottomCluster,
     body:not(.map-ready) #navHud,
     body:not(.map-ready) #turnCueHud,
     body:not(.map-ready) #routeCard,
@@ -460,7 +462,16 @@
       <path d="M12 21.5L7.8 12h8.4z" fill="#fff"/>
     </svg>
   </button>
-  <div id="speedLimitBadge" aria-live="polite"></div>
+  <div id="navBottomCluster">
+    <div id="speedLimitBadge" aria-live="polite"></div>
+    <div id="navEtaBar" hidden>
+      <button type="button" id="navExit" aria-label="Stop navigation">&times;</button>
+      <div id="navEtaCopy">
+        <span id="navEtaRemain"></span>
+        <span id="navEtaClock"></span>
+      </div>
+    </div>
+  </div>
   <div id="navHud">
     <div id="navLanes" hidden></div>
     <div id="navBanner" hidden>
@@ -483,13 +494,6 @@
       <div id="navThen" hidden>
         <span>Then</span>
         <span id="navThenIcon"></span>
-      </div>
-    </div>
-    <div id="navEtaBar" hidden>
-      <button type="button" id="navExit" aria-label="Stop navigation">&times;</button>
-      <div id="navEtaCopy">
-        <span id="navEtaRemain"></span>
-        <span id="navEtaClock"></span>
       </div>
     </div>
   </div>
@@ -3655,11 +3659,11 @@
   }
 
   const MANEUVER_ICONS = {
-    straight: svgIconUrl('<path fill="#fff" d="M32 6l12 13h-7v31h-10V19h-7z"/>'),
-    right: svgIconUrl('<path fill="#fff" d="M24 54H36V16H42V22L56 14 42 6V12H36V16H24z"/>'),
-    left: svgIconUrl('<path fill="#fff" d="M40 54H28V16H22V22L8 14 22 6V12H28V16H40z"/>'),
-    "slight-right": svgIconUrl('<path fill="#fff" d="M24 54h12V18l10-10V4l12 10-12 10v-6H24z"/>'),
-    "slight-left": svgIconUrl('<path fill="#fff" d="M40 54H28V18L18 8V4L6 14l12 10v-6h22z"/>'),
+    straight: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" d="M32 50V22"/><path fill="#fff" d="M21 24.5L32 8l11 16.5z"/>'),
+    right: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M24 50V24h18"/><path fill="#fff" d="M34 15l18 11-18 11z"/>'),
+    left: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M40 50V24H22"/><path fill="#fff" d="M30 15L12 26l18 11z"/>'),
+    "slight-right": svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M26 50V30L42 16"/><path fill="#fff" d="M34 8l18 8-10 16z"/>'),
+    "slight-left": svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M38 50V30L22 16"/><path fill="#fff" d="M30 8L12 16l10 16z"/>'),
     uturn: svgIconUrl('<path fill="#fff" d="M42 50h-8V28c0-5.5-4-10-9-10s-9 4.5-9 10h-7c0-9.4 7.2-17 16-17s16 7.6 16 17v22zM20 34l-8 8 8 8V34z"/>'),
     roundabout: svgIconUrl('<path fill="#fff" d="M32 12l10 12h-7v4.2A12 12 0 1 1 20 34.5l5.6-3.2A6.5 6.5 0 1 0 32 30.2V24h-7z"/>')
   };
@@ -3787,7 +3791,9 @@
   const turnCue = { played: new Set(), ignoreOsm: false, test: null, ctx: null };
   const NAV_CLOCK_S = 10;
   const NAV_LANE_AHEAD_M = 220;
+  const NAV_TURN_HOLD_MS = 1100;
   const CLOCK_RING = 2 * Math.PI * 22;
+  let navPassHold = { m: null, until: 0 };
 
   function readLatLng(value){
     if (!value) return null;
@@ -3837,31 +3843,32 @@
     const fam = maneuverFamily(maneuver);
     const m = String(maneuver || "").toUpperCase();
     const s = size || 48;
-    let d = "M24 3l13 14h-7v27H18V17h-7z";
+    const shaft = 'fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"';
+    let inner = `<path ${shaft} d="M24 40V16"/><path fill="currentColor" d="M14.5 18.5L24 5l9.5 13.5z"/>`;
     if (fam === "left" && m.includes("SLIGHT")) {
-      d = "M32 46h-10V14l-9-9V3L4 12l9 9v-4h10V46z";
+      inner = `<path ${shaft} d="M28 40V24L14 12"/><path fill="currentColor" d="M22 5L6 11l8 14z"/>`;
     } else if (fam === "right" && m.includes("SLIGHT")) {
-      d = "M16 46h10V14l9-9V3l9 9-9 9v-4H16V46z";
+      inner = `<path ${shaft} d="M20 40V24L34 12"/><path fill="currentColor" d="M26 5l16 6-8 14z"/>`;
     } else if (fam === "left") {
-      d = "M34 46H24V12H18V18L4 10l14-8V8H24V12H34z";
+      inner = `<path ${shaft} d="M30 40V18H14"/><path fill="currentColor" d="M22.5 9L6 18l16.5 9z"/>`;
     } else if (fam === "right") {
-      d = "M14 46H24V12H30V18L44 10 30 2V8H24V12H14z";
+      inner = `<path ${shaft} d="M18 40V18h16"/><path fill="currentColor" d="M25.5 9L42 18l-16.5 9z"/>`;
     } else if (fam === "uturn") {
-      d = "M34 44h-8V23.5c0-3.6-2.7-6.5-6-6.5s-6 2.9-6 6.5H8c0-7.5 5.6-13.5 12.5-13.5S33 16 33 23.5V44zM14.5 29.5L6 38l8.5 8.5V29.5z";
+      inner = `<path fill="currentColor" d="M34 44h-8V23.5c0-3.6-2.7-6.5-6-6.5s-6 2.9-6 6.5H8c0-7.5 5.6-13.5 12.5-13.5S33 16 33 23.5V44zM14.5 29.5L6 38l8.5 8.5V29.5z"/>`;
     } else if (fam === "roundabout") {
-      d = "M24 4l10 12h-7.5v5.2A11 11 0 1 1 13 28.2l6.2-3.4A4.8 4.8 0 1 0 24 23.2V16h-7.5z";
+      inner = `<path fill="currentColor" d="M24 4l10 12h-7.5v5.2A11 11 0 1 1 13 28.2l6.2-3.4A4.8 4.8 0 1 0 24 23.2V16h-7.5z"/>`;
     } else if (fam === "dest") {
-      d = "M24 6c7.7 0 14 6.1 14 13.8C38 28.5 24 42 24 42S10 28.5 10 19.8C10 12.1 16.3 6 24 6zm0 18.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z";
+      inner = `<path fill="currentColor" d="M24 6c7.7 0 14 6.1 14 13.8C38 28.5 24 42 24 42S10 28.5 10 19.8C10 12.1 16.3 6 24 6zm0 18.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z"/>`;
     }
-    return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+    return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true">${inner}</svg>`;
   }
 
   function laneGlyph(dir){
     const d = String(dir || "through").toLowerCase();
-    if (d === "left" || d === "sharp_left") return "M18 42V12c0-3 2.4-5.5 6-5.5h2V2L10 14l16 12v-5.5h-2c-2 0-4 1-4 3V42z";
-    if (d === "slight_left" || d === "merge_to_left") return "M28 42V16L14 4h-6v7H3l17 17v14z";
-    if (d === "right" || d === "sharp_right") return "M14 42V12c0-3 2.4-5.5 6-5.5h2V2l16 12-16 12v-5.5h-2c-2 0-4 1-4 3V42z";
-    if (d === "slight_right" || d === "merge_to_right") return "M4 42V16L18 4h6v7h5L12 28v14z";
+    if (d === "left" || d === "sharp_left") return "M30 40V18H14";
+    if (d === "slight_left" || d === "merge_to_left") return "M28 40V24L14 12";
+    if (d === "right" || d === "sharp_right") return "M18 40V18h16";
+    if (d === "slight_right" || d === "merge_to_right") return "M20 40V24L34 12";
     if (d === "reverse") return "M22 40V24c0-4.5-3.2-8-7.5-8S7 19.5 7 24h5c0-1.7 1.4-3 3-3s3 1.3 3 3v16h4zM12 28L6 34l6 6V28z";
     return "M16 6l11 13h-7v21h-8V19H5z";
   }
@@ -4084,6 +4091,7 @@
 
   function rebuildNavSteps(route, path, cum){
     navHudKey = "";
+    navPassHold = { m: null, until: 0 };
     const destM = cum && cum.length ? cum[cum.length - 1] : 0;
     const destName = (activeDestination && activeDestination.name) || "Destination";
     const google = stepsFromGoogleRoute(route, path, cum);
@@ -4159,10 +4167,25 @@
     return best;
   }
 
-  function upcomingNavSteps(progressM){
-    const m = Number.isFinite(progressM) ? progressM : 0;
-    const ahead = navSteps.filter(step => step.m > m + 12);
-    return ahead.length ? ahead : navSteps.slice(-1);
+  function upcomingNavSteps(progressM, opts){
+    const pos = Number.isFinite(progressM) ? progressM : 0;
+    if (!navSteps.length) return [];
+    const hold = !opts || opts.hold !== false;
+    if (!hold) {
+      const ahead = navSteps.filter(step => step.m > pos + 12);
+      return ahead.length ? ahead : navSteps.slice(-1);
+    }
+    const now = performance.now();
+    let idx = 0;
+    while (idx < navSteps.length - 1 && navSteps[idx].m < pos) idx++;
+    if (idx > 0 && navSteps[idx].m > pos) {
+      const prev = navSteps[idx - 1];
+      if (maneuverFamily(prev.maneuver) !== "dest") {
+        if (navPassHold.m !== prev.m) navPassHold = { m: prev.m, until: now + NAV_TURN_HOLD_MS, idx: idx - 1 };
+        if (now < navPassHold.until) idx = navPassHold.idx;
+      }
+    }
+    return navSteps.slice(idx);
   }
 
   function hideNavHud(){
@@ -4181,6 +4204,7 @@
     document.body.classList.remove("has-lanes");
     document.documentElement.classList.remove("has-lanes");
     navHudKey = "";
+    navPassHold = { m: null, until: 0 };
   }
 
   function renderLaneBar(lanes){
@@ -4581,7 +4605,7 @@
       progressM = nearestAlongRoute(currentGpsPoint, activeRoutePath, routeCum);
     }
     const speed = speedKalman.speed;
-    const ahead = upcomingNavSteps(progressM);
+    const ahead = upcomingNavSteps(progressM, { hold: false });
     const current = ahead[0];
     if (!current) return;
     const decoys = decoysForStep(current);
@@ -5561,6 +5585,23 @@
     return clamp(hi, 80, 24000);
   }
 
+  function navInfoMaxLevel(){
+    if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
+      return Math.max(1, navTurnCoverTargets().targets.length);
+    }
+    return NAV_INFO.MAX_LEVEL;
+  }
+
+  function upcomingInfoTurnMetres(startM){
+    const fromSteps = [];
+    (navSteps || []).forEach(s => {
+      const fam = maneuverFamily(s.maneuver);
+      if (s.m > startM + 18 && fam !== "dest" && fam !== "straight") fromSteps.push(s.m);
+    });
+    if (fromSteps.length) return fromSteps;
+    return routeManeuvers().filter(t => t.m > startM + 25).map(t => t.m);
+  }
+
   function navTurnCoverTargets(){
     const total = routeCum.length ? routeCum[routeCum.length - 1] : 0;
     const startM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
@@ -5568,29 +5609,39 @@
     const zoom = Number.isFinite(cam.zoom) ? cam.zoom : zoomBandForSpeed(cam.speedLP);
     const baseRange = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
     const baseAhead = visibleAheadMetres(baseRange, view.tilt, view.fov);
-    const turns = routeManeuvers().filter(t => t.m > startM + 25);
+    const closeM = Math.max(220, baseAhead * 1.1);
+    const turns = upcomingInfoTurnMetres(startM);
+    const PEEK = 3;
     const targets = [];
-    let coverM = startM + baseAhead * 0.88;
-    for (const t of turns) {
-      if (t.m > coverM + NAV_INFO.TURN_SKIP_M) {
-        targets.push(t.m);
-        coverM = t.m;
+    let i = 0;
+    if (turns.length) {
+      let end = turns[0];
+      i = 1;
+      if (turns[1] && (turns[0] - startM) <= closeM) {
+        end = turns[1];
+        i = 2;
       }
+      targets.push(Math.min(end, total));
     }
-    if (total > coverM + 80) targets.push(total);
-    while (targets.length < NAV_INFO.MAX_LEVEL && total > startM + 50) {
-      const last = targets.length ? targets[targets.length - 1] : coverM;
-      const next = Math.min(total, startM + Math.max(last - startM, baseAhead) * 1.85);
-      if (next <= last + 30) break;
-      targets.push(next);
+    while (targets.length < PEEK && i < turns.length) {
+      const m = turns[i++];
+      if (!targets.length || m > targets[targets.length - 1] + 30) targets.push(Math.min(m, total));
     }
-    if (!targets.length) targets.push(Math.min(total, startM + Math.max(baseAhead * 1.8, 220)));
+    if (!targets.length && total > startM + 80) {
+      targets.push(Math.min(total, startM + Math.max(baseAhead * 1.8, 220)));
+    }
+    if (total > startM + 40 && (!targets.length || total > targets[targets.length - 1] + 50)) {
+      targets.push(total);
+    } else if (!targets.length) {
+      targets.push(Math.min(total, startM + Math.max(baseAhead * 1.5, 180)));
+    }
     return { startM, total, targets };
   }
 
   function navInfoPreview(view, baseRange, baseTilt){
     const range0 = Math.max(Number(baseRange) || view.range, 40);
-    const level = clamp(infoLevel, 0, NAV_INFO.MAX_LEVEL);
+    const maxLevel = navInfoMaxLevel();
+    const level = clamp(infoLevel, 0, maxLevel);
     if (level <= 0) return null;
     if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
       const span = navTurnCoverTargets();
@@ -7234,7 +7285,7 @@
     const btn = document.getElementById("recenterBtn");
     if (!btn) return;
     updateNavInfoButton();
-    const show = !!currentGpsPoint && (!following || cam.userRange != null || infoLevel >= NAV_INFO.MAX_LEVEL);
+    const show = !!currentGpsPoint && (!following || cam.userRange != null || infoLevel >= navInfoMaxLevel());
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-recenter", show);
     document.documentElement.classList.toggle("has-recenter", show);
@@ -7259,7 +7310,7 @@
       }
       clearManeuverMarkers();
     }
-    const show = infoBtnArmed && infoUiAvailable() && infoLevel < NAV_INFO.MAX_LEVEL;
+    const show = infoBtnArmed && infoUiAvailable() && infoLevel < navInfoMaxLevel();
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-info", show);
     document.documentElement.classList.toggle("has-info", show);
@@ -7267,7 +7318,7 @@
 
   function armNavInfoIdle(){
     if (infoIdleTimer) window.clearTimeout(infoIdleTimer);
-    if (infoLevel >= NAV_INFO.MAX_LEVEL) {
+    if (infoLevel >= navInfoMaxLevel()) {
       infoIdleTimer = 0;
       return;
     }
@@ -7304,7 +7355,7 @@
     infoBtnArmed = true;
     flyover = null;
     if (!following) attachFollow(null);
-    if (infoLevel >= NAV_INFO.MAX_LEVEL) {
+    if (infoLevel >= navInfoMaxLevel()) {
       updateRecenterButton();
       armNavInfoIdle();
       return;
@@ -7586,7 +7637,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navHud, #carDebugBtn, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #descDialog, #parkDialog, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #descDialog, #parkDialog, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
@@ -7831,6 +7882,8 @@
     if (eta) { eta.hidden = false; eta.classList.add("visible"); }
     if (remainEl) remainEl.textContent = "14 min · 3.9 km";
     if (clockEl) clockEl.textContent = "5:31 pm";
+    const speed = document.getElementById("speedLimitBadge");
+    if (speed) { speed.textContent = "50"; speed.classList.add("visible"); }
     renderLaneBar([
       { dirs: ["left"], rec: false },
       { dirs: ["through"], rec: false },

@@ -6,8 +6,8 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "pages" / "forte.glb"
-DST = ROOT / "pages" / "forte.glb"
+SRC = ROOT / "pages" / "forte-new.glb"
+DST = ROOT / "pages" / "forte-new.glb"
 
 
 def read_glb(path: Path):
