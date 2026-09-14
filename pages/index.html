@@ -178,7 +178,7 @@
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
-    body.navigating #routeCard {display:none !important}
+    body.navigating #routeCard,body.suppress-route-card #routeCard {display:none !important}
     body.route-card-stowed #routeCard {opacity:0; pointer-events:none !important; visibility:hidden; transform:translateY(12px)}
     #routeCard * {pointer-events:none}
     #routeCardHead button,#routeGo,#routeParking,#routeTitleRow {pointer-events:auto}
@@ -760,6 +760,14 @@
     TILT: 62,
     SPIN_MS: 56000
   };
+  const CAR_INSPECT = {
+    SWOOP_MS: 900,
+    RANGE: 12,
+    TILT: 75,
+    FOV: 30,
+    SPIN_MS: 12000,
+    PAUSE_MS: 1500
+  };
   const START_COUNTDOWN_MS = 10000;
   const START_COUNTDOWN_IGNORE_MS = 450;
   // Shift the route (and the car that follows it) into the left driving lane.
@@ -834,12 +842,21 @@
   const routeSnippetEl = document.getElementById("routeSnippet");
   const routeGoEl = document.getElementById("routeGo");
   let destPreview = null;
+  let carInspect = null;
   let startCountdown = null;
 
   function setMessage(text){ messageEl.textContent = text; }
 
   function isNavigating(){
     return document.body.classList.contains("navigating");
+  }
+
+  function setSuppressRouteCard(on){
+    document.body.classList.toggle("suppress-route-card", !!on);
+    document.documentElement.classList.toggle("suppress-route-card", !!on);
+    if (on) {
+      try { cancelStartCountdown(); } catch (err) {}
+    }
   }
 
   function arrowOrientation(heading){
@@ -1003,7 +1020,7 @@
 
   function applyLiveCarScale(){
     if (!userCar || usingArrow) return;
-    const next = carScaleForCamera();
+    const next = carInspect ? 1 : carScaleForCamera();
     if (Math.abs(next - lastCarScale) < 0.02) return;
     lastCarScale = next;
     try { userCar.scale = next; } catch (err) {}
@@ -1218,6 +1235,10 @@
         carModelReady = false;
         usingArrow = false;
         if (USE_HEADING_ARROW && isNavigating()) showHeadingArrow();
+      });
+      userCar.addEventListener("gmp-click", event => {
+        try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
+        startCarInspect();
       });
       map3d.append(userCar);
       try { userCar.src = src; } catch (err) {}
@@ -1619,10 +1640,20 @@
     return /503-wht-blank/i.test(String(href || ""));
   }
 
+  function explorePinLabelText(place){
+    const raw = String((place && place.name) || "").replace(/\s+/g, " ").trim();
+    return raw.length > 22 ? raw.slice(0, 21) + "…" : raw;
+  }
+
+  function exploreLabelBoxWidth(name){
+    const n = String(name || "");
+    const padX = 5;
+    return Math.min(158, Math.max(24, Math.ceil(n.length * 5.2 + padX * 2)));
+  }
+
   function exploreLabeledPinDataUrl(place, opts){
     const showLabel = !opts || opts.label !== false;
-    const raw = String(place.name || "").replace(/\s+/g, " ").trim();
-    const name = raw.length > 22 ? raw.slice(0, 21) + "…" : raw;
+    const name = explorePinLabelText(place);
     const fill = place.color || place.iconBg || "#1A73E8";
     const glyph = place.kind === "parking" ? "parking" : (place.glyph || "pin");
     const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -1637,14 +1668,12 @@
         pin.replace("PINX", "2.5").replace("PINY", "1") + "</svg>";
       return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
     }
-    const pad = 12;
-    const textW = Math.min(176, Math.max(64, name.length * 6.7 + pad * 2));
-    const width = Math.round(textW + 6);
+    const width = exploreLabelBoxWidth(name);
     const pinX = Math.round((width - 31) / 2);
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="60" viewBox="0 0 ' + width + ' 60">' +
-      '<rect x="3" y="1" rx="8" width="' + (width - 6) + '" height="18" fill="#E8EAED"/>' +
-      '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#202124" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
+      '<rect x="1" y="1" rx="7" width="' + (width - 2) + '" height="18" fill="#101214" fill-opacity="0.55"/>' +
+      '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
       pin.replace("PINX", String(pinX)).replace("PINY", "18") +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
@@ -1654,9 +1683,10 @@
     if (!img) return;
     img.src = exploreLabeledPinDataUrl(place, { label: showLabel });
     if (showLabel) {
-      img.width = 128;
+      const width = exploreLabelBoxWidth(explorePinLabelText(place));
+      img.width = width;
       img.height = 60;
-      img.style.cssText = "width:auto;height:60px;max-width:176px;overflow:visible;display:block";
+      img.style.cssText = "width:" + width + "px;height:60px;max-width:162px;overflow:visible;display:block";
     } else {
       img.width = 36;
       img.height = 42;
@@ -1951,7 +1981,7 @@
 
   async function loadOsmParkingPlaces(center, radiusM, limit){
     const lots = await queryOsmParking(center, radiusM);
-    return lots.slice(0, limit || 40);
+    return lots.filter(p => p.parkKind === "lot" || p.parkKind === "building").slice(0, limit || 40);
   }
 
   async function queryGoogleParking(center, radiusM){
@@ -2526,21 +2556,34 @@
 
   function drawDottedWalk(pts){
     if (!map3d || !Polyline3DElement || !pts || pts.length < 2) return;
-    const flat = densifyWalkPath(pts, 3);
-    const on = 2;
-    const off = 6;
+    const flat = densifyWalkPath(pts, 2);
+    const on = 3;
+    const off = 2;
     let i = 0;
     while (i < flat.length - 1) {
       const end = Math.min(flat.length - 1, i + on);
       if (end > i) {
+        const seg = flat.slice(i, end + 1);
         try {
-          const line = new Polyline3DElement({
-            path: flat.slice(i, end + 1),
-            strokeColor: "#1A73E8",
-            strokeWidth: 2.5,
+          const halo = new Polyline3DElement({
+            path: seg,
+            strokeColor: "#FFFFFF",
+            strokeWidth: 7,
             altitudeMode: MODEL_ALTITUDE_MODE,
             drawsOccludedSegments: true,
             zIndex: 8
+          });
+          map3d.append(halo);
+          parkingWalkLines.push(halo);
+        } catch (err) {}
+        try {
+          const line = new Polyline3DElement({
+            path: seg,
+            strokeColor: "#4CA3FF",
+            strokeWidth: 4.5,
+            altitudeMode: MODEL_ALTITUDE_MODE,
+            drawsOccludedSegments: true,
+            zIndex: 9
           });
           map3d.append(line);
           parkingWalkLines.push(line);
@@ -3007,8 +3050,10 @@
     autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     hideSearchDropdown();
+    cancelStartCountdown();
+    stopDestPreview();
     startDestPreview(place);
-    destPreview.noSpin = true;
+    if (destPreview) destPreview.noSpin = true;
     const dest = Object.assign({}, place, { name: place.name });
     if (place.placeId) {
       try {
@@ -3019,21 +3064,24 @@
       } catch (err) {}
     }
     await enrichPlaceFromGoogle(dest);
-    try {
-      await calculateRoute(getRouteOrigin(), dest, dest.name, { preview: false });
-    } catch (err) {
-      activeDestination = dest;
-      document.body.classList.add("has-route");
-      document.documentElement.classList.add("has-route");
-      routeTitleEl.textContent = dest.name || "";
-      fillRouteCardExtras(dest);
-      routeTimeEl.textContent = "";
-      routeStatsEl.textContent = dest.address || "";
-      fetchParkingNear(dest);
-    }
-    activeDestination = Object.assign({}, activeDestination || {}, dest);
+    activeRoute = null;
+    activeDriveTo = null;
+    activeRoutePath = [];
+    try { setRouteGeometry([]); } catch (err) {}
+    try { removeRouteLines(); } catch (err) {}
+    try { clearParkingWalk(); } catch (err) {}
+    activeDestination = Object.assign({}, dest);
+    document.body.classList.add("has-route");
+    document.documentElement.classList.add("has-route");
+    document.body.classList.remove("navigating");
+    document.documentElement.classList.remove("navigating");
+    routeTitleEl.textContent = dest.name || "";
+    fillRouteCardExtras(dest);
+    routeTimeEl.textContent = "";
+    routeStatsEl.textContent = dest.address || "";
     showExploreSnippet(activeDestination);
-    fillRouteCardExtras(activeDestination);
+    fetchParkingNear(dest);
+    updateRecenterButton();
     setMessage(dest.name);
   }
 
@@ -3482,6 +3530,8 @@
     setMessage(`Calculating route to ${destinationName}...`);
 
     try {
+      const noCard = !!(opts && opts.noCard);
+      setSuppressRouteCard(noCard);
       const parkingP = fetchParkingNear(destination);
       const fast = !!(opts && opts.refineWalk === false);
       const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
@@ -3493,8 +3543,8 @@
         lng: destination.lng
       });
       adoptRoute(route, path, intervals, dest, false, null);
-      if (!opts || opts.preview !== false) showRoutePreview(origin, dest, route.distanceMeters);
-      setMessage("Route ready. Tap Start, or wait for the countdown.");
+      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters);
+      if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
 
       const applyRefine = async () => {
         try { await parkingP; } catch (err) {}
@@ -4833,7 +4883,7 @@
     setMapLabels(true);
     startDestPreview(destination || origin);
     if (explore.mode && destPreview) destPreview.noSpin = true;
-    startStartCountdown();
+    if (!explore.mode) startStartCountdown();
   }
 
   // `opts.flyover` (default true): sweep the route from the destination back to the car
@@ -4844,6 +4894,7 @@
     const fromPreview = !!destPreview;
     cancelStartCountdown();
     stopDestPreview();
+    stopCarInspect();
     document.body.classList.add("navigating");
     document.documentElement.classList.add("navigating");
     following = true;
@@ -4881,6 +4932,7 @@
     flyover = null;
     cancelStartCountdown();
     stopDestPreview();
+    stopCarInspect();
     unstowRouteCard();
     offRoute.hits = 0;
     if (destinationMarker) { destinationMarker.remove(); destinationMarker = null; }
@@ -4897,8 +4949,8 @@
     speedLimit.routeId += 1;
     updateSpeedLimitBadge();
     traceRec.dest = null;
-    document.body.classList.remove("has-route", "navigating", "nav-browsing");
-    document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
+    document.body.classList.remove("has-route", "navigating", "nav-browsing", "suppress-route-card");
+    document.documentElement.classList.remove("has-route", "navigating", "nav-browsing", "suppress-route-card");
     hideNavHud();
     resetTurnCue();
     setMapLabels(false);
@@ -5566,16 +5618,21 @@
     if (!map3d) return;
     if (destPreview) applyDestPreviewCamera(dtEase, now);
     tickStartCountdown(now);
-    if (!puck.fix) return;
+    if (!puck.fix) {
+      if (carInspect) applyCarInspectCamera(dtEase, now);
+      return;
+    }
     stepPuck(dtRaw, dtEase, now);
     applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
     updateTraversedRoute();
     // Car mode: a pan let go of the car; re-attach once the screen has been untouched long enough.
-    if (!following && !destPreview && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
+    if (!following && !destPreview && !carInspect && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
       attachFollow(currentView === "overview" ? "drive" : null);
     }
     if (destPreview) {
       // preview owns the camera until Start or a pan
+    } else if (carInspect) {
+      applyCarInspectCamera(dtEase, now);
     } else if (following) applyFollowCamera(dtEase, now);
     else cam.seeded = false; // re-attach eases in from wherever the user left the camera
     updateSpeedLimitBadge();
@@ -5828,6 +5885,99 @@
     destPreview = null;
   }
 
+  function stopCarInspect(){
+    carInspect = null;
+  }
+
+  function startCarInspect(){
+    if (carInspect) return;
+    if (!map3d || !isNavigating()) return;
+    const car = currentCarPoint() || (puck.fix ? { lat: puck.lat, lng: puck.lng } : lastCarPoint);
+    if (!car || !Number.isFinite(car.lat)) return;
+    stopDestPreview();
+    flyover = null;
+    following = false;
+    autoRefollowArmed = false;
+    const followBtn = document.getElementById("followBtn");
+    if (followBtn) followBtn.textContent = "Following: OFF";
+    const heading = numOr(map3d.heading, Number.isFinite(puck.heading) ? puck.heading : 0);
+    carInspect = {
+      startMs: performance.now(),
+      fromRange: numOr(map3d.range, CAR_REF_RANGE),
+      fromTilt: numOr(map3d.tilt, CAR_REF_TILT),
+      fromHeading: heading,
+      fromFov: numOr(map3d.fov, CAR_REF_FOV),
+      userRange: CAR_INSPECT.RANGE,
+      userTilt: CAR_INSPECT.TILT,
+      yaw: 0,
+      spinAcc: 0,
+      lastInteractMs: 0
+    };
+    cam.lat = car.lat;
+    cam.lng = car.lng;
+    cam.heading = heading;
+    cam.range = carInspect.fromRange;
+    cam.tilt = carInspect.fromTilt;
+    cam.fov = carInspect.fromFov;
+    cam.seeded = true;
+    chromeLocked = false;
+    hideChrome();
+    if (userCar && !usingArrow) {
+      lastCarScale = 1;
+      try { userCar.scale = 1; } catch (err) {}
+    }
+    ensureFollowTicker();
+    updateRecenterButton();
+  }
+
+  function applyCarInspectCamera(dtEase, now){
+    if (!carInspect || !map3d) return;
+    const car = currentCarPoint() || (puck.fix ? { lat: puck.lat, lng: puck.lng } : lastCarPoint);
+    if (!car || !Number.isFinite(car.lat)) return;
+    const u = clamp((now - carInspect.startMs) / CAR_INSPECT.SWOOP_MS, 0, 1);
+    const e = u * u * (3 - 2 * u);
+    const targetRange = clamp(Number(carInspect.userRange) || CAR_INSPECT.RANGE, 8, 90);
+    const targetTilt = clamp(Number(carInspect.userTilt) || CAR_INSPECT.TILT, 20, 85);
+    cam.range = lerp(carInspect.fromRange, targetRange, e);
+    cam.tilt = lerp(carInspect.fromTilt, targetTilt, e);
+    cam.fov = lerp(carInspect.fromFov, CAR_INSPECT.FOV, e);
+    const yaw = Number(carInspect.yaw) || 0;
+    const paused = (now - (carInspect.lastInteractMs || 0)) < CAR_INSPECT.PAUSE_MS;
+    if (u >= 1 && !paused) {
+      carInspect.spinAcc = (Number(carInspect.spinAcc) || 0) + (dtEase * 1000 / CAR_INSPECT.SPIN_MS) * 360;
+    }
+    cam.heading = normaliseHeading(carInspect.fromHeading + yaw + (Number(carInspect.spinAcc) || 0));
+    const center = { lat: car.lat, lng: car.lng };
+    const alt = followGroundAltitude(center, dtEase);
+    if (Number.isFinite(alt)) center.altitude = alt + 0.7;
+    map3d.center = center;
+    if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
+    if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
+    if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
+    if (Math.abs(numOr(map3d.fov, 0) - cam.fov) > 0.005) map3d.fov = cam.fov;
+    applyLiveCarScale();
+    updateCompassNeedle(cam.heading);
+  }
+
+  function tapHitsCar(event){
+    if (!isNavigating() || !event || flyover) return false;
+    const car = currentCarPoint() || lastCarPoint;
+    if (!car || !Number.isFinite(car.lat)) return false;
+    const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
+    const h = Math.max(1, viewSafe.height || window.innerHeight || 1);
+    const slop = Math.max(64, Math.min(w, h) * 0.1);
+    const x = Number(event.clientX);
+    const y = Number(event.clientY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (carInspect) {
+      return Math.hypot(x - w * 0.5, y - h * 0.5) < slop * 1.35;
+    }
+    if (!following) return false;
+    const cx = carScreenX() * w;
+    const cy = carScreenY() * h;
+    return Math.hypot(x - cx, y - cy) < slop;
+  }
+
   function destPreviewScreenX(){
     const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
     const right = viewSafe.right || 0;
@@ -5894,7 +6044,7 @@
   }
 
   function startStartCountdown(){
-    if (!routeGoEl) return;
+    if (!routeGoEl || explore.mode) return;
     startCountdown = {
       startMs: performance.now() + START_COUNTDOWN_IGNORE_MS,
       durMs: START_COUNTDOWN_MS
@@ -5921,6 +6071,10 @@
     setGoProgress(p);
     if (p >= 1) {
       startCountdown = null;
+      if (explore.mode) {
+        cancelStartCountdown();
+        return;
+      }
       enterNavigation();
     }
   }
@@ -6273,6 +6427,7 @@
     if (!map3d) return;
     cancelStartCountdown();
     stopDestPreview();
+    stopCarInspect();
     following = true;
     cam.userRange = null;
     cam.seeded = false;
@@ -6789,13 +6944,12 @@
     setMessage("Fence walk test: routing to Bucklands Beach Domain…");
     const origin = BUCKLANDS_ACCESS_TEST.origin;
     const dest = BUCKLANDS_ACCESS_TEST.dest;
-    await calculateRoute(origin, dest, dest.name, { preview: false, waitRefine: true });
+    await calculateRoute(origin, dest, dest.name, { preview: false, waitRefine: true, noCard: true });
     try { cancelStartCountdown(); } catch (err) {}
+    stopDestPreview();
     setMapLabels(true);
-    startDestPreview(dest);
-    if (destPreview) destPreview.noSpin = true;
-    await new Promise(resolve => setTimeout(resolve, 1400));
     const end = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : dest;
+    if (end && Number.isFinite(end.lat)) frameParkingAndDest(dest, end);
     const walkN = (parkingWalkLines && parkingWalkLines.length) || 0;
     const fencedSide = end.lng < dest.lng - 0.00085 && end.lat > dest.lat - 0.00075;
     const joined = walkN > 0 ? " Dotted walk joins that end to the playground." : "";
@@ -6817,6 +6971,7 @@
     }
     if (isDemoRunning()) stopDemo();
     if (watchId !== null) stopGps();
+    setSuppressRouteCard(true);
     resumeNavAudio();
     const logic = evaluateTurnCueLogic();
     const logicLine = logic.pass
@@ -7330,6 +7485,12 @@
 
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
+    if (carInspect) {
+      const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
+      carInspect.userRange = clamp(cur / (Number(factor) || 1), 8, 90);
+      carInspect.lastInteractMs = performance.now();
+      return;
+    }
     if (destPreview || (document.body.classList.contains("has-route") && !isNavigating())) {
       markUserPanned(true);
     }
@@ -7350,6 +7511,12 @@
     const dh = Number(dHeading) || 0;
     const dt = Number(dTilt) || 0;
     if (!dh && !dt) return;
+    if (carInspect) {
+      carInspect.yaw = (Number(carInspect.yaw) || 0) + dh;
+      if (dt) carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) + dt, 20, 85);
+      carInspect.lastInteractMs = performance.now();
+      return;
+    }
     markUserPanned(true);
     if (dh) map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dh);
     if (dt) map3d.tilt = clamp((Number(map3d.tilt) || 0) + dt, 0, 90);
@@ -7430,6 +7597,7 @@
     flyover = null;
     cancelStartCountdown();
     stopDestPreview();
+    stopCarInspect();
     if (fromTouch) {
       stowRouteCard();
       if (!mapDragStart) scheduleRestoreRouteCard();
@@ -7696,9 +7864,14 @@
     event.stopPropagation();
     clearNavigation();
   });
-  document.getElementById("routeGo").addEventListener("click", event => {
+  document.getElementById("routeGo").addEventListener("click", async event => {
     event.preventDefault();
     event.stopPropagation();
+    cancelStartCountdown();
+    if (explore.mode && activeDestination && !(activeRoutePath && activeRoutePath.length >= 2)) {
+      await calculateRoute(getRouteOrigin(), activeDestination, activeDestination.name, { preview: false });
+      if (!(activeRoutePath && activeRoutePath.length >= 2)) return;
+    }
     enterNavigation();
   });
   const mapsBrowseBtn = document.getElementById("mapsBrowseBtn");
@@ -7719,6 +7892,7 @@
       else {
         exitExploreMode();
         clearNavigation();
+        recenterToCar();
         setMessage("");
       }
     });
@@ -7865,6 +8039,17 @@
     const dx = event.clientX - mapDragStart.x;
     const dy = event.clientY - mapDragStart.y;
     if (dx * dx + dy * dy < 64) return;
+    if (carInspect) {
+      mapDragStart.panned = true;
+      chromeLocked = false;
+      hideChrome();
+      carInspect.yaw = (Number(carInspect.yaw) || 0) + dx * 0.28;
+      carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) - dy * 0.18, 20, 85);
+      carInspect.lastInteractMs = performance.now();
+      mapDragStart.x = event.clientX;
+      mapDragStart.y = event.clientY;
+      return;
+    }
     if (!mapDragStart.panned) {
       mapDragStart.panned = true;
       chromeLocked = false;
@@ -7881,6 +8066,11 @@
       scheduleRestoreRouteCard();
       return;
     }
+    if (tapHitsCar(event)) {
+      startCarInspect();
+      return;
+    }
+    if (carInspect) stopCarInspect();
     onNavMapTap();
     scheduleRestoreRouteCard();
   }, { capture:true, passive:true });
@@ -7893,6 +8083,13 @@
     if (isChromeUiTarget(event.target)) return;
     chromeLocked = false;
     hideChrome();
+    if (carInspect) {
+      const dir = event.deltaY > 0 ? 1.12 : (1 / 1.12);
+      const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
+      carInspect.userRange = clamp(cur * dir, 8, 90);
+      carInspect.lastInteractMs = performance.now();
+      return;
+    }
     markUserPanned(true);
   }, { capture:true, passive:true });
 
@@ -7924,6 +8121,19 @@
     const dMidY = next.midY - camGesture.midY;
     chromeLocked = false;
     hideChrome();
+    if (carInspect) {
+      if (Math.abs(dAngle) > 0.35) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
+      if (Math.abs(dDist - 1) > 0.012) {
+        const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
+        carInspect.userRange = clamp(cur / dDist, 8, 90);
+      }
+      if (Math.abs(dMidY) > 1.5 && Math.abs(dAngle) < 8) {
+        carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) - dMidY * 0.18, 20, 85);
+      }
+      carInspect.lastInteractMs = performance.now();
+      camGesture = next;
+      return true;
+    }
     markUserPanned(true);
     if (Math.abs(dAngle) > 0.35) {
       map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
@@ -7954,6 +8164,7 @@
   window.addEventListener("touchcancel", () => { camGesture = null; }, { capture:true, passive:true });
 
   window.addEventListener("click", event => {
+    if (tapHitsCar(event) || carInspect) return;
     if (!isChromeUiTarget(event.target)) onNavMapTap();
     if (isAndroidAuto()) return;
     if (document.body.classList.contains("chrome-hidden")) showChrome();
