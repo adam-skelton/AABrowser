@@ -170,11 +170,15 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto}
+    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:none; user-select:none; transition:opacity .18s ease, transform .18s ease}
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard {display:none !important}
+    body.route-card-stowed #routeCard {opacity:0; pointer-events:none; transform:translateY(12px)}
+    #routeCard * {pointer-events:none}
+    #routeCardHead button,#routeGo,#routeParking,#routeTitleRow {pointer-events:auto}
+    #routePhoto {-webkit-user-drag:none; user-select:none}
     #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -8px 8px}
     #routeCardHeadSpacer {flex:1}
     #routeBack,#routeClose {width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
@@ -429,7 +433,7 @@
     <button id="routeGo" type="button">
       <span id="routeGoProgress" aria-hidden="true"></span>
       <span id="routeGoLabel">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3l7.8 16.8-.9.5L12 16.6 5.1 20.3l-.9-.5z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3l8 8h-5v11H9V11H4z"/></svg>
         Start
       </span>
     </button>
@@ -447,7 +451,7 @@
   </button>
   <button id="infoBtn" type="button" aria-label="Widen view">
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="M12 5l9 12H3z"/>
+      <path fill="currentColor" d="M12 4l7 8h-4v9H9V12H5z"/>
     </svg>
   </button>
   <button id="compassBtn" type="button" aria-label="Toggle north up">
@@ -1862,11 +1866,12 @@
     };
   }
 
-  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+  const OVERPASS_URL = "https://overpass.openstreetmap.fr/api/interpreter";
   const OVERPASS_MIRRORS = [
     OVERPASS_URL,
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter"
   ];
 
   async function overpassJson(query, timeoutMs, urls){
@@ -1879,7 +1884,7 @@
       try {
         const res = await fetch(list[i], {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: "data=" + encodeURIComponent(query),
           signal: ctrl ? ctrl.signal : undefined
         });
@@ -2021,7 +2026,7 @@
     return id && id.indexOf("__") !== 0 ? id : "";
   }
 
-  async function pickDriveDestination(dest){
+  async function pickDriveDestination(dest, opts){
     if (!dest || !Number.isFinite(dest.lat)) return dest;
     const lot = parkingNear.selected;
     if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && (!(lot.walkM > 450))) {
@@ -2029,8 +2034,14 @@
       return id ? { lat: lot.lat, lng: lot.lng, name: lot.name, placeId: id } : { lat: lot.lat, lng: lot.lng, name: lot.name };
     }
     const placeId = usablePlaceId(dest.placeId);
-    if (placeId) return dest;
-    const road = await nearestPublicRoadPoint(dest);
+    if (placeId || (opts && opts.skipOsm)) return dest;
+    let road = null;
+    try {
+      road = await Promise.race([
+        nearestPublicRoadPoint(dest),
+        new Promise(resolve => setTimeout(() => resolve(null), 1500))
+      ]);
+    } catch (err) {}
     if (road && distanceMetres(dest, road) > 35) {
       return { lat: road.lat, lng: road.lng, name: dest.name };
     }
@@ -2326,7 +2337,7 @@
         fields: ["path", "distanceMeters", "durationMillis"]
       };
       try {
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("walk timeout")), 8000));
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("walk timeout")), 4000));
         const result = await Promise.race([RouteClass.computeRoutes(request), timeout]);
         const route = result && result.routes && result.routes[0];
         const path = routePathPoints(route);
@@ -2356,11 +2367,12 @@
     return path.slice();
   }
 
-  async function walkAccessFrom(from, to){
+  async function walkAccessFrom(from, to, opts){
     let google = null, osm = null;
+    const skipGoogle = !!(opts && opts.skipGoogle);
     try {
       const pair = await Promise.all([
-        fetchGoogleWalkPath(from, to).catch(() => null),
+        skipGoogle ? Promise.resolve(null) : fetchGoogleWalkPath(from, to).catch(() => null),
         fetchOsmWalkPathRouter(from, to).catch(() => null)
       ]);
       google = pair[0];
@@ -2437,7 +2449,7 @@
   async function refineDriveByWalk(origin, dest, drivePath){
     if (!dest || !drivePath || drivePath.length < 2) return null;
     const driveEnd = drivePath[drivePath.length - 1];
-    const current = await walkAccessFrom(driveEnd, dest);
+    const current = await walkAccessFrom(driveEnd, dest, { skipGoogle: true });
     const crow = distanceMetres(driveEnd, dest);
     const blocked = current.blocked || current.walkM > Math.max(crow * 1.9, crow + 80) || current.walkM > 160;
     const candidates = [];
@@ -2466,7 +2478,7 @@
     });
     const toScore = parkingC.concat(streets.slice(0, 4)).slice(0, 7);
     const scored = await Promise.all(toScore.map(async c => {
-      const w = await walkAccessFrom(c, dest);
+      const w = await walkAccessFrom(c, dest, { skipGoogle: true });
       return Object.assign({}, c, w);
     }));
     let best = { kind: "drive-end", lat: driveEnd.lat, lng: driveEnd.lng, walkM: current.walkM, path: current.path };
@@ -3356,7 +3368,7 @@
   // One traffic-aware route. `origin` may carry a `heading` (DirectionalLocation) so a
   // reroute departs the way the car is already pointing. The traffic-on-polyline extra
   // is requested first; if the loaded API build rejects it, retry for a plain route.
-  async function requestRoute(origin, destination, wantTraffic = true){
+  async function requestRoute(origin, destination, wantTraffic = true, opts){
     const placeId = usablePlaceId(destination && destination.placeId);
     const request = {
       origin,
@@ -3375,11 +3387,11 @@
     } catch (err) {
       if (wantTraffic) {
         console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
-        return requestRoute(origin, destination, false);
+        return requestRoute(origin, destination, false, opts);
       }
       if (placeId && Number.isFinite(destination.lat) && Number.isFinite(destination.lng)) {
         console.warn("Place-id route failed, retrying at coordinates", err);
-        return requestRoute(origin, { lat: destination.lat, lng: destination.lng }, false);
+        return requestRoute(origin, { lat: destination.lat, lng: destination.lng }, false, opts);
       }
       if (request.extraComputations && request.extraComputations.length) {
         console.warn("Nav instruction extra failed, retrying without it", err);
@@ -3410,7 +3422,17 @@
       lng: typeof point.lng === "function" ? point.lng() : point.lng
     }));
     if (path.length < 2) throw new Error("Route returned without a usable path.");
-    const trimmed = await trimPrivateRoadTail(path);
+    let trimmed = path;
+    if (!(opts && opts.skipTrim)) {
+      try {
+        trimmed = await Promise.race([
+          trimPrivateRoadTail(path),
+          new Promise(resolve => setTimeout(() => resolve(path), 1800))
+        ]);
+      } catch (err) {
+        trimmed = path;
+      }
+    }
     return { route, path: trimmed, intervals: routeTrafficIntervals(route, trimmed) };
   }
 
@@ -3454,31 +3476,42 @@
     setMessage(`Calculating route to ${destinationName}...`);
 
     try {
-      await fetchParkingNear(destination);
-      const driveTo = await pickDriveDestination(destination);
+      const parkingP = fetchParkingNear(destination);
+      const fast = !!(opts && opts.refineWalk === false);
+      const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
       activeDriveTo = driveTo;
-      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo);
-      let walkReady = null;
-      try {
-        const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
-        if (refined && refined.drive && refined.drive.path) {
-          route = refined.drive.route;
-          path = refined.drive.path;
-          intervals = refined.drive.intervals;
-          if (refined.access) activeDriveTo = refined.access;
-        }
-        if (refined && refined.walk) walkReady = refined.walk;
-      } catch (err) {
-        console.warn("Walk access refine failed", err);
-      }
+      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true, { skipTrim: fast });
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
         lat: destination.lat,
         lng: destination.lng
       });
-      adoptRoute(route, path, intervals, dest, false, walkReady);
+      adoptRoute(route, path, intervals, dest, false, null);
       if (!opts || opts.preview !== false) showRoutePreview(origin, dest, route.distanceMeters);
       setMessage("Route ready. Tap Start, or wait for the countdown.");
+
+      const applyRefine = async () => {
+        try { await parkingP; } catch (err) {}
+        const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
+        if (!refined) return;
+        if (refined.drive && refined.drive.path) {
+          route = refined.drive.route;
+          path = refined.drive.path;
+          intervals = refined.drive.intervals;
+          if (refined.access) activeDriveTo = refined.access;
+          adoptRoute(route, path, intervals, dest, isNavigating(), refined.walk || null);
+        } else if (refined.walk) {
+          const end = path[path.length - 1];
+          const visual = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : end;
+          drawParkingWalk(visual, dest, refined.walk);
+        }
+      };
+      if (opts && opts.refineWalk === false) {
+        parkingP.catch(() => {});
+        return;
+      }
+      if (opts && opts.waitRefine) await applyRefine();
+      else applyRefine().catch(err => console.warn("Walk access refine failed", err));
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
@@ -3622,11 +3655,11 @@
   }
 
   const MANEUVER_ICONS = {
-    straight: svgIconUrl('<path fill="#fff" d="M32 12l12 14h-7v22h-10V26h-7z"/>'),
-    right: svgIconUrl('<path fill="#fff" d="M20 50H30V32h8v6l14-10-14-10v6h-8V14H20z"/>'),
-    left: svgIconUrl('<path fill="#fff" d="M44 50H34V32h-8v6L12 28l14-10v6h8V14h10z"/>'),
-    "slight-right": svgIconUrl('<path fill="#fff" d="M24 50h10l7-22h6V18l10 8-10 8v-6h-5L34 50z"/>'),
-    "slight-left": svgIconUrl('<path fill="#fff" d="M40 50H30l-7-22h-6V18L7 26l10 8v-6h5L30 50z"/>'),
+    straight: svgIconUrl('<path fill="#fff" d="M32 6l12 13h-7v31h-10V19h-7z"/>'),
+    right: svgIconUrl('<path fill="#fff" d="M24 54H36V16H42V22L56 14 42 6V12H36V16H24z"/>'),
+    left: svgIconUrl('<path fill="#fff" d="M40 54H28V16H22V22L8 14 22 6V12H28V16H40z"/>'),
+    "slight-right": svgIconUrl('<path fill="#fff" d="M24 54h12V18l10-10V4l12 10-12 10v-6H24z"/>'),
+    "slight-left": svgIconUrl('<path fill="#fff" d="M40 54H28V18L18 8V4L6 14l12 10v-6h22z"/>'),
     uturn: svgIconUrl('<path fill="#fff" d="M42 50h-8V28c0-5.5-4-10-9-10s-9 4.5-9 10h-7c0-9.4 7.2-17 16-17s16 7.6 16 17v22zM20 34l-8 8 8 8V34z"/>'),
     roundabout: svgIconUrl('<path fill="#fff" d="M32 12l10 12h-7v4.2A12 12 0 1 1 20 34.5l5.6-3.2A6.5 6.5 0 1 0 32 30.2V24h-7z"/>')
   };
@@ -3804,15 +3837,15 @@
     const fam = maneuverFamily(maneuver);
     const m = String(maneuver || "").toUpperCase();
     const s = size || 48;
-    let d = "M24 4l14 16h-8v24H18V20h-8z";
+    let d = "M24 3l13 14h-7v27H18V17h-7z";
     if (fam === "left" && m.includes("SLIGHT")) {
-      d = "M30 44h-9L16 24H10V16L2 22.5 10 29v-5h5l6 20z";
+      d = "M32 46h-10V14l-9-9V3L4 12l9 9v-4h10V46z";
     } else if (fam === "right" && m.includes("SLIGHT")) {
-      d = "M18 44h9l5-20h6V16l8 6.5L38 29v-5h-5l-6 20z";
+      d = "M16 46h10V14l9-9V3l9 9-9 9v-4H16V46z";
     } else if (fam === "left") {
-      d = "M34 44H24V28H16V34L4 24l12-10V20H34z";
+      d = "M34 46H24V12H18V18L4 10l14-8V8H24V12H34z";
     } else if (fam === "right") {
-      d = "M14 44H24V28H32V34L44 24 32 14V20H14z";
+      d = "M14 46H24V12H30V18L44 10 30 2V8H24V12H14z";
     } else if (fam === "uturn") {
       d = "M34 44h-8V23.5c0-3.6-2.7-6.5-6-6.5s-6 2.9-6 6.5H8c0-7.5 5.6-13.5 12.5-13.5S33 16 33 23.5V44zM14.5 29.5L6 38l8.5 8.5V29.5z";
     } else if (fam === "roundabout") {
@@ -3825,10 +3858,10 @@
 
   function laneGlyph(dir){
     const d = String(dir || "through").toLowerCase();
-    if (d === "left" || d === "sharp_left") return "M18 40V22c0-4 2.8-7 7-7h2V9L13 21l14 12v-6h-2c-2 0-4 1.2-4 3.5V40z";
-    if (d === "slight_left" || d === "merge_to_left") return "M28 40V24L16 12h-6v7H5l15 15v6z";
-    if (d === "right" || d === "sharp_right") return "M14 40V22c0-4 2.8-7 7-7h2V9l14 12-14 12v-6h-2c-2 0-4 1.2-4 3.5V40z";
-    if (d === "slight_right" || d === "merge_to_right") return "M4 40V24L16 12h6v7h5L12 34v6z";
+    if (d === "left" || d === "sharp_left") return "M18 42V12c0-3 2.4-5.5 6-5.5h2V2L10 14l16 12v-5.5h-2c-2 0-4 1-4 3V42z";
+    if (d === "slight_left" || d === "merge_to_left") return "M28 42V16L14 4h-6v7H3l17 17v14z";
+    if (d === "right" || d === "sharp_right") return "M14 42V12c0-3 2.4-5.5 6-5.5h2V2l16 12-16 12v-5.5h-2c-2 0-4 1-4 3V42z";
+    if (d === "slight_right" || d === "merge_to_right") return "M4 42V16L18 4h6v7h5L12 28v14z";
     if (d === "reverse") return "M22 40V24c0-4.5-3.2-8-7.5-8S7 19.5 7 24h5c0-1.7 1.4-3 3-3s3 1.3 3 3v16h4zM12 28L6 34l6 6V28z";
     return "M16 6l11 13h-7v21h-8V19H5z";
   }
@@ -5139,7 +5172,7 @@
   // matched to the nearest heading-compatible way each fix. Shown only while navigating
   // and only when a limit is known; never the current speed.
 
-  const SPEED_LIMIT_MATCH_M = 22;      // way must pass this close to the fix
+  const SPEED_LIMIT_MATCH_M = 32;      // way must pass this close to the fix
   const SPEED_LIMIT_FORGET_M = 300;    // clear the badge this far past the last matched way
   const IMPLICIT_MAXSPEED = {          // OSM zone tags -> km/h
     "NZ:urban": 50, "NZ:rural": 100, "AU:urban": 50, "AU:rural": 100,
@@ -5159,6 +5192,20 @@
     return kmh > 0 ? Math.round(kmh) : null;
   }
 
+  function wayMaxspeed(tags){
+    if (!tags) return null;
+    const tagged = parseMaxspeed(tags.maxspeed)
+      || parseMaxspeed(tags["maxspeed:forward"])
+      || parseMaxspeed(tags["maxspeed:type"])
+      || parseMaxspeed(tags["source:maxspeed"]);
+    if (tagged) return tagged;
+    const hw = String(tags.highway || "");
+    if (hw === "living_street" || hw === "residential") return 50;
+    if (hw === "motorway" || hw === "motorway_link") return 100;
+    if (hw === "trunk" || hw === "trunk_link") return 100;
+    return null;
+  }
+
   async function fetchSpeedLimits(path){
     const id = ++speedLimit.routeId;
     speedLimit.ways = [];
@@ -5166,16 +5213,10 @@
     speedLimit.lastHitMs = 0;
     updateSpeedLimitBadge();
     if (!path || path.length < 2) return;
-    const pts = downsamplePath(path, 80).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
-    const query = `[out:json][timeout:22];(way["highway"]["maxspeed"](around:20,${pts});way["highway"]["turn:lanes"](around:20,${pts});way["highway"]["turn:lanes:forward"](around:20,${pts});way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"](around:22,${pts}););out geom;`;
+    const pts = downsamplePath(path, 36).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
+    const query = `[out:json][timeout:12];(way["highway"]["maxspeed"](around:30,${pts});way["highway"]["maxspeed:type"](around:30,${pts});way["highway"]["source:maxspeed"](around:30,${pts});way["highway"]["maxspeed:forward"](around:30,${pts});way["highway"]["turn:lanes"](around:30,${pts});way["highway"]["turn:lanes:forward"](around:30,${pts});way["highway"~"^(residential|living_street|motorway|motorway_link|trunk|trunk_link)$"](around:24,${pts}););out geom;`;
     try {
-      const res = await fetch(OVERPASS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "data=" + encodeURIComponent(query)
-      });
-      if (!res.ok) throw new Error("Overpass " + res.status);
-      const json = await res.json();
+      const json = await overpassJson(query, 12000);
       if (id !== speedLimit.routeId) return; // a newer route superseded this query
       speedLimit.ways = ingestSpeedLimitWays(json.elements);
       rebuildOsmSideStreets();
@@ -5188,7 +5229,7 @@
     const ways = [];
     for (const el of elements || []) {
       const tags = el.tags || {};
-      const kmh = parseMaxspeed(tags.maxspeed);
+      const kmh = wayMaxspeed(tags);
       const turnLanes = tags["turn:lanes"] || tags["turn:lanes:forward"] || "";
       const laneCount = parseInt(tags.lanes, 10);
       const highway = tags.highway || "";
@@ -5207,30 +5248,41 @@
     return ways;
   }
 
+  function mergeSpeedLimitWays(ways){
+    if (!ways || !ways.length) return;
+    if (!speedLimit.ways.length) {
+      speedLimit.ways = ways;
+      return;
+    }
+    ways.forEach(w => {
+      const a = w.pts && w.pts[0];
+      if (!a) return;
+      const dup = speedLimit.ways.some(h => {
+        const b = h.pts && h.pts[0];
+        return b && h.highway === w.highway && Math.abs(b.lat - a.lat) < 1e-4 && Math.abs(b.lng - a.lng) < 1e-4;
+      });
+      if (!dup) speedLimit.ways.push(w);
+    });
+  }
+
   async function fetchSpeedLimitsNear(point){
     if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return;
-    const query = `[out:json][timeout:15];way["highway"]["maxspeed"](around:220,${point.lat.toFixed(5)},${point.lng.toFixed(5)});out geom;`;
+    const query = `[out:json][timeout:10];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link)$"](around:180,${point.lat.toFixed(5)},${point.lng.toFixed(5)});out geom;`;
     try {
-      const res = await fetch(OVERPASS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "data=" + encodeURIComponent(query)
-      });
-      if (!res.ok) throw new Error("Overpass " + res.status);
-      const json = await res.json();
+      const json = await overpassJson(query, 10000);
       const ways = ingestSpeedLimitWays(json.elements);
-      if (ways.length) speedLimit.ways = ways;
+      mergeSpeedLimitWays(ways);
     } catch (err) {
       console.warn("Nearby speed limits unavailable", err);
     }
   }
 
   function maybeFetchNearbySpeedLimits(point){
-    if (isNavigating()) return;
     const now = performance.now();
-    if (now - speedLimit.nearAtMs < 12000) return;
+    const wait = isNavigating() ? 8000 : 12000;
+    if (now - speedLimit.nearAtMs < wait) return;
     const prev = speedLimit.nearAt;
-    if (prev && distanceMetres(prev, point) < 120 && speedLimit.ways.length) return;
+    if (prev && distanceMetres(prev, point) < 90 && speedLimit.ways.length) return;
     speedLimit.nearAtMs = now;
     speedLimit.nearAt = { lat: point.lat, lng: point.lng };
     fetchSpeedLimitsNear(point);
@@ -6485,7 +6537,7 @@
     if (isDemoRunning()) stopDemo();
     if (!activeRoutePath || activeRoutePath.length < 2) {
       setMessage("Picking a random route...");
-      await randomRoute({ preview: false });
+      await randomRoute({ preview: false, refineWalk: false });
       if (!activeRoutePath || activeRoutePath.length < 2) {
         setMessage("Could not load a route.");
         return;
@@ -6523,7 +6575,7 @@
     setMessage("Fence walk test: routing to Bucklands Beach Domain…");
     const origin = BUCKLANDS_ACCESS_TEST.origin;
     const dest = BUCKLANDS_ACCESS_TEST.dest;
-    await calculateRoute(origin, dest, dest.name, { preview: false });
+    await calculateRoute(origin, dest, dest.name, { preview: false, waitRefine: true });
     try { cancelStartCountdown(); } catch (err) {}
     setMapLabels(true);
     startDestPreview(dest);
@@ -6565,7 +6617,7 @@
       try {
         const { route, path, intervals } = await requestRoute(c.origin, c.dest, false);
         adoptRoute(route, path, intervals, { name: c.dest.name, lat: c.dest.lat, lng: c.dest.lng }, false);
-        await fetchSpeedLimits(activeRoutePath);
+        fetchSpeedLimits(activeRoutePath);
         rebuildOsmSideStreets();
         const step = (navSteps || []).find(s => {
           const fam = maneuverFamily(s.maneuver);
@@ -7161,6 +7213,10 @@
     flyover = null;
     cancelStartCountdown();
     stopDestPreview();
+    if (fromTouch) {
+      stowRouteCard();
+      if (!mapDragStart) scheduleRestoreRouteCard();
+    }
     if (fromTouch && isAndroidAuto()) {
       lastTouchMs = performance.now();
       autoRefollowArmed = true;
@@ -7530,10 +7586,22 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navHud, #carDebugBtn, #routeCard, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #descDialog, #parkDialog, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navHud, #carDebugBtn, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #descDialog, #parkDialog, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
+  let routeCardRestoreTimer = null;
+  function stowRouteCard(){
+    if (!document.body.classList.contains("has-route") || document.body.classList.contains("navigating")) return;
+    document.body.classList.add("route-card-stowed");
+    clearTimeout(routeCardRestoreTimer);
+  }
+  function scheduleRestoreRouteCard(){
+    clearTimeout(routeCardRestoreTimer);
+    routeCardRestoreTimer = setTimeout(() => {
+      document.body.classList.remove("route-card-stowed");
+    }, 750);
+  }
   window.addEventListener("pointerdown", event => {
     if (startCountdown && performance.now() >= startCountdown.startMs && !(event.target.closest && event.target.closest("#routeGo"))) {
       cancelStartCountdown();
@@ -7543,28 +7611,35 @@
       mapDragStart = null;
       return;
     }
-    mapDragStart = { x: event.clientX, y: event.clientY };
+    mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
     if (!mapDragStart) return;
     const dx = event.clientX - mapDragStart.x;
     const dy = event.clientY - mapDragStart.y;
     if (dx * dx + dy * dy < 64) return;
-    chromeLocked = false;
-    hideChrome();
-    markUserPanned(true);
-    mapDragStart = null;
+    if (!mapDragStart.panned) {
+      mapDragStart.panned = true;
+      chromeLocked = false;
+      hideChrome();
+      markUserPanned(true);
+    }
+    stowRouteCard();
   }, { capture:true, passive:true });
   window.addEventListener("pointerup", event => {
     const start = mapDragStart;
     mapDragStart = null;
     if (!start) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    if (dx * dx + dy * dy >= 64) return;
+    if (start.panned) {
+      scheduleRestoreRouteCard();
+      return;
+    }
     onNavMapTap();
   }, { capture:true, passive:true });
-  window.addEventListener("pointercancel", () => { mapDragStart = null; }, { capture:true, passive:true });
+  window.addEventListener("pointercancel", () => {
+    if (mapDragStart && mapDragStart.panned) scheduleRestoreRouteCard();
+    mapDragStart = null;
+  }, { capture:true, passive:true });
   window.addEventListener("wheel", event => {
     if (isChromeUiTarget(event.target)) return;
     chromeLocked = false;
