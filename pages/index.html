@@ -19,7 +19,7 @@
     @keyframes gmapsRipple {0%{transform:scale(.5); opacity:.65}100%{transform:scale(1.75); opacity:0}}
     gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block; transform:translate3d(0,0,0); will-change:contents}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
-    #searchRow,#buttonRow,#routeCard,#carDebugBtn {pointer-events:auto}
+    #searchRow,#buttonRow,#carDebugBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:8px; align-items:stretch}
     #searchHost {min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
     #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
@@ -83,7 +83,7 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:34px; height:34px; display:block}
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
-    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); display:flex; align-items:center; gap:12px; pointer-events:none}
+    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + (100% - var(--aa-inset-left) - var(--aa-inset-right)) / 2); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:translateX(-50%); display:flex; align-items:center; gap:12px; pointer-events:none}
     #speedLimitBadge {display:none; position:relative; left:auto; bottom:auto; z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; flex:0 0 auto}
     #speedLimitBadge.visible {display:flex}
     #navHud {display:none; pointer-events:none}
@@ -101,6 +101,8 @@
     body:not(.chrome-hidden) #navBanner {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
     html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
+    body.nav-browsing #navBanner,
+    body.nav-browsing #navBanner.visible {display:none !important}
     #navPrimary {display:flex; align-items:center; gap:10px; min-height:76px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
     #navIconWrap {position:relative; width:64px; height:64px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
@@ -114,7 +116,7 @@
     #navIconWrap.clock #navIcon {opacity:0}
     #navClock svg {width:64px; height:64px; display:block}
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
-    #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95}
+    #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #navThen {display:none; align-items:center; gap:8px; width:max-content; padding:6px 14px 6px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
     #navThenIcon {width:22px; height:22px; display:flex}
@@ -177,7 +179,7 @@
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard {display:none !important}
-    body.route-card-stowed #routeCard {opacity:0; pointer-events:none; transform:translateY(12px)}
+    body.route-card-stowed #routeCard {opacity:0; pointer-events:none !important; visibility:hidden; transform:translateY(12px)}
     #routeCard * {pointer-events:none}
     #routeCardHead button,#routeGo,#routeParking,#routeTitleRow {pointer-events:auto}
     #routePhoto {-webkit-user-drag:none; user-select:none}
@@ -809,7 +811,7 @@
     TILT_CAPS: [62, 50, 42, 34, 26],
     TURN_TILT_MIN: 28,
     TURN_PAD_M: 90,
-    TURN_EDGE_FRAC: 0.14,
+    TURN_EDGE_FRAC: 0.22,
     TURN_SKIP_M: 40
   };
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
@@ -3042,8 +3044,8 @@
     cancelStartCountdown();
     closeDescriptionDialog();
     clearParkingOverlay();
-    document.body.classList.remove("has-route", "navigating");
-    document.documentElement.classList.remove("has-route", "navigating");
+    document.body.classList.remove("has-route", "navigating", "nav-browsing");
+    document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
     if (explore.overview && map3d) {
       map3d.center = explore.overview.center;
       map3d.range = explore.overview.range;
@@ -3821,10 +3823,10 @@
   function maneuverFamily(maneuver){
     const m = String(maneuver || "").toUpperCase();
     if (m.includes("UTURN") || m.includes("REVERSE")) return "uturn";
-    if (m.includes("ROUNDABOUT")) return "roundabout";
-    if (m.includes("LEFT") || m.includes("WEST")) return "left";
-    if (m.includes("RIGHT") || m.includes("EAST")) return "right";
     if (m.includes("DESTINATION") || m.includes("ARRIVE")) return "dest";
+    if (m.includes("RIGHT") || m.includes("EAST")) return "right";
+    if (m.includes("LEFT") || m.includes("WEST")) return "left";
+    if (m.includes("ROUNDABOUT") || m.includes("ROUND_ABOUT")) return "roundabout";
     return "straight";
   }
 
@@ -3895,21 +3897,126 @@
     return `<svg viewBox="0 0 48 48" aria-hidden="true">${paths}</svg>`;
   }
 
-  function shortInstruction(text, maneuver){
-    const raw = String(text || "").replace(/\s+/g, " ").trim();
-    if (!raw) {
-      const fam = maneuverFamily(maneuver);
-      if (fam === "dest") return activeDestination?.name || "Destination";
-      if (fam === "left") return "Turn left";
-      if (fam === "right") return "Turn right";
-      if (fam === "uturn") return "Make a u-turn";
-      if (fam === "roundabout") return "Roundabout";
-      return "Continue";
+  function geometryManeuverAt(metres){
+    const path = activeRoutePath, cum = routeCum;
+    if (!path || path.length < 2 || !cum || cum.length !== path.length) return "";
+    const total = cum[cum.length - 1];
+    const m = Number(metres);
+    if (!Number.isFinite(m)) return "";
+    const before = pointAtMetres(path, cum, clamp(m - 90, 0, total)).bearing;
+    const after = pointAtMetres(path, cum, clamp(m + 70, 0, total)).bearing;
+    const turn = ((after - before + 540) % 360) - 180;
+    if (turn > 125 || turn < -125) return "UTURN_LEFT";
+    if (turn > 48) return "TURN_RIGHT";
+    if (turn > 22) return "TURN_SLIGHT_RIGHT";
+    if (turn < -48) return "TURN_LEFT";
+    if (turn < -22) return "TURN_SLIGHT_LEFT";
+    return "";
+  }
+
+  function roundaboutExitNumber(text){
+    const t = String(text || "").toLowerCase();
+    const n = t.match(/\b(?:take\s+the\s+)?(\d+)(?:st|nd|rd|th)?\s+exit\b/);
+    if (n) return Number(n[1]);
+    if (/\bfirst\s+exit\b/.test(t)) return 1;
+    if (/\bsecond\s+exit\b/.test(t)) return 2;
+    if (/\bthird\s+exit\b/.test(t)) return 3;
+    if (/\bfourth\s+exit\b/.test(t)) return 4;
+    return 0;
+  }
+
+  function inferManeuver(maneuver, instructions, metres){
+    const m = String(maneuver || "").toUpperCase();
+    if (m.includes("UTURN") || m.includes("REVERSE")) return maneuver || "UTURN_LEFT";
+    if (m.includes("DESTINATION") || m.includes("ARRIVE")) return maneuver || "DESTINATION";
+    if (m.includes("RIGHT") && !m.includes("LEFT")) return m.includes("SLIGHT") ? "TURN_SLIGHT_RIGHT" : "TURN_RIGHT";
+    if (m.includes("LEFT") && !m.includes("RIGHT")) return m.includes("SLIGHT") ? "TURN_SLIGHT_LEFT" : "TURN_LEFT";
+    const text = stripNavHtml(instructions);
+    const t = text.toLowerCase();
+    if (/\b(u-?turn|make a u)\b/.test(t)) return "UTURN_LEFT";
+    if (/\b(slight(?:ly)?|sharp)?\s*(?:turn|keep|bear|fork|ramp|merge|exit)\s+(?:to the\s+)?right\b/.test(t) || /\bright\s+(?:turn|lane|fork|ramp)\b/.test(t)) {
+      return /slight/.test(t) ? "TURN_SLIGHT_RIGHT" : "TURN_RIGHT";
     }
-    return raw
-      .replace(/^(Turn slightly left|Turn slightly right|Turn sharp left|Turn sharp right|Turn left|Turn right|Keep left|Keep right|Bear left|Bear right|Merge|Continue|Head|Take the ramp|Take the slip road|At the roundabout)( onto | on | toward | towards | to )?/i, "")
-      .replace(/^onto /i, "")
-      .trim() || raw;
+    if (/\b(slight(?:ly)?|sharp)?\s*(?:turn|keep|bear|fork|ramp|merge|exit)\s+(?:to the\s+)?left\b/.test(t) || /\bleft\s+(?:turn|lane|fork|ramp)\b/.test(t)) {
+      return /slight/.test(t) ? "TURN_SLIGHT_LEFT" : "TURN_LEFT";
+    }
+    const exitN = roundaboutExitNumber(text);
+    const roundabout = exitN > 0 || /roundabout/i.test(text) || m.includes("ROUNDABOUT");
+    const geo = geometryManeuverAt(metres);
+    if (roundabout) {
+      const geoFam = maneuverFamily(geo);
+      if (geoFam === "left" || geoFam === "right" || geoFam === "uturn") return geo;
+      if (exitN <= 1) return "TURN_LEFT";
+      return "TURN_RIGHT";
+    }
+    if (geo && maneuverFamily(m) === "straight") return geo;
+    return maneuver || "STRAIGHT";
+  }
+
+  function hudManeuver(step){
+    if (!step) return "STRAIGHT";
+    return inferManeuver(step.maneuver, step.instructions, step.m);
+  }
+
+  function isBannerStreetPart(s){
+    const name = String(s || "").trim();
+    if (!name || name.length > 48) return false;
+    if (/^\d+(st|nd|rd|th)?$/i.test(name)) return false;
+    if (/^(first|second|third|fourth|exit|ramp|pin)$/i.test(name)) return false;
+    if (/^(overbridge|bridge|motorway|highway)$/i.test(name)) return false;
+    return /[a-z]/i.test(name);
+  }
+
+  function cleanBannerStreet(name){
+    let s = stripNavHtml(name)
+      .replace(/\s+heading\s+to\b.*$/i, "")
+      .replace(/\s+toward[s]?\b.*$/i, "")
+      .replace(/^[^a-z0-9]+/i, "")
+      .replace(/[.,;:]+$/g, "")
+      .trim();
+    if (s.includes(" / ")) {
+      const parts = s.split(/\s\/\s/).map(p => p.trim()).filter(isBannerStreetPart);
+      if (parts.length) s = parts[0];
+    }
+    const comma = s.split(",")[0].trim();
+    if (comma) s = comma;
+    return s;
+  }
+
+  function streetNameFromInstruction(text){
+    const src = String(text || "").trim();
+    if (!src) return "";
+    const bolds = [];
+    src.replace(/<b>([\s\S]*?)<\/b>/gi, (_, inner) => {
+      const part = stripNavHtml(inner);
+      if (isBannerStreetPart(part)) bolds.push(part);
+    });
+    const raw = stripNavHtml(src);
+    let name = bolds[0] || "";
+    if (!name) {
+      const onto = raw.match(/\b(?:onto|on to)\s+(.+)$/i);
+      if (onto) name = onto[1];
+    }
+    if (!name) {
+      const along = raw.match(/\b(?:along|on)\s+(.+)$/i);
+      if (along && !/^(the\s+)?(left|right|ramp|roundabout)\b/i.test(along[1])) name = along[1];
+    }
+    if (!name && !/^\s*(at\b|take\b|turn\b|keep\b|bear\b|merge\b|continue\b|head\b|slight\b|sharp\b)/i.test(raw) && raw.length <= 42) {
+      name = raw;
+    }
+    return cleanBannerStreet(name);
+  }
+
+  function shortInstruction(text, maneuver){
+    const street = streetNameFromInstruction(text);
+    if (street) return street;
+    const fam = maneuverFamily(maneuver);
+    if (fam === "dest") return activeDestination?.name || "Destination";
+    if (fam === "left") return "Turn left";
+    if (fam === "right") return "Turn right";
+    if (fam === "uturn") return "Make a u-turn";
+    if (fam === "roundabout") return "Roundabout";
+    return "Continue";
   }
 
   function parseTurnLanes(tag){
@@ -4006,8 +4113,8 @@
   function stepInstructions(step){
     const ni = step && step.navigationInstruction;
     const loc = step && step.localizedValues;
-    return stripNavHtml(
-      (step && (step.instructions || step.instruction)) ||
+    return String(
+      (step && (step.html_instructions || step.htmlInstructions || step.instructions || step.instruction)) ||
       (ni && ni.instructions) ||
       (loc && loc.instructions) ||
       ""
@@ -4265,19 +4372,21 @@
     if (banner && current) {
       banner.hidden = false;
       banner.classList.add("visible");
-      const title = shortInstruction(current.instructions, current.maneuver);
+      const turn = hudManeuver(current);
+      const title = shortInstruction(current.instructions, turn);
       if (text && text.textContent !== title) text.textContent = title;
-      const iconKey = current.maneuver;
+      const iconKey = turn;
       if (icon && icon.dataset.maneuver !== iconKey) {
         icon.dataset.maneuver = iconKey;
-        icon.innerHTML = maneuverIconSvg(current.maneuver, 56);
+        icon.innerHTML = maneuverIconSvg(turn, 56);
       }
-      if (next && thenEl && thenIcon && maneuverFamily(next.maneuver) !== "straight") {
+      const nextTurn = next ? hudManeuver(next) : "";
+      if (next && thenEl && thenIcon && maneuverFamily(nextTurn) !== "straight") {
         thenEl.hidden = false;
         thenEl.classList.add("visible");
-        if (thenIcon.dataset.maneuver !== next.maneuver) {
-          thenIcon.dataset.maneuver = next.maneuver;
-          thenIcon.innerHTML = maneuverIconSvg(next.maneuver, 22);
+        if (thenIcon.dataset.maneuver !== nextTurn) {
+          thenIcon.dataset.maneuver = nextTurn;
+          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 22);
         }
       } else if (thenEl) {
         thenEl.hidden = true;
@@ -4309,19 +4418,19 @@
           wrap.classList.remove("clock");
         }
       }
-      const fam = maneuverFamily(current.maneuver);
+      const fam = maneuverFamily(turn);
       const showLanes = dist < NAV_LANE_AHEAD_M && fam !== "dest" && (fam !== "straight" || dist < 80);
       if (showLanes) {
         const turnPt = pointAtMetres(activeRoutePath, routeCum, current.m).point;
         const googleLanes = current.lanes && current.lanes.length >= 2
-          ? (current.lanes.some(l => l.rec) ? current.lanes : markRecommendedLanes(current.lanes, current.maneuver))
+          ? (current.lanes.some(l => l.rec) ? current.lanes : markRecommendedLanes(current.lanes, turn))
           : null;
         const osm = googleLanes ? null : matchTurnLanes(turnPt, puck.heading);
         let osmLanes = osm && osm.turnLanes ? parseTurnLanes(osm.turnLanes) : null;
         if (!osmLanes && osm && osm.lanes > 1) {
           osmLanes = Array.from({ length: osm.lanes }, () => ({ dirs: ["through"], rec: false }));
         }
-        const lanes = googleLanes || (osmLanes ? markRecommendedLanes(osmLanes, current.maneuver) : synthLanes(current.maneuver));
+        const lanes = googleLanes || (osmLanes ? markRecommendedLanes(osmLanes, turn) : synthLanes(turn));
         renderLaneBar(lanes);
       } else {
         renderLaneBar(null);
@@ -4611,8 +4720,9 @@
     const decoys = decoysForStep(current);
     const lastDecoy = decoys.length ? decoys[decoys.length - 1] : null;
     const armedM = turnCueArmedM(current, speed, decoys);
-    const key = Math.round(current.m) + ":" + current.maneuver;
-    const fam = maneuverFamily(current.maneuver);
+    const cueMan = hudManeuver(current);
+    const key = Math.round(current.m) + ":" + cueMan;
+    const fam = maneuverFamily(cueMan);
     if (turnCue.test) {
       const waiting = lastDecoy && progressM < lastDecoy.m + TURN_CUE.AFTER_DECOY_M;
       const live = turnCue.test.playedM == null
@@ -4624,7 +4734,7 @@
     if (fam === "dest" || fam === "straight") return;
     if (turnCue.played.has(key)) return;
     if (!turnCueShouldPlay(current, progressM, speed, decoys)) return;
-    const side = turnCueSpeaker(current.maneuver);
+    const side = turnCueSpeaker(cueMan);
     playTurnCue(side);
     turnCue.played.add(key);
     if (turnCue.test) {
@@ -4771,6 +4881,7 @@
     flyover = null;
     cancelStartCountdown();
     stopDestPreview();
+    unstowRouteCard();
     offRoute.hits = 0;
     if (destinationMarker) { destinationMarker.remove(); destinationMarker = null; }
     clearParkingOverlay();
@@ -4786,8 +4897,8 @@
     speedLimit.routeId += 1;
     updateSpeedLimitBadge();
     traceRec.dest = null;
-    document.body.classList.remove("has-route", "navigating");
-    document.documentElement.classList.remove("has-route", "navigating");
+    document.body.classList.remove("has-route", "navigating", "nav-browsing");
+    document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
     hideNavHud();
     resetTurnCue();
     setMapLabels(false);
@@ -5571,7 +5682,11 @@
 
   function visibleAheadMetres(range, tilt, fov){
     const y = carScreenY();
-    return Math.max(40, lookAheadForFraction(range, tilt, fov, y) - lookAheadForFraction(range, tilt, fov, NAV_INFO.TURN_EDGE_FRAC));
+    const carLook = groundLookAhead(range, tilt, fov, y);
+    let edgeLook = groundLookAhead(range, tilt, fov, NAV_INFO.TURN_EDGE_FRAC);
+    if (!Number.isFinite(edgeLook)) edgeLook = groundLookAhead(range, tilt, fov, 0.28);
+    if (!Number.isFinite(carLook) || !Number.isFinite(edgeLook)) return 40;
+    return Math.max(40, carLook - edgeLook);
   }
 
   function rangeToFitAhead(aheadM, tilt, fov){
@@ -5610,16 +5725,20 @@
     const baseRange = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
     const baseAhead = visibleAheadMetres(baseRange, view.tilt, view.fov);
     const closeM = Math.max(220, baseAhead * 1.1);
+    const inViewM = baseAhead * 0.92;
     const turns = upcomingInfoTurnMetres(startM);
     const PEEK = 3;
     const targets = [];
     let i = 0;
-    if (turns.length) {
-      let end = turns[0];
-      i = 1;
-      if (turns[1] && (turns[0] - startM) <= closeM) {
-        end = turns[1];
-        i = 2;
+    while (i < turns.length && (turns[i] - startM) <= inViewM) i++;
+    if (i < turns.length) {
+      let end = turns[i];
+      const next = turns[i + 1];
+      if (next && (turns[i] - startM) <= closeM && (next - turns[i]) <= Math.max(280, closeM)) {
+        end = next;
+        i += 2;
+      } else {
+        i += 1;
       }
       targets.push(Math.min(end, total));
     }
@@ -5648,7 +5767,10 @@
       const idx = Math.min(level - 1, Math.max(0, span.targets.length - 1));
       const endM = span.targets[idx];
       const aheadM = Math.max(endM - span.startM, 80);
-      const tilt = clamp(baseTilt - Math.log2(Math.max(aheadM / 90, 1)) * 7, NAV_INFO.TURN_TILT_MIN, baseTilt);
+      const overview = endM >= span.total - 8;
+      const tilt = overview
+        ? clamp(baseTilt - Math.log2(Math.max(aheadM / 90, 1)) * 7, NAV_INFO.TURN_TILT_MIN, baseTilt)
+        : clamp(baseTilt - Math.log2(Math.max(aheadM / 500, 1)) * 4, 62, baseTilt);
       return { range: rangeToFitAhead(aheadM, tilt, view.fov), tilt };
     }
     const stepIdx = Math.min(level - 1, NAV_INFO.RANGE_STEPS.length - 1);
@@ -5706,6 +5828,32 @@
     destPreview = null;
   }
 
+  function destPreviewScreenX(){
+    const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
+    const right = viewSafe.right || 0;
+    let visLeft = (viewSafe.left || 0) + 24;
+    const card = document.getElementById("routeCard");
+    if (card && document.body.classList.contains("has-route") && !document.body.classList.contains("navigating") && !document.body.classList.contains("route-card-stowed")) {
+      const box = card.getBoundingClientRect();
+      if (box.width > 40) visLeft = Math.max(visLeft, box.right + 28);
+    }
+    const visRight = Math.max(visLeft + 80, w - right);
+    return clamp(((visLeft + visRight) / 2) / w, 0.56, 0.82);
+  }
+
+  function destPreviewCenter(dest, heading, range){
+    if (!dest) return dest;
+    const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
+    const h = Math.max(1, viewSafe.height || window.innerHeight || 1);
+    const fov = numOr(cam && cam.fov, CAR_REF_FOV);
+    const dx = destPreviewScreenX() - 0.5;
+    if (dx < 0.02) return dest;
+    const hFovRad = 2 * Math.atan(Math.tan(toRad(fov) / 2) * (w / Math.max(h, 1)));
+    const halfW = Math.max(range, 40) * Math.tan(hFovRad / 2);
+    const shift = clamp(dx * 2 * halfW, 28, Math.max(48, range * 0.42));
+    return lookAhead(dest, heading - 90, shift);
+  }
+
   function applyDestPreviewCamera(dtEase, now){
     if (!destPreview || !map3d) return;
     const dest = destPreview.dest;
@@ -5724,7 +5872,12 @@
       const spinU = ((now - destPreview.startMs - DEST_PREVIEW.SWOOP_MS) / DEST_PREVIEW.SPIN_MS) % 1;
       cam.heading = normaliseHeading(from.heading + spinU * 360);
     }
-    const center = { lat: cam.lat, lng: cam.lng };
+    const pin = { lat: cam.lat, lng: cam.lng };
+    const aimed = destPreviewCenter(pin, cam.heading, cam.range);
+    const center = {
+      lat: lerp(pin.lat, aimed.lat, e),
+      lng: lerp(pin.lng, aimed.lng, e)
+    };
     const alt = followGroundAltitude(center, dtEase);
     if (Number.isFinite(alt)) center.altitude = alt;
     map3d.center = center;
@@ -5940,16 +6093,25 @@
   // with `tilt` degrees from vertical and a vertical field of view `fov`. Aiming the
   // centre this far AHEAD of the car puts the car at `frac` (Google/Vela's puck-low
   // framing). Works for any tilt including top-down.
-  function lookAheadForFraction(range, tilt, fov, frac){
+  function groundLookAhead(range, tilt, fov, frac){
     const tiltR = toRad(clamp(tilt, 0, 89.9));
     const H = range * Math.cos(tiltR);
     const L = range * Math.sin(tiltR);
     const depCentre = Math.PI / 2 - tiltR;
     const delta = Math.atan(((frac - 0.5) / 0.5) * Math.tan(toRad(clamp(fov, 5, 80)) / 2));
-    const depCar = depCentre + delta;
-    const s = Math.sin(depCar), c = Math.cos(depCar);
-    if (Math.abs(s) < 1e-6) return L;
-    return Math.max(0, L - H * c / s);
+    const dep = depCentre + delta;
+    const s = Math.sin(dep), c = Math.cos(dep);
+    if (s <= 1e-6) return NaN;
+    return L - H * c / s;
+  }
+
+  function lookAheadForFraction(range, tilt, fov, frac){
+    const d = groundLookAhead(range, tilt, fov, frac);
+    if (!Number.isFinite(d)) {
+      const tiltR = toRad(clamp(tilt, 0, 89.9));
+      return range * Math.sin(tiltR);
+    }
+    return Math.max(0, d);
   }
 
   function numOr(value, fallback){
@@ -6134,6 +6296,7 @@
     const followBtn = document.getElementById("followBtn");
     if (followBtn) followBtn.textContent = "Following: ON";
     ensureFollowTicker();
+    unstowRouteCard();
     updateRecenterButton();
   }
 
@@ -7167,6 +7330,9 @@
 
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
+    if (destPreview || (document.body.classList.contains("has-route") && !isNavigating())) {
+      markUserPanned(true);
+    }
     const range = Number(map3d.range) || 260;
     const next = clamp(range / (Number(factor) || 1), 40, 20000);
     if (following && puck.fix) {
@@ -7289,6 +7455,9 @@
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-recenter", show);
     document.documentElement.classList.toggle("has-recenter", show);
+    const browsing = isNavigating() && !following;
+    document.body.classList.toggle("nav-browsing", browsing);
+    document.documentElement.classList.toggle("nav-browsing", browsing);
     updateCompassButton();
   }
 
@@ -7641,17 +7810,43 @@
   }
 
   let mapDragStart = null;
-  let routeCardRestoreTimer = null;
+  let routeCardRestoreTimer = 0;
+  const ROUTE_CARD_RESTORE_MS = 2800;
   function stowRouteCard(){
     if (!document.body.classList.contains("has-route") || document.body.classList.contains("navigating")) return;
     document.body.classList.add("route-card-stowed");
-    clearTimeout(routeCardRestoreTimer);
+    if (routeCardRestoreTimer) {
+      window.clearTimeout(routeCardRestoreTimer);
+      routeCardRestoreTimer = 0;
+    }
+  }
+  function unstowRouteCard(){
+    document.body.classList.remove("route-card-stowed");
+    if (routeCardRestoreTimer) {
+      window.clearTimeout(routeCardRestoreTimer);
+      routeCardRestoreTimer = 0;
+    }
   }
   function scheduleRestoreRouteCard(){
-    clearTimeout(routeCardRestoreTimer);
-    routeCardRestoreTimer = setTimeout(() => {
+    if (!document.body.classList.contains("route-card-stowed")) return;
+    if (routeCardRestoreTimer) window.clearTimeout(routeCardRestoreTimer);
+    routeCardRestoreTimer = window.setTimeout(() => {
+      routeCardRestoreTimer = 0;
       document.body.classList.remove("route-card-stowed");
-    }, 750);
+    }, ROUTE_CARD_RESTORE_MS);
+  }
+  function releaseMapFromRoutePreview(){
+    if (!document.body.classList.contains("has-route") || document.body.classList.contains("navigating")) return;
+    cancelStartCountdown();
+    stopDestPreview();
+    stowRouteCard();
+    if (following) {
+      following = false;
+      cam.seeded = false;
+      const followBtn = document.getElementById("followBtn");
+      if (followBtn) followBtn.textContent = "Following: OFF";
+    }
+    updateRecenterButton();
   }
   window.addEventListener("pointerdown", event => {
     if (startCountdown && performance.now() >= startCountdown.startMs && !(event.target.closest && event.target.closest("#routeGo"))) {
@@ -7662,6 +7857,7 @@
       mapDragStart = null;
       return;
     }
+    releaseMapFromRoutePreview();
     mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
@@ -7686,9 +7882,11 @@
       return;
     }
     onNavMapTap();
+    scheduleRestoreRouteCard();
   }, { capture:true, passive:true });
   window.addEventListener("pointercancel", () => {
     if (mapDragStart && mapDragStart.panned) scheduleRestoreRouteCard();
+    else if (document.body.classList.contains("route-card-stowed")) scheduleRestoreRouteCard();
     mapDragStart = null;
   }, { capture:true, passive:true });
   window.addEventListener("wheel", event => {
