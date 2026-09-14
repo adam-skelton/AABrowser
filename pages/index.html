@@ -182,7 +182,7 @@
     #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:center}
     #routePlace.has-photo {grid-template-columns:112px minmax(0,1fr)}
     #routePhoto {width:112px; height:112px; border-radius:16px; object-fit:cover; background:#DADCE0}
-    #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0}
+    #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; cursor:pointer}
     #routeTitle {margin:0; flex:1; min-width:0; font-size:22px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
     #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#80868B; display:flex}
     #routeTitleChevron svg {width:22px; height:22px; display:block}
@@ -776,6 +776,7 @@
 
   let map3d, Polyline3DElement, Marker3DElement, Marker3DInteractiveElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
   let userMarker, userCar, userArrow, destinationMarker, parkingMarker;
+  let parkingWalkLines = [];
   let maneuverMarkers = [];
   let infoLevel = 0;
   let infoBtnArmed = false;
@@ -862,6 +863,7 @@
       ["gmp-headingchange","gmp-rangechange","gmp-tiltchange","gmp-fovchange","gmp-rollchange"].forEach(name => {
         map3d.addEventListener(name, () => {
           if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
+          if (name === "gmp-rangechange") applyExploreLabelMode();
           refreshViewSpecs();
         });
       });
@@ -1430,7 +1432,7 @@
     { id: "hospital", title: "Hospitals", subtitle: "Emergency care", type: "hospital", color: "#D93025" },
     { id: "lodging", title: "Hotels", subtitle: "Places to stay", type: "lodging", color: "#5F6368" }
   ];
-  const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null };
+  const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null, labelMode: "" };
 
   function customMapConfigured(){
     const id = String(CUSTOM_MAP_ID || "").trim();
@@ -1479,6 +1481,29 @@
 
   function kmlText(el){
     return el && el.textContent ? el.textContent.trim() : "";
+  }
+
+  function cssHue(hex){
+    const s = String(hex || "").replace("#", "");
+    if (s.length < 6) return -1;
+    const r = parseInt(s.slice(0, 2), 16) / 255;
+    const g = parseInt(s.slice(2, 4), 16) / 255;
+    const b = parseInt(s.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    if (d < 1e-4) return 0;
+    let h = 0;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+    return h < 0 ? h + 360 : h;
+  }
+
+  function customMapPinLook(color){
+    const h = cssHue(color);
+    if (h <= 22 || h >= 338) return { color: "#0F9D58", glyph: "pin" };
+    if (h >= 85 && h <= 170) return { color: "#0F9D58", glyph: "tick" };
+    return { color: color || "#1A73E8", glyph: "pin" };
   }
 
   function kmlColorToCss(value){
@@ -1540,6 +1565,7 @@
       const lng = Number(parts[0]), lat = Number(parts[1]);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       const style = styles[kmlText(kmlKids(pm, "styleUrl")[0])] || { href: "", color: "#1A73E8" };
+      const look = customMapPinLook(style.color);
       const html = kmlText(kmlKids(pm, "description")[0]);
       const text = htmlToText(html);
       places.push({
@@ -1547,7 +1573,8 @@
         name: kmlText(kmlKids(pm, "name")[0]) || "Place",
         lat,
         lng,
-        color: style.color,
+        color: look.color,
+        glyph: look.glyph,
         iconHref: rewriteIconHref(style.href),
         description: text,
         descriptionHtml: html,
@@ -1569,24 +1596,52 @@
     return /503-wht-blank/i.test(String(href || ""));
   }
 
-  function exploreLabeledPinDataUrl(place){
+  function exploreLabeledPinDataUrl(place, opts){
+    const showLabel = !opts || opts.label !== false;
     const raw = String(place.name || "").replace(/\s+/g, " ").trim();
     const name = raw.length > 22 ? raw.slice(0, 21) + "…" : raw;
     const fill = place.color || place.iconBg || "#1A73E8";
+    const glyph = place.kind === "parking" ? "parking" : (place.glyph || "pin");
     const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const pinGlyph = glyph === "parking"
+      ? '<circle cx="18" cy="17" r="7" fill="#fff"/><text x="18" y="21.2" text-anchor="middle" fill="' + fill + '" font-size="11" font-weight="800" font-family="system-ui,Segoe UI,sans-serif">P</text>'
+      : glyph === "tick"
+        ? '<circle cx="18" cy="17" r="7.2" fill="#fff"/><path fill="none" stroke="' + fill + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M13 17.2l3.1 3.2 7-7.2"/>'
+        : '<circle cx="18" cy="17" r="6.2" fill="#fff"/>';
+    const pin = '<g transform="translate(PINX,16) scale(.86)"><path fill="' + fill + '" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' + pinGlyph + "</g>";
+    if (!showLabel || !escaped) {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">' +
+        pin.replace("PINX", "0") + "</svg>";
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }
+    const pad = 12;
+    const textW = Math.min(176, Math.max(64, name.length * 6.7 + pad * 2));
+    const width = Math.round(textW + 6);
+    const pinX = Math.round((width - 31) / 2);
     const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="52" viewBox="0 0 112 52">' +
-      (escaped ? '<rect x="4" y="1" rx="7" width="104" height="16" fill="#202124" fill-opacity=".92"/><text x="56" y="13" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" : "") +
-      '<g transform="translate(41,16) scale(.86)">' +
-      '<path fill="' + fill + '" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' +
-      (place.kind === "parking"
-        ? '<circle cx="18" cy="17" r="7" fill="#fff"/><text x="18" y="21.2" text-anchor="middle" fill="' + fill + '" font-size="11" font-weight="800" font-family="system-ui,Segoe UI,sans-serif">P</text>'
-        : '<circle cx="18" cy="17" r="6.2" fill="#fff"/>') +
-      "</g></svg>";
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="56" viewBox="0 0 ' + width + ' 56">' +
+      '<rect x="3" y="1" rx="8" width="' + (width - 6) + '" height="18" fill="#E8EAED"/>' +
+      '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#202124" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
+      pin.replace("PINX", String(pinX)) +
+      "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
 
-  function explorePinNode(place){
+  function applyExplorePinImage(img, place, showLabel){
+    if (!img) return;
+    img.src = exploreLabeledPinDataUrl(place, { label: showLabel });
+    if (showLabel) {
+      img.width = 128;
+      img.height = 56;
+      img.style.cssText = "width:auto;height:56px;max-width:176px";
+    } else {
+      img.width = 36;
+      img.height = 48;
+      img.style.cssText = "width:36px;height:48px";
+    }
+  }
+
+  function explorePinNode(place, showLabel){
     const img = document.createElement("img");
     img.alt = place.name || "";
     const href = rewriteIconHref(place.iconHref);
@@ -1598,10 +1653,7 @@
       img.style.cssText = "width:40px;height:40px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))";
       return img;
     }
-    img.src = exploreLabeledPinDataUrl(place);
-    img.width = 112;
-    img.height = 52;
-    img.style.cssText = "width:112px;height:52px";
+    applyExplorePinImage(img, place, showLabel !== false);
     return img;
   }
 
@@ -1654,7 +1706,8 @@
     }).filter(Boolean);
   }
 
-  const PARKING_NEAR_FALLBACK_M = 1100;
+  const PARKING_NEAR_M = 420;
+  const PARKING_NEAR_FALLBACK_M = 850;
   const parkingNear = { requestId: 0, destKey: "", options: [], selected: null };
 
   function osmCoord(el){
@@ -1667,6 +1720,8 @@
 
   function parkingTypeText(kind){
     const k = String(kind || "").toLowerCase();
+    if (k === "street") return "Street";
+    if (k === "building") return "Building";
     if (k === "underground" || k === "multi-storey" || k === "rooftop") return k.replace("-", " ");
     if (k === "street_side" || k === "lane") return "Street";
     if (k === "surface") return "Surface";
@@ -1683,21 +1738,60 @@
     return "";
   }
 
-  function describeOsmParking(tags, walkM){
+  function describeOsmParking(tags, walkM, kind){
     const bits = [];
     if (Number.isFinite(walkM)) bits.push(formatDistance(walkM) + " walk");
     const fee = parkingFeeText(tags);
     if (fee) bits.push(fee);
     const cap = parseInt(tags && tags.capacity, 10);
     if (cap > 0) bits.push(cap + (cap === 1 ? " space" : " spaces"));
-    const type = parkingTypeText(tags && tags.parking);
+    const type = parkingTypeText(kind || (tags && tags.parking));
     if (type) bits.push(type);
     const access = String((tags && tags.access) || "").toLowerCase();
     if (access === "customers" || access === "destination") bits.push("Customer parking");
-    if (access === "permissive") bits.push("Permissive");
     if (tags && tags.wheelchair === "yes") bits.push("Accessible");
-    if (tags && tags.maxstay) bits.push("Max stay " + tags.maxstay);
     return bits.join(" · ");
+  }
+
+  function closestOnGeometry(dest, geom){
+    let best = null, bestD = Infinity;
+    (geom || []).forEach(g => {
+      if (!g || !Number.isFinite(g.lat) || !Number.isFinite(g.lon)) return;
+      const p = { lat: g.lat, lng: g.lon };
+      const d = dest ? distanceMetres(dest, p) : 0;
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    return best;
+  }
+
+  function osmLoc(el, dest){
+    if (Array.isArray(el.geometry) && el.geometry.length) {
+      const p = closestOnGeometry(dest, el.geometry);
+      if (p) return p;
+    }
+    return osmCoord(el);
+  }
+
+  function isNoParkingLane(tags){
+    const keys = Object.keys(tags || {}).filter(k => k.indexOf("parking:lane") === 0);
+    if (!keys.length) return false;
+    return keys.every(k => /^(no|no_parking|no_stopping|no_standing)$/i.test(String(tags[k] || "")));
+  }
+
+  function parkingKindOf(tags, el){
+    const parking = String((tags && tags.parking) || "").toLowerCase();
+    const amenity = String((tags && tags.amenity) || "").toLowerCase();
+    const building = String((tags && tags.building) || "").toLowerCase();
+    if (amenity === "parking_entrance" || building === "parking" || parking === "multi-storey" || parking === "underground" || parking === "rooftop") return "building";
+    if (parking === "street_side" || parking === "lane" || isStreetLaneTags(tags)) return "street";
+    if (tags && tags.highway && amenity !== "parking") return "street";
+    return "lot";
+  }
+
+  function isStreetLaneTags(tags){
+    const keys = Object.keys(tags || {}).filter(k => k.indexOf("parking:lane") === 0);
+    if (!keys.length) return false;
+    return keys.some(k => !/^(no|no_parking|no_stopping|no_standing)$/i.test(String(tags[k] || "")));
   }
 
   function osmParkingPlace(el, dest, color){
@@ -1705,22 +1799,35 @@
     const access = String(tags.access || "").toLowerCase();
     if (access === "private" || access === "no") return null;
     if (String(tags.parking || "") === "garage_boxes") return null;
-    const loc = osmCoord(el);
+    if (isNoParkingLane(tags) && tags.amenity !== "parking") return null;
+    const loc = osmLoc(el, dest);
     if (!loc) return null;
     const walkM = dest ? distanceMetres(dest, loc) : 0;
+    const kind = parkingKindOf(tags, el);
+    if (kind === "street" && tags.highway && tags.amenity !== "parking") {
+      if (tags.service === "driveway" || tags.service === "parking_aisle") return null;
+      if (walkM > 180) return null;
+      if (!tags.name && walkM > 90) return null;
+    }
     const cap = parseInt(tags.capacity, 10);
     const fee = String(tags.fee || "").toLowerCase();
-    const type = String(tags.parking || "").toLowerCase();
-    let score = Number.isFinite(walkM) ? -walkM : 0;
-    if (fee === "no") score += 90;
-    else if (fee === "yes") score -= 20;
-    if (cap > 0) score += Math.min(cap, 80);
-    if (tags.name) score += 18;
-    if (!access || access === "yes" || access === "public") score += 22;
-    if (type === "underground" || type === "multi-storey") score += 12;
-    if (tags.wheelchair === "yes") score += 8;
-    const line = describeOsmParking(tags, dest ? walkM : NaN);
-    const name = tags.name || tags.operator || (parkingTypeText(type) ? parkingTypeText(type) + " parking" : "Parking");
+    let score = Number.isFinite(walkM) ? -walkM * 4 : 0;
+    if (kind === "street" && walkM < 200) score += 70;
+    if (kind === "building" && walkM < 320) score += 55;
+    if (kind === "lot" && walkM < 220) score += 48;
+    if (fee === "no") score += 18;
+    else if (fee === "yes") score -= 8;
+    if (cap > 0) score += Math.min(cap, 40);
+    if (tags.name) score += 8;
+    const line = describeOsmParking(tags, dest ? walkM : NaN, kind);
+    let name = tags.name || tags.operator || "";
+    if (!name) {
+      if (kind === "street") name = tags.highway ? "Street parking" : "Street parking";
+      else if (kind === "building") name = "Parking building";
+      else name = parkingTypeText(tags.parking) ? parkingTypeText(tags.parking) + " parking" : "Parking";
+    } else if (kind === "street" && !/park/i.test(name)) {
+      name = name + " (street)";
+    }
     const descBits = [];
     if (line) descBits.push(line);
     if (tags.operator && tags.operator !== tags.name) descBits.push("Operator: " + tags.operator);
@@ -1733,9 +1840,10 @@
       color: color || "#1A73E8",
       iconHref: "",
       kind: "parking",
+      parkKind: kind,
       walkM,
       score,
-      parking: { fee, capacity: cap > 0 ? cap : 0, access, type, line },
+      parking: { fee, capacity: cap > 0 ? cap : 0, access, type: kind, line },
       description: descBits.join("\n") || "Car park",
       snippet: snippetOf(line || name, 110)
     };
@@ -1745,12 +1853,16 @@
     const urls = [OVERPASS_URL, "https://overpass.kumi.systems/api/interpreter"];
     let lastErr = null;
     for (let i = 0; i < urls.length; i++) {
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : 0;
       try {
         const res = await fetch(urls[i], {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query)
+          body: "data=" + encodeURIComponent(query),
+          signal: ctrl ? ctrl.signal : undefined
         });
+        if (timer) clearTimeout(timer);
         if (res.status === 429 || res.status === 504 || res.status === 502) {
           lastErr = new Error("Overpass " + res.status);
           continue;
@@ -1758,6 +1870,7 @@
         if (!res.ok) throw new Error("Overpass " + res.status);
         return await res.json();
       } catch (err) {
+        if (timer) clearTimeout(timer);
         lastErr = err;
       }
     }
@@ -1770,22 +1883,42 @@
     if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return [];
     const key = center.lat.toFixed(3) + "," + center.lng.toFixed(3) + ":" + Math.round(radiusM);
     if (parkingCache[key] && (Date.now() - parkingCache[key].at) < 180000) return parkingCache[key].lots.slice();
-    const query = '[out:json][timeout:20];(nwr["amenity"="parking"]["access"!="private"]["access"!="no"](around:' +
-      Math.round(radiusM) + "," + center.lat.toFixed(5) + "," + center.lng.toFixed(5) + "););out center tags;";
+    const lat = center.lat.toFixed(5), lng = center.lng.toFixed(5);
+    const parkAround = "(around:" + Math.round(radiusM) + "," + lat + "," + lng + ")";
+    const streetAround = "(around:170," + lat + "," + lng + ")";
+    const tertAround = "(around:140," + lat + "," + lng + ")";
+    const query = "[out:json][timeout:16];(" +
+      'nwr["amenity"="parking"]' + parkAround + ";" +
+      'nwr["amenity"="parking_entrance"]' + parkAround + ";" +
+      'nwr["building"="parking"]' + parkAround + ";" +
+      'nwr["parking"~"^(street_side|lane|multi-storey|underground)$"]' + parkAround + ";" +
+      'way["highway"~"^(residential|unclassified|living_street)$"]' + streetAround + ";" +
+      'way["highway"="tertiary"]' + tertAround + ";" +
+      ");out tags center geom;";
     const json = await overpassJson(query);
     const seen = {};
     const out = [];
     (json.elements || []).forEach(el => {
       const place = osmParkingPlace(el, center, "#1A73E8");
       if (!place) return;
-      const locKey = place.lat.toFixed(5) + "," + place.lng.toFixed(5);
+      const locKey = place.id;
       if (seen[locKey]) return;
       seen[locKey] = true;
       out.push(place);
     });
     out.sort((a, b) => (b.score - a.score) || (a.walkM - b.walkM));
-    parkingCache[key] = { at: Date.now(), lots: out };
-    return out.slice();
+    const seenStreet = {};
+    const trimmed = [];
+    out.forEach(place => {
+      if (place.parkKind === "street") {
+        const key = String(place.name || "").toLowerCase();
+        if (seenStreet[key]) return;
+        seenStreet[key] = true;
+      }
+      trimmed.push(place);
+    });
+    parkingCache[key] = { at: Date.now(), lots: trimmed };
+    return trimmed.slice();
   }
 
   async function loadOsmParkingPlaces(center, radiusM, limit){
@@ -1800,6 +1933,64 @@
       '<text x="20" y="26" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="system-ui,Segoe UI,sans-serif">P</text>' +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+
+  function clearParkingWalk(){
+    (parkingWalkLines || []).forEach(line => { try { line.remove(); } catch (err) {} });
+    parkingWalkLines = [];
+  }
+
+  function drawParkingWalk(from, to){
+    clearParkingWalk();
+    if (!map3d || !Polyline3DElement || !from || !to) return;
+    const dist = distanceMetres(from, to);
+    if (!(dist > 12)) return;
+    const dash = 16, gap = 12, step = dash + gap;
+    const n = Math.max(1, Math.ceil(dist / step));
+    for (let i = 0; i < n; i++) {
+      const t0 = (i * step) / dist;
+      const t1 = Math.min(1, (i * step + dash) / dist);
+      if (t1 <= t0 + 0.002) continue;
+      try {
+        const line = new Polyline3DElement({
+          path: [
+            { lat: lerp(from.lat, to.lat, t0), lng: lerp(from.lng, to.lng, t0) },
+            { lat: lerp(from.lat, to.lat, t1), lng: lerp(from.lng, to.lng, t1) }
+          ],
+          strokeColor: "#1A73E8",
+          outerColor: "#FFFFFF",
+          strokeWidth: 4.5,
+          outerWidth: 0.28,
+          altitudeMode: MODEL_ALTITUDE_MODE,
+          drawsOccludedSegments: true
+        });
+        map3d.append(line);
+        parkingWalkLines.push(line);
+      } catch (err) {}
+    }
+  }
+
+  function frameParkingAndDest(dest, lot){
+    if (!map3d || !dest || !lot) return;
+    stopDestPreview();
+    following = false;
+    autoRefollowArmed = false;
+    document.getElementById("followBtn").textContent = "Following: OFF";
+    const mid = { lat: (dest.lat + lot.lat) / 2, lng: (dest.lng + lot.lng) / 2 };
+    const span = Math.max(distanceMetres(dest, lot), 80);
+    map3d.center = mid;
+    map3d.heading = 0;
+    map3d.tilt = 40;
+    map3d.range = clamp(span * 2.4, 380, 5200);
+    cam.seeded = false;
+    updateRecenterButton();
+  }
+
+  function recenterOnDestination(){
+    const dest = activeDestination;
+    if (!dest || !Number.isFinite(dest.lat)) return;
+    startDestPreview(dest);
+    if (destPreview) destPreview.noSpin = true;
   }
 
   function hideParkingRow(){
@@ -1860,7 +2051,7 @@
       marker.append(template);
       const onPick = event => {
         try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-        openParkingOptions();
+        setSelectedParking(lot, dest || activeDestination, { frame: true });
       };
       marker.addEventListener("gmp-click", onPick);
       marker.addEventListener("click", onPick);
@@ -1871,10 +2062,14 @@
     }
   }
 
-  function setSelectedParking(lot, dest){
+  function setSelectedParking(lot, dest, opts){
+    const target = dest || activeDestination;
     parkingNear.selected = lot || null;
-    drawParkingMarker(lot, dest || activeDestination);
+    drawParkingMarker(lot, target);
+    if (lot && target && !destIsSamePlace(target, lot)) drawParkingWalk(lot, target);
+    else clearParkingWalk();
     updateParkingRow();
+    if (opts && opts.frame && lot && target) frameParkingAndDest(target, lot);
   }
 
   function clearParkingOverlay(){
@@ -1883,6 +2078,7 @@
     parkingNear.options = [];
     parkingNear.selected = null;
     clearParkingMarker();
+    clearParkingWalk();
     hideParkingRow();
     closeParkingDialog();
   }
@@ -1922,7 +2118,7 @@
         btn.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
-          setSelectedParking(lot, activeDestination);
+          setSelectedParking(lot, activeDestination, { frame: true });
           closeParkingDialog();
         });
         list.append(btn);
@@ -1943,8 +2139,18 @@
     if (dest.kind === "parking") setSelectedParking(dest, dest);
     else hideParkingRow();
     try {
-      let lots = (await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M)).slice(0, 12);
+      let lots = await queryOsmParking(dest, PARKING_NEAR_M);
       if (id !== parkingNear.requestId) return;
+      if (!lots.length) lots = await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M);
+      if (id !== parkingNear.requestId) return;
+      if (!lots.length) {
+        if (dest.kind === "parking") setSelectedParking(dest, dest);
+        return;
+      }
+      lots.sort((a, b) => (b.score - a.score) || (a.walkM - b.walkM));
+      const closest = lots.reduce((min, lot) => Math.min(min, lot.walkM), Infinity);
+      const cap = closest > 400 ? closest + 90 : Math.max(160, Math.min(380, closest + 130));
+      lots = lots.filter(lot => lot.walkM <= cap).slice(0, 10);
       if (dest.kind === "parking") {
         const already = lots.some(lot => destIsSamePlace(dest, lot));
         if (!already) lots = [dest].concat(lots);
@@ -2010,6 +2216,45 @@
     updateRecenterButton();
   }
 
+  function exploreLabelModeForRange(range){
+    if (!Number.isFinite(range) || range >= 15000) return "none";
+    if (range >= 7500) return "sparse";
+    return "all";
+  }
+
+  function sparseLabelIds(places){
+    const cells = {};
+    (places || []).forEach(place => {
+      const key = Math.round(place.lat * 55) + ":" + Math.round(place.lng * 55);
+      if (!cells[key]) cells[key] = place.id;
+    });
+    const ids = {};
+    Object.keys(cells).forEach(key => { ids[cells[key]] = true; });
+    return ids;
+  }
+
+  function markerShowsLabel(place, mode, sparseIds){
+    if (mode === "none") return false;
+    if (mode === "all") return true;
+    return !!(sparseIds && sparseIds[place.id]);
+  }
+
+  function applyExploreLabelMode(force){
+    if (!explore.mode || !explore.markers.length || !map3d) return;
+    const mode = exploreLabelModeForRange(Number(map3d.range));
+    if (!force && mode === explore.labelMode) return;
+    explore.labelMode = mode;
+    const sparse = mode === "sparse" ? sparseLabelIds(explore.places) : null;
+    explore.markers.forEach((marker, i) => {
+      const place = (marker._explorePlace) || explore.places[i];
+      if (!place) return;
+      const href = rewriteIconHref(place.iconHref);
+      if (href && !isBlankStockIcon(href)) return;
+      const img = marker._pinImg || (marker.querySelector && marker.querySelector("img"));
+      applyExplorePinImage(img, place, markerShowsLabel(place, mode, sparse));
+    });
+  }
+
   function makeExploreMarker(place){
     const Ctor = Marker3DInteractiveElement || Marker3DElement;
     const href = rewriteIconHref(place.iconHref);
@@ -2022,9 +2267,13 @@
     };
     if (custom && place.name) opts.label = place.name;
     const marker = new Ctor(opts);
+    marker._explorePlace = place;
     const template = document.createElement("template");
-    template.content.append(explorePinNode(place));
-    marker.append(template);
+    const sparse = explore.labelMode === "sparse" ? sparseLabelIds(explore.places) : null;
+    const showLabel = markerShowsLabel(place, explore.labelMode || "all", sparse);
+    const pin = explorePinNode(place, showLabel);
+    marker._pinImg = pin;
+    template.content.append(pin);
     marker.append(template);
     const onPick = event => {
       try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
@@ -2038,6 +2287,8 @@
   function drawExplorePlaces(places){
     clearExploreMarkers();
     if (!map3d) return;
+    explore.places = places;
+    explore.labelMode = exploreLabelModeForRange(Number(map3d.range));
     places.forEach(place => {
       try {
         const marker = makeExploreMarker(place);
@@ -2081,6 +2332,43 @@
     overlay.classList.remove("open");
   }
 
+  async function enrichPlaceFromGoogle(dest){
+    if (!dest || dest.photoUrl) return dest;
+    try {
+      const { Place } = await google.maps.importLibrary("places");
+      const q = String(dest.name || "").replace(/^\d+\.\s*/, "").trim();
+      if (!q) return dest;
+      const found = await Place.searchByText({
+        textQuery: q + " Auckland",
+        fields: PLACE_CORE_FIELDS.concat(PLACE_EXTRA_FIELDS),
+        locationBias: { center: { lat: dest.lat, lng: dest.lng }, radius: 600 },
+        maxResultCount: 5,
+        region: "nz"
+      });
+      const pool = found.places || [];
+      let best = null, bestD = 280;
+      pool.forEach(place => {
+        const loc = latLngOf(place.location);
+        if (!loc) return;
+        const d = distanceMetres(dest, loc);
+        if (d < bestD) { bestD = d; best = place; }
+      });
+      if (!best) return dest;
+      const extra = snapshotPlace(best, dest.name);
+      if (!extra) return dest;
+      dest.placeId = extra.placeId || dest.placeId;
+      dest.photoUrl = extra.photoUrl || "";
+      dest.photoAttr = extra.photoAttr || "";
+      dest.rating = extra.rating || dest.rating;
+      dest.userRatingCount = extra.userRatingCount || dest.userRatingCount;
+      dest.hours = extra.hours || dest.hours;
+      dest.address = dest.address || extra.address;
+    } catch (err) {
+      console.warn("Place photo lookup failed", err);
+    }
+    return dest;
+  }
+
   async function selectExplorePlace(place){
     if (!place) return;
     explore.selected = place;
@@ -2096,9 +2384,10 @@
         const { Place } = await google.maps.importLibrary("places");
         const googlePlace = new Place({ id: place.placeId });
         const extra = await fetchPlaceDestination(googlePlace, place.name);
-        if (extra) Object.assign(dest, extra, { description: place.description || extra.address, snippet: place.snippet || snippetOf(extra.address, 110) });
+        if (extra) Object.assign(dest, extra, { description: place.description || extra.address, snippet: place.snippet || snippetOf(extra.address, 110), lat: dest.lat, lng: dest.lng, name: dest.name });
       } catch (err) {}
     }
+    await enrichPlaceFromGoogle(dest);
     try {
       await calculateRoute(getRouteOrigin(), dest, dest.name, { preview: false });
     } catch (err) {
@@ -2113,6 +2402,7 @@
     }
     activeDestination = Object.assign({}, activeDestination || {}, dest);
     showExploreSnippet(activeDestination);
+    fillRouteCardExtras(activeDestination);
     setMessage(dest.name);
   }
 
@@ -6299,6 +6589,14 @@
         clearNavigation();
         setMessage("");
       }
+    });
+  }
+  const routeTitleRow = document.getElementById("routeTitleRow");
+  if (routeTitleRow) {
+    routeTitleRow.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      recenterOnDestination();
     });
   }
   if (routeSnippetEl) {
