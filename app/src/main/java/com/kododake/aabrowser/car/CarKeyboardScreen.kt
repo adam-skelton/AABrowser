@@ -32,6 +32,7 @@ class CarKeyboardScreen(
                         invalidate()
                     }
                 }
+                onTextChanged(typedText)
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
@@ -70,7 +71,7 @@ class CarKeyboardScreen(
             builder.setNoItemsMessage(carContext.getString(R.string.car_keyboard_empty))
             return builder.build()
         }
-        suggestions.take(6).forEach { hit ->
+        suggestions.take(12).forEach { hit ->
             val row = Row.Builder().setTitle(hit.title)
             if (hit.subtitle.isNotBlank()) {
                 row.addText(hit.subtitle)

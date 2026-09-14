@@ -11,6 +11,8 @@ local.properties
 .env
 .env.*
 !.env.example
+pages/custom-map.kml
+pages/custom-map.kmz
 /app/build/
 *.jks
 *.keystore

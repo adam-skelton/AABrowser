@@ -30,27 +30,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Inject Maps API key
+      - name: Inject Maps secrets
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          CUSTOM_MAP_ID: ${{ secrets.CUSTOM_MAP_ID }}
+          CUSTOM_MAP_NAME: ${{ secrets.CUSTOM_MAP_NAME }}
         run: |
           if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
             echo "Add repo secret GOOGLE_MAPS_API_KEY, then re-run this workflow."
             exit 1
           fi
           python3 - <<'PY'
-          import os
+          import json, os, urllib.request
           from pathlib import Path
           path = Path("pages/index.html")
-          marker = 'const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";'
           text = path.read_text(encoding="utf-8")
-          if marker not in text:
-              raise SystemExit("API key assignment placeholder not found in pages/index.html")
           key = os.environ["GOOGLE_MAPS_API_KEY"].strip()
           if not key.startswith("AIza"):
               raise SystemExit("GOOGLE_MAPS_API_KEY secret does not look like a Maps key")
-          assignment = f'const GOOGLE_MAPS_API_KEY = "{key}";'
-          path.write_text(text.replace(marker, assignment, 1), encoding="utf-8")
+          mid = os.environ.get("CUSTOM_MAP_ID", "").strip()
+          name = os.environ.get("CUSTOM_MAP_NAME", "").strip()
+          swaps = {
+              'const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";': f"const GOOGLE_MAPS_API_KEY = {json.dumps(key)};",
+              'const CUSTOM_MAP_ID = "__CUSTOM_MAP_ID__";': f"const CUSTOM_MAP_ID = {json.dumps(mid)};",
+              'const CUSTOM_MAP_NAME = "__CUSTOM_MAP_NAME__";': f"const CUSTOM_MAP_NAME = {json.dumps(name)};",
+          }
+          for marker, assignment in swaps.items():
+              if marker not in text:
+                  raise SystemExit(f"placeholder not found: {marker}")
+              text = text.replace(marker, assignment, 1)
+          path.write_text(text, encoding="utf-8")
+          if mid:
+              url = "https://www.google.com/maps/d/kml?mid=" + mid + "&forcekml=1"
+              req = urllib.request.Request(url, headers={"User-Agent": "AABrowser-pages"})
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  Path("pages/custom-map.kml").write_bytes(resp.read())
+              print("wrote pages/custom-map.kml")
           PY
 
       - name: Setup Pages

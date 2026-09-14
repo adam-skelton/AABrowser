@@ -1,6 +1,7 @@
 // Local map server: injects GOOGLE_MAPS_API_KEY from .env into pages/index.html
 // without writing the key into the repo.
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const root = path.resolve(__dirname, "..");
@@ -26,6 +27,8 @@ function loadDotEnv() {
 
 loadDotEnv();
 const mapsKey = (process.env.GOOGLE_MAPS_API_KEY || "").trim();
+const customMapId = (process.env.CUSTOM_MAP_ID || "").trim();
+const customMapName = (process.env.CUSTOM_MAP_NAME || "").trim();
 if (!mapsKey || !mapsKey.startsWith("AIza")) {
   console.error("Add GOOGLE_MAPS_API_KEY to .env (see .env.example).");
   process.exit(1);
@@ -41,9 +44,39 @@ const types = {
   ".json": "application/json"
 };
 
+function proxyCustomMapKml(res) {
+  if (!customMapId) {
+    res.writeHead(404, { "Cache-Control": "no-store" });
+    res.end("custom map id not configured");
+    return;
+  }
+  const url = "https://www.google.com/maps/d/kml?mid=" + encodeURIComponent(customMapId) + "&forcekml=1";
+  https.get(url, { headers: { "User-Agent": "AABrowser-local" } }, up => {
+    const status = up.statusCode || 502;
+    if (status >= 400) {
+      up.resume();
+      res.writeHead(status, { "Cache-Control": "no-store" });
+      res.end("custom map fetch failed");
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": up.headers["content-type"] || "application/vnd.google-earth.kml+xml; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    up.pipe(res);
+  }).on("error", () => {
+    res.writeHead(502, { "Cache-Control": "no-store" });
+    res.end("custom map fetch failed");
+  });
+}
+
 http.createServer((req, res) => {
   let urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
   if (urlPath === "/") urlPath = "/index.html";
+  if (urlPath === "/custom-map.kml") {
+    proxyCustomMapKml(res);
+    return;
+  }
   const file = path.normalize(path.join(pages, urlPath.replace(/^\/+/, "")));
   if (!file.startsWith(pages)) {
     res.writeHead(403);
@@ -58,10 +91,20 @@ http.createServer((req, res) => {
     }
     const ext = path.extname(file);
     if (ext === ".html") {
-      data = Buffer.from(String(data).replace(
+      let html = String(data);
+      html = html.replace(
         'const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";',
-        'const GOOGLE_MAPS_API_KEY = ' + JSON.stringify(mapsKey) + ";"
-      ));
+        "const GOOGLE_MAPS_API_KEY = " + JSON.stringify(mapsKey) + ";"
+      );
+      html = html.replace(
+        'const CUSTOM_MAP_ID = "__CUSTOM_MAP_ID__";',
+        "const CUSTOM_MAP_ID = " + JSON.stringify(customMapId) + ";"
+      );
+      html = html.replace(
+        'const CUSTOM_MAP_NAME = "__CUSTOM_MAP_NAME__";',
+        "const CUSTOM_MAP_NAME = " + JSON.stringify(customMapName) + ";"
+      );
+      data = Buffer.from(html);
     }
     res.writeHead(200, {
       "Content-Type": types[ext] || "application/octet-stream",
