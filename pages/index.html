@@ -290,6 +290,7 @@
       <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <button id="turnCueTestBtn" type="button">Turn cue test</button>
+      <button id="fenceWalkTestBtn" type="button">Fence walk test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
       <button id="navCardTestBtn" type="button">Nav card</button>
@@ -773,6 +774,10 @@
     { origin: { name: "Dominion Rd", lat: -36.87485, lng: 174.75855 }, dest: { name: "Ewington Ave", lat: -36.87755, lng: 174.76190 } },
     { origin: { name: "Ponsonby Rd", lat: -36.85620, lng: 174.74710 }, dest: { name: "Pollen St", lat: -36.85840, lng: 174.74980 } }
   ];
+  const BUCKLANDS_ACCESS_TEST = {
+    origin: { name: "Devon Road", lat: -36.86355, lng: 174.90195 },
+    dest: { name: "54. Bucklands Beach Domain", lat: -36.862309, lng: 174.904423 }
+  };
 
   let map3d, Polyline3DElement, Marker3DElement, Marker3DInteractiveElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
   let userMarker, userCar, userArrow, destinationMarker, parkingMarker;
@@ -2108,7 +2113,9 @@
   }
 
   async function fetchOsmWalkPathGraph(from, to){
-    const pad = 0.0022;
+    const spanLat = Math.abs((from.lat || 0) - (to.lat || 0));
+    const spanLng = Math.abs((from.lng || 0) - (to.lng || 0));
+    const pad = Math.max(0.0048, spanLat * 0.5 + 0.0022, spanLng * 0.5 + 0.0022);
     const s = Math.min(from.lat, to.lat) - pad;
     const n = Math.max(from.lat, to.lat) + pad;
     const w = Math.min(from.lng, to.lng) - pad;
@@ -2152,25 +2159,40 @@
     return keys.map(k => nodes[k]).filter(Boolean);
   }
 
+  let osmWalkQueue = Promise.resolve();
+
+  function enqueueOsmWalk(task){
+    const run = osmWalkQueue.then(task, task);
+    osmWalkQueue = run.then(() => null, () => null);
+    return run;
+  }
+
   async function fetchOsmWalkPathRouter(from, to){
+    return enqueueOsmWalk(() => fetchOsmWalkPathRouterOnce(from, to));
+  }
+
+  async function fetchOsmWalkPathRouterOnce(from, to){
     const url = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/" +
       from.lng.toFixed(6) + "," + from.lat.toFixed(6) + ";" +
       to.lng.toFixed(6) + "," + to.lat.toFixed(6) +
       "?overview=full&geometries=geojson";
-    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : 0;
-    try {
-      const res = await fetch(url, { signal: ctrl ? ctrl.signal : undefined });
-      if (timer) clearTimeout(timer);
-      if (!res.ok) throw new Error("foot router " + res.status);
-      const json = await res.json();
-      const coords = json && json.routes && json.routes[0] && json.routes[0].geometry && json.routes[0].geometry.coordinates;
-      if (!coords || coords.length < 2) return null;
-      return coords.map(c => ({ lat: c[1], lng: c[0] }));
-    } catch (err) {
-      if (timer) clearTimeout(timer);
-      return null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : 0;
+      try {
+        const res = await fetch(url, { signal: ctrl ? ctrl.signal : undefined });
+        if (timer) clearTimeout(timer);
+        if (!res.ok) throw new Error("foot router " + res.status);
+        const json = await res.json();
+        const coords = json && json.routes && json.routes[0] && json.routes[0].geometry && json.routes[0].geometry.coordinates;
+        if (!coords || coords.length < 2) return null;
+        return coords.map(c => ({ lat: c[1], lng: c[0] }));
+      } catch (err) {
+        if (timer) clearTimeout(timer);
+        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 450));
+      }
     }
+    return null;
   }
 
   function walkPathLengthM(pts){
@@ -2179,14 +2201,101 @@
     return walked;
   }
 
-  function walkPathLooksUsable(path, from, to){
-    if (!path || path.length < 2) return false;
+  function walkPathLooksStraightFake(path, from, to){
+    if (!path || path.length < 2) return true;
     const straight = distanceMetres(from, to);
     const walked = walkPathLengthM(path);
-    if (!(walked > 0)) return false;
+    if (!(walked > 0)) return true;
+    if (straight > 40 && path.length < 4 && walked < straight * 1.12) return true;
+    return false;
+  }
+
+  function walkPathLooksUsable(path, from, to){
+    if (walkPathLooksStraightFake(path, from, to)) return false;
+    const straight = distanceMetres(from, to);
+    const walked = walkPathLengthM(path);
     if (straight > 20 && walked > Math.max(straight * 4.5, straight + 500)) return false;
-    if (straight > 40 && path.length < 4 && walked < straight * 1.12) return false;
     return true;
+  }
+
+  function snapWalkToDriveEnd(end, path){
+    if (!end || !path || path.length < 2) return path || [];
+    if (distanceMetres(end, path[0]) <= 6) {
+      path[0] = { lat: end.lat, lng: end.lng };
+      return path;
+    }
+    return [{ lat: end.lat, lng: end.lng }].concat(path);
+  }
+
+  const barrierCache = { key: "", at: 0, segs: [] };
+
+  function llXY(p, o){
+    return {
+      x: (p.lng - o.lng) * 111320 * Math.cos((o.lat * Math.PI) / 180),
+      y: (p.lat - o.lat) * 110540
+    };
+  }
+
+  function distPointSegXY(p, a, b){
+    const abx = b.x - a.x, aby = b.y - a.y;
+    const apx = p.x - a.x, apy = p.y - a.y;
+    const ab2 = abx * abx + aby * aby;
+    const t = ab2 > 0 ? Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2)) : 0;
+    const dx = apx - abx * t, dy = apy - aby * t;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function segsNear(a, b, c, d, tolM){
+    const o = a;
+    const A = llXY(a, o), B = llXY(b, o), C = llXY(c, o), D = llXY(d, o);
+    const den = (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+    if (Math.abs(den) > 1e-8) {
+      const t = ((C.x - A.x) * (D.y - C.y) - (C.y - A.y) * (D.x - C.x)) / den;
+      const u = ((C.x - A.x) * (B.y - A.y) - (C.y - A.y) * (B.x - A.x)) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
+    }
+    const minD = Math.min(distPointSegXY(A, C, D), distPointSegXY(B, C, D), distPointSegXY(C, A, B), distPointSegXY(D, A, B));
+    if (minD > (tolM || 3)) return false;
+    const side = (p, u, v) => (v.x - u.x) * (p.y - u.y) - (v.y - u.y) * (p.x - u.x);
+    return side(A, C, D) * side(B, C, D) <= 0 || side(C, A, B) * side(D, A, B) <= 0;
+  }
+
+  async function fetchBarrierSegs(dest, radiusM){
+    if (!dest || !Number.isFinite(dest.lat)) return [];
+    const key = dest.lat.toFixed(4) + "," + dest.lng.toFixed(4);
+    if (barrierCache.key === key && Date.now() - barrierCache.at < 180000) return barrierCache.segs;
+    const r = Math.round(radiusM || 180);
+    const query = '[out:json][timeout:8];way["barrier"~"^(fence|wall|hedge|retaining_wall)$"](around:' + r + "," + dest.lat.toFixed(5) + "," + dest.lng.toFixed(5) + ");out geom;";
+    try {
+      const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
+      const segs = [];
+      (json.elements || []).forEach(el => {
+        const g = el.geometry || [];
+        for (let i = 1; i < g.length; i++) {
+          const a = g[i - 1], b = g[i];
+          if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
+          segs.push({ a: { lat: a.lat, lng: a.lon }, b: { lat: b.lat, lng: b.lon } });
+        }
+      });
+      barrierCache.key = key;
+      barrierCache.at = Date.now();
+      barrierCache.segs = segs;
+      return segs;
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function pathCrossesBarriers(path, segs, tolM){
+    if (!path || path.length < 2 || !segs || !segs.length) return false;
+    const tol = tolM || 12;
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      for (let j = 0; j < segs.length; j++) {
+        if (segsNear(a, b, segs[j].a, segs[j].b, tol)) return true;
+      }
+    }
+    return false;
   }
 
   function routePathPoints(route){
@@ -2239,6 +2348,140 @@
     return path.slice();
   }
 
+  async function walkAccessFrom(from, to){
+    let google = null, osm = null;
+    try {
+      const pair = await Promise.all([
+        fetchGoogleWalkPath(from, to).catch(() => null),
+        fetchOsmWalkPathRouter(from, to).catch(() => null)
+      ]);
+      google = pair[0];
+      osm = pair[1];
+    } catch (err) {}
+    if (walkPathLooksStraightFake(osm, from, to)) {
+      try { osm = await fetchOsmWalkPathGraph(from, to); } catch (err) { osm = null; }
+    }
+    const segs = await fetchBarrierSegs(to, 200);
+    const crowHits = pathCrossesBarriers([from, to], segs, 4);
+    if (google && (crowHits || pathCrossesBarriers(google, segs, 4))) google = null;
+    if (osm && pathCrossesBarriers(osm, segs, 4)) osm = null;
+    const gOk = walkPathLooksUsable(google, from, to);
+    const osmReal = osm && osm.length >= 2 && !walkPathLooksStraightFake(osm, from, to);
+    const gM = gOk ? walkPathLengthM(google) : Infinity;
+    const oM = osmReal ? walkPathLengthM(osm) : Infinity;
+    if (gOk && osmReal) {
+      const blocked = oM > gM * 1.65 && oM > gM + 55;
+      const path = blocked ? osm : (oM + 12 < gM ? osm : google);
+      return { path: snapWalkToDriveEnd(from, path), walkM: blocked ? oM : Math.min(gM, oM), blocked: blocked };
+    }
+    if (osmReal) return { path: snapWalkToDriveEnd(from, osm), walkM: oM, blocked: false };
+    if (gOk) return { path: snapWalkToDriveEnd(from, google), walkM: gM, blocked: false };
+    const crow = distanceMetres(from, to);
+    return { path: [from, to], walkM: Math.max(crow * 3.2, crow + 280), blocked: true };
+  }
+
+  function spreadAccessByBearing(points, dest, perSector, sectors){
+    const buckets = [];
+    for (let i = 0; i < sectors; i++) buckets.push([]);
+    (points || []).forEach(p => {
+      const ang = Math.atan2(p.lat - dest.lat, p.lng - dest.lng);
+      const i = Math.floor(((ang + Math.PI) / (2 * Math.PI)) * sectors) % sectors;
+      buckets[i].push(p);
+    });
+    const out = [];
+    buckets.forEach(b => {
+      b.sort((a, c) => a.d - c.d);
+      b.slice(0, perSector).forEach(p => out.push(p));
+    });
+    return out;
+  }
+
+  async function nearbyPublicAccessPoints(dest, radiusM){
+    if (!dest || !Number.isFinite(dest.lat)) return [];
+    const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
+    const r = Math.round(radiusM || 320);
+    const query = '[out:json][timeout:8];(' +
+      'way["highway"~"^(residential|unclassified|living_street|tertiary|secondary|primary)$"]["access"!="private"]["service"!="driveway"](around:' + r + "," + lat + "," + lng + ");" +
+      'nwr["amenity"="parking"]["access"!="private"](around:' + r + "," + lat + "," + lng + ");" +
+      ");out geom center;";
+    const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
+    const cells = {};
+    (json.elements || []).forEach(el => {
+      const pts = [];
+      if (Array.isArray(el.geometry)) {
+        el.geometry.forEach(g => {
+          if (g && Number.isFinite(g.lat) && Number.isFinite(g.lon)) pts.push({ lat: g.lat, lng: g.lon });
+        });
+      }
+      const c = osmCoord(el);
+      if (c) pts.push(c);
+      pts.forEach(p => {
+        const d = distanceMetres(dest, p);
+        if (d < 28 || d > r) return;
+        const cell = Math.round(p.lat * 1600) + ":" + Math.round(p.lng * 1600);
+        if (!cells[cell] || d < cells[cell].d) cells[cell] = { lat: p.lat, lng: p.lng, d: d };
+      });
+    });
+    const clustered = Object.keys(cells).map(k => cells[k]);
+    return spreadAccessByBearing(clustered, dest, 2, 8).sort((a, b) => a.d - b.d).slice(0, 12);
+  }
+
+  async function refineDriveByWalk(origin, dest, drivePath){
+    if (!dest || !drivePath || drivePath.length < 2) return null;
+    const driveEnd = drivePath[drivePath.length - 1];
+    const current = await walkAccessFrom(driveEnd, dest);
+    const crow = distanceMetres(driveEnd, dest);
+    const blocked = current.blocked || current.walkM > Math.max(crow * 1.9, crow + 80) || current.walkM > 160;
+    const candidates = [];
+    (parkingNear.options || []).slice(0, 8).forEach(lot => {
+      if (!Number.isFinite(lot.lat) || destIsSamePlace(dest, lot)) return;
+      if (distanceMetres(driveEnd, lot) < 28) return;
+      candidates.push({ kind: "parking", lot: lot, lat: lot.lat, lng: lot.lng, name: lot.name, placeId: lot.placeId });
+    });
+    try {
+      const roads = await nearbyPublicAccessPoints(dest, 320);
+      roads.forEach(p => {
+        if (distanceMetres(driveEnd, p) < 32) return;
+        if (candidates.some(c => distanceMetres(c, p) < 36)) return;
+        candidates.push({ kind: "street", lat: p.lat, lng: p.lng, name: "Street access" });
+      });
+    } catch (err) {}
+    const parkingC = candidates.filter(c => c.kind === "parking").slice(0, 3);
+    const streets = candidates.filter(c => c.kind === "street");
+    const opp = Math.atan2(driveEnd.lat - dest.lat, driveEnd.lng - dest.lng) + Math.PI;
+    streets.sort((a, b) => {
+      const ang = p => {
+        const d = Math.atan2(p.lat - dest.lat, p.lng - dest.lng) - opp;
+        return Math.abs(((d + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      };
+      return ang(a) - ang(b);
+    });
+    const toScore = parkingC.concat(streets.slice(0, 4)).slice(0, 7);
+    const scored = await Promise.all(toScore.map(async c => {
+      const w = await walkAccessFrom(c, dest);
+      return Object.assign({}, c, w);
+    }));
+    let best = { kind: "drive-end", lat: driveEnd.lat, lng: driveEnd.lng, walkM: current.walkM, path: current.path };
+    scored.forEach(c => {
+      if (c.walkM + 40 < best.walkM && c.walkM < best.walkM * 0.82) best = c;
+    });
+    if (best.kind === "drive-end") return { walk: snapWalkToDriveEnd(driveEnd, current.path), walkM: current.walkM, drive: null, access: null };
+    const driveTo = usablePlaceId(best.placeId)
+      ? { lat: best.lat, lng: best.lng, name: best.name, placeId: best.placeId }
+      : { lat: best.lat, lng: best.lng, name: best.name };
+    try {
+      const routed = await requestRoute(origin, driveTo);
+      const newEnd = routed.path[routed.path.length - 1];
+      const joined = await walkAccessFrom(newEnd, dest);
+      if (joined.walkM > current.walkM - 28) return { walk: snapWalkToDriveEnd(driveEnd, current.path), walkM: current.walkM, drive: null, access: null };
+      if (best.lot) setSelectedParking(best.lot, dest, { skipWalk: true });
+      return { walk: snapWalkToDriveEnd(newEnd, joined.path), walkM: joined.walkM, drive: routed, access: driveTo };
+    } catch (err) {
+      console.warn("Access reroute failed", err);
+      return { walk: snapWalkToDriveEnd(driveEnd, current.path), walkM: current.walkM, drive: null, access: null };
+    }
+  }
+
   function densifyWalkPath(pts, stepM){
     const out = [];
     if (!pts || !pts.length) return out;
@@ -2281,21 +2524,24 @@
     }
   }
 
-  async function drawParkingWalk(from, to){
+  async function drawParkingWalk(from, to, readyPath){
     const id = ++parkingNear.walkId;
     clearParkingWalk();
     if (!map3d || !Polyline3DElement || !from || !to) return;
     const dist = distanceMetres(from, to);
     if (!(dist > 12)) return;
-    let path = [from, to];
-    try {
-      path = await fetchWalkPath(from, to);
-    } catch (err) {
-      console.warn("Walk path failed", err);
+    let path = readyPath && readyPath.length >= 2 ? readyPath : null;
+    if (!path) {
+      try {
+        path = await fetchWalkPath(from, to);
+      } catch (err) {
+        console.warn("Walk path failed", err);
+      }
     }
     if (id !== parkingNear.walkId) return;
     clearParkingWalk();
-    drawDottedWalk(path && path.length >= 2 ? path : [from, to]);
+    const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : [from, to];
+    drawDottedWalk(drawn);
   }
 
   function frameParkingAndDest(dest, lot){
@@ -2305,6 +2551,8 @@
     autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     const mid = { lat: (dest.lat + lot.lat) / 2, lng: (dest.lng + lot.lng) / 2 };
+    const alt = followGroundAltitude(mid, 1);
+    if (Number.isFinite(alt)) mid.altitude = alt;
     const span = Math.max(distanceMetres(dest, lot), 80);
     map3d.center = mid;
     map3d.heading = 0;
@@ -2394,7 +2642,14 @@
     const target = dest || activeDestination;
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
-    if (lot && target && !destIsSamePlace(target, lot)) drawParkingWalk(lot, target);
+    if (lot && target && !destIsSamePlace(target, lot)) {
+      if (!(opts && opts.skipWalk)) {
+        const start = (activeRoutePath && activeRoutePath.length >= 2)
+          ? activeRoutePath[activeRoutePath.length - 1]
+          : lot;
+        drawParkingWalk(start, target);
+      }
+    }
     else {
       parkingNear.walkId += 1;
       clearParkingWalk();
@@ -3153,8 +3408,9 @@
 
   // Make `route` the active one: geometry, drawing, card, speed limits, trace metadata.
   // `keepNav` = a mid-drive reroute (stay in navigation; the car re-acquires at the next fix).
-  function adoptRoute(route, path, intervals, destination, keepNav){
+  function adoptRoute(route, path, intervals, destination, keepNav, walkPath){
     activeRoute = route;
+    const driveEnd = path && path.length ? path[path.length - 1] : null;
     const driven = offsetPathLeft(path, ROUTE_LANE_OFFSET_M);
     activeRoutePath = driven;
     activeDestination = destination;
@@ -3173,6 +3429,13 @@
       const key = destination.lat.toFixed(5) + "," + destination.lng.toFixed(5);
       if (parkingNear.destKey !== key) fetchParkingNear(destination);
     }
+    const visualEnd = (driven && driven.length) ? driven[driven.length - 1] : driveEnd;
+    if (destination && visualEnd && !destIsSamePlace(destination, visualEnd)) {
+      drawParkingWalk(visualEnd, destination, walkPath);
+    } else {
+      parkingNear.walkId += 1;
+      clearParkingWalk();
+    }
     offRoute.hits = 0;
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
   }
@@ -3186,13 +3449,26 @@
       await fetchParkingNear(destination);
       const driveTo = await pickDriveDestination(destination);
       activeDriveTo = driveTo;
-      const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo);
+      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo);
+      let walkReady = null;
+      try {
+        const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
+        if (refined && refined.drive && refined.drive.path) {
+          route = refined.drive.route;
+          path = refined.drive.path;
+          intervals = refined.drive.intervals;
+          if (refined.access) activeDriveTo = refined.access;
+        }
+        if (refined && refined.walk) walkReady = refined.walk;
+      } catch (err) {
+        console.warn("Walk access refine failed", err);
+      }
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
         lat: destination.lat,
         lng: destination.lng
       });
-      adoptRoute(route, path, intervals, dest, false);
+      adoptRoute(route, path, intervals, dest, false, walkReady);
       if (!opts || opts.preview !== false) showRoutePreview(origin, dest, route.distanceMeters);
       setMessage("Route ready. Tap Start, or wait for the countdown.");
     } catch (err) {
@@ -6175,6 +6451,34 @@
     try { map3d.append(item); } catch (err) {}
   }
 
+  async function startBucklandsAccessTest(){
+    if (!map3d || !RouteClass) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    if (isDemoRunning()) stopDemo();
+    if (watchId !== null) stopGps();
+    following = false;
+    autoRefollowArmed = false;
+    document.getElementById("followBtn").textContent = "Following: OFF";
+    setMessage("Fence walk test: routing to Bucklands Beach Domain…");
+    const origin = BUCKLANDS_ACCESS_TEST.origin;
+    const dest = BUCKLANDS_ACCESS_TEST.dest;
+    await calculateRoute(origin, dest, dest.name, { preview: false });
+    try { cancelStartCountdown(); } catch (err) {}
+    setMapLabels(true);
+    startDestPreview(dest);
+    if (destPreview) destPreview.noSpin = true;
+    await new Promise(resolve => setTimeout(resolve, 1400));
+    const end = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : dest;
+    const walkN = (parkingWalkLines && parkingWalkLines.length) || 0;
+    const fencedSide = end.lng < dest.lng - 0.00085 && end.lat > dest.lat - 0.00075;
+    const joined = walkN > 0 ? " Dotted walk joins that end to the playground." : "";
+    setMessage(fencedSide
+      ? "Fence walk test FAIL: nav still ends on the fenced Devon/driveway side." + joined
+      : "Fence walk test: drive ends at public parking/street, not the fenced driveway." + joined);
+  }
+
   async function startTurnCueTest(){
     if (demoKind === "turncue" && isDemoRunning()) {
       stopDemo();
@@ -6924,6 +7228,11 @@
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
   document.getElementById("turnCueTestBtn").addEventListener("click",startTurnCueTest);
+  const fenceWalkTestBtn = document.getElementById("fenceWalkTestBtn");
+  if (fenceWalkTestBtn) fenceWalkTestBtn.addEventListener("click", event => {
+    event.preventDefault();
+    startBucklandsAccessTest();
+  });
   document.getElementById("freeFollowBtn").addEventListener("click",startFreeFollow);
   document.addEventListener("pointerdown", () => { resumeNavAudio(); }, { capture: true, passive: true });
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
