@@ -8,6 +8,7 @@ import java.util.Locale
 object MapModelAssets {
     private val files = mapOf(
         "forte.glb" to "models/forte.glb",
+        "forte-new.glb" to "models/forte-new.glb",
         "cerato.glb" to "models/cerato.glb",
         "forte-preview.glb" to "models/forte-preview.glb",
         "heading-arrow.glb" to "models/heading-arrow.glb"

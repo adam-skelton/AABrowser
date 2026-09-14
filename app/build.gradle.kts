@@ -79,6 +79,7 @@ androidComponents {
         ) {
             modelFiles.from(
                 rootProject.layout.projectDirectory.file("pages/forte.glb"),
+                rootProject.layout.projectDirectory.file("pages/forte-new.glb"),
                 rootProject.layout.projectDirectory.file("pages/cerato.glb"),
                 rootProject.layout.projectDirectory.file("pages/forte-preview.glb"),
                 rootProject.layout.projectDirectory.file("pages/heading-arrow.glb")
