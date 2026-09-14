@@ -792,7 +792,7 @@
     TURN_SKIP_M: 40
   };
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
-  let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null;
+  let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null, activeDriveTo = null;
   let activeRoutePath = [];
   let currentView = "drive";
   let carModelReady = false;
@@ -1608,10 +1608,10 @@
       : glyph === "tick"
         ? '<circle cx="18" cy="17" r="7.2" fill="#fff"/><path fill="none" stroke="' + fill + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M13 17.2l3.1 3.2 7-7.2"/>'
         : '<circle cx="18" cy="17" r="6.2" fill="#fff"/>';
-    const pin = '<g transform="translate(PINX,16) scale(.86)"><path fill="' + fill + '" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' + pinGlyph + "</g>";
+    const pin = '<g transform="translate(PINX,PINY) scale(.86)"><path fill="' + fill + '" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' + pinGlyph + "</g>";
     if (!showLabel || !escaped) {
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">' +
-        pin.replace("PINX", "0") + "</svg>";
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="42" viewBox="0 0 36 42">' +
+        pin.replace("PINX", "2.5").replace("PINY", "1") + "</svg>";
       return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
     }
     const pad = 12;
@@ -1619,10 +1619,10 @@
     const width = Math.round(textW + 6);
     const pinX = Math.round((width - 31) / 2);
     const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="56" viewBox="0 0 ' + width + ' 56">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="60" viewBox="0 0 ' + width + ' 60">' +
       '<rect x="3" y="1" rx="8" width="' + (width - 6) + '" height="18" fill="#E8EAED"/>' +
       '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#202124" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
-      pin.replace("PINX", String(pinX)) +
+      pin.replace("PINX", String(pinX)).replace("PINY", "18") +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
@@ -1632,12 +1632,12 @@
     img.src = exploreLabeledPinDataUrl(place, { label: showLabel });
     if (showLabel) {
       img.width = 128;
-      img.height = 56;
-      img.style.cssText = "width:auto;height:56px;max-width:176px";
+      img.height = 60;
+      img.style.cssText = "width:auto;height:60px;max-width:176px;overflow:visible;display:block";
     } else {
       img.width = 36;
-      img.height = 48;
-      img.style.cssText = "width:36px;height:48px";
+      img.height = 42;
+      img.style.cssText = "width:36px;height:42px;overflow:visible;display:block";
     }
   }
 
@@ -1849,21 +1849,29 @@
     };
   }
 
-  async function overpassJson(query){
-    const urls = [OVERPASS_URL, "https://overpass.kumi.systems/api/interpreter"];
+  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+  const OVERPASS_MIRRORS = [
+    OVERPASS_URL,
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
+  ];
+
+  async function overpassJson(query, timeoutMs, urls){
+    const list = (urls && urls.length) ? urls : OVERPASS_MIRRORS;
+    const ms = timeoutMs || 10000;
     let lastErr = null;
-    for (let i = 0; i < urls.length; i++) {
+    for (let i = 0; i < list.length; i++) {
       const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : 0;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : 0;
       try {
-        const res = await fetch(urls[i], {
+        const res = await fetch(list[i], {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
           body: "data=" + encodeURIComponent(query),
           signal: ctrl ? ctrl.signal : undefined
         });
         if (timer) clearTimeout(timer);
-        if (res.status === 429 || res.status === 504 || res.status === 502) {
+        if (res.status === 429 || res.status === 504 || res.status === 502 || res.status === 406) {
           lastErr = new Error("Overpass " + res.status);
           continue;
         }
@@ -1885,17 +1893,13 @@
     if (parkingCache[key] && (Date.now() - parkingCache[key].at) < 180000) return parkingCache[key].lots.slice();
     const lat = center.lat.toFixed(5), lng = center.lng.toFixed(5);
     const parkAround = "(around:" + Math.round(radiusM) + "," + lat + "," + lng + ")";
-    const streetAround = "(around:170," + lat + "," + lng + ")";
-    const tertAround = "(around:140," + lat + "," + lng + ")";
-    const query = "[out:json][timeout:16];(" +
+    const query = "[out:json][timeout:8];(" +
       'nwr["amenity"="parking"]' + parkAround + ";" +
       'nwr["amenity"="parking_entrance"]' + parkAround + ";" +
       'nwr["building"="parking"]' + parkAround + ";" +
-      'nwr["parking"~"^(street_side|lane|multi-storey|underground)$"]' + parkAround + ";" +
-      'way["highway"~"^(residential|unclassified|living_street)$"]' + streetAround + ";" +
-      'way["highway"="tertiary"]' + tertAround + ";" +
-      ");out tags center geom;";
-    const json = await overpassJson(query);
+      'nwr["parking"~"^(street_side|lane|multi-storey|underground|surface)$"]' + parkAround + ";" +
+      ");out tags center;";
+    const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
     const seen = {};
     const out = [];
     (json.elements || []).forEach(el => {
@@ -1917,13 +1921,107 @@
       }
       trimmed.push(place);
     });
-    parkingCache[key] = { at: Date.now(), lots: trimmed };
+    if (trimmed.length) parkingCache[key] = { at: Date.now(), lots: trimmed };
     return trimmed.slice();
   }
 
   async function loadOsmParkingPlaces(center, radiusM, limit){
     const lots = await queryOsmParking(center, radiusM);
     return lots.slice(0, limit || 40);
+  }
+
+  async function queryGoogleParking(center, radiusM){
+    if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return [];
+    try {
+      const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
+      const req = {
+        fields: ["id", "displayName", "formattedAddress", "location"],
+        locationRestriction: { center: { lat: center.lat, lng: center.lng }, radius: Math.max(120, Math.min(radiusM || 500, 1000)) },
+        maxResultCount: 10
+      };
+      if (SearchNearbyRankPreference) req.rankPreference = SearchNearbyRankPreference.DISTANCE;
+      let places = [];
+      try {
+        req.includedPrimaryTypes = ["parking"];
+        const nearby = await Place.searchNearby(req);
+        places = nearby.places || [];
+      } catch (err) {
+        delete req.includedPrimaryTypes;
+        req.includedTypes = ["parking"];
+        const nearby = await Place.searchNearby(req);
+        places = nearby.places || [];
+      }
+      const out = [];
+      (places || []).forEach((place, index) => {
+        const snap = snapshotPlace(place, "Parking");
+        if (!snap) return;
+        const walkM = distanceMetres(center, snap);
+        const line = (Number.isFinite(walkM) ? formatDistance(walkM) + " walk · " : "") + "Parking";
+        out.push({
+          id: "g-park-" + (snap.placeId || index),
+          name: snap.name || "Parking",
+          lat: snap.lat,
+          lng: snap.lng,
+          color: "#1A73E8",
+          iconHref: "",
+          kind: "parking",
+          parkKind: "lot",
+          walkM,
+          score: -walkM * 4 + 40,
+          placeId: snap.placeId || "",
+          parking: { fee: "", capacity: 0, access: "", type: "lot", line: line.replace(/ · $/, "") },
+          description: snap.address || "Car park",
+          snippet: snippetOf(snap.address || snap.name || "Parking", 110)
+        });
+      });
+      out.sort((a, b) => a.walkM - b.walkM);
+      return out;
+    } catch (err) {
+      console.warn("Google parking search failed", err);
+      return [];
+    }
+  }
+
+  async function nearestPublicRoadPoint(dest){
+    if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) return null;
+    const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
+    const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary|secondary|primary)$"]["access"!="private"](around:200,' + lat + "," + lng + ");out geom;";
+    try {
+      const json = await overpassJson(query, 8000);
+      let best = null, bestD = 220;
+      (json.elements || []).forEach(el => {
+        (el.geometry || []).forEach(g => {
+          if (!g || !Number.isFinite(g.lat) || !Number.isFinite(g.lon)) return;
+          const p = { lat: g.lat, lng: g.lon };
+          const d = distanceMetres(dest, p);
+          if (d < bestD) { bestD = d; best = p; }
+        });
+      });
+      return best;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function usablePlaceId(value){
+    const id = String(value || "").trim();
+    return id && id.indexOf("__") !== 0 ? id : "";
+  }
+
+  async function pickDriveDestination(dest){
+    if (!dest || !Number.isFinite(dest.lat)) return dest;
+    const lot = parkingNear.selected;
+    if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && (!(lot.walkM > 450))) {
+      const id = usablePlaceId(lot.placeId);
+      return id ? { lat: lot.lat, lng: lot.lng, name: lot.name, placeId: id } : { lat: lot.lat, lng: lot.lng, name: lot.name };
+    }
+    const placeId = usablePlaceId(dest.placeId);
+    if (placeId) return dest;
+    const road = await nearestPublicRoadPoint(dest);
+    if (road && distanceMetres(dest, road) > 35) {
+      return { lat: road.lat, lng: road.lng, name: dest.name };
+    }
+    return dest;
   }
 
   function parkingPinDataUrl(){
@@ -2325,10 +2423,28 @@
     parkingNear.destKey = key;
     if (dest.kind === "parking") setSelectedParking(dest, dest);
     else hideParkingRow();
+    const googleP = queryGoogleParking(dest, Math.max(PARKING_NEAR_M, 500));
     try {
-      let lots = await queryOsmParking(dest, PARKING_NEAR_M);
+      let lots = [];
+      let googleLots = [];
+      googleP.then(list => { googleLots = list || []; }).catch(() => {});
+      try {
+        lots = await Promise.race([
+          queryOsmParking(dest, PARKING_NEAR_M),
+          new Promise(resolve => setTimeout(() => resolve([]), 4500))
+        ]);
+      } catch (err) {
+        console.warn("OSM parking lookup failed", err);
+        lots = [];
+      }
       if (id !== parkingNear.requestId) return;
-      if (!lots.length) lots = await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M);
+      if (!lots.length) {
+        try { lots = googleLots.length ? googleLots : await googleP; } catch (err) { lots = []; }
+      }
+      if (id !== parkingNear.requestId) return;
+      if (!lots.length) {
+        try { lots = await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M); } catch (err) {}
+      }
       if (id !== parkingNear.requestId) return;
       if (!lots.length) {
         if (dest.kind === "parking") setSelectedParking(dest, dest);
@@ -2837,9 +2953,10 @@
   // reroute departs the way the car is already pointing. The traffic-on-polyline extra
   // is requested first; if the loaded API build rejects it, retry for a plain route.
   async function requestRoute(origin, destination, wantTraffic = true){
+    const placeId = usablePlaceId(destination && destination.placeId);
     const request = {
       origin,
-      destination: { lat: destination.lat, lng: destination.lng },
+      destination: placeId ? { placeId: placeId } : { lat: destination.lat, lng: destination.lng },
       travelMode: "DRIVING",
       routingPreference: "TRAFFIC_AWARE",
       language: "en-NZ",
@@ -2855,6 +2972,10 @@
       if (wantTraffic) {
         console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
         return requestRoute(origin, destination, false);
+      }
+      if (placeId && Number.isFinite(destination.lat) && Number.isFinite(destination.lng)) {
+        console.warn("Place-id route failed, retrying at coordinates", err);
+        return requestRoute(origin, { lat: destination.lat, lng: destination.lng }, false);
       }
       if (request.extraComputations && request.extraComputations.length) {
         console.warn("Nav instruction extra failed, retrying without it", err);
@@ -2906,7 +3027,10 @@
     }
     updateRouteInfo(route, destination.name, keepNav);
     fetchSpeedLimits(driven);
-    if (!keepNav) fetchParkingNear(destination);
+    if (!keepNav) {
+      const key = destination.lat.toFixed(5) + "," + destination.lng.toFixed(5);
+      if (parkingNear.destKey !== key) fetchParkingNear(destination);
+    }
     offRoute.hits = 0;
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
   }
@@ -2917,7 +3041,10 @@
     setMessage(`Calculating route to ${destinationName}...`);
 
     try {
-      const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, destination);
+      await fetchParkingNear(destination);
+      const driveTo = await pickDriveDestination(destination);
+      activeDriveTo = driveTo;
+      const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo);
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
         lat: destination.lat,
@@ -4166,6 +4293,7 @@
     clearManeuverMarkers();
     activeRoute = null;
     activeDestination = null;
+    activeDriveTo = null;
     activeRoutePath = [];
     setRouteGeometry([]);
     speedLimit.ways = [];
@@ -4563,7 +4691,7 @@
       const origin = fix.bearingOk && Number.isFinite(fix.heading)
         ? { lat: fix.lat, lng: fix.lng, heading: fix.heading }
         : { lat: fix.lat, lng: fix.lng };
-      const { route, path, intervals } = await requestRoute(origin, dest);
+      const { route, path, intervals } = await requestRoute(origin, activeDriveTo || dest);
       // Navigation ended or the destination changed while the request was out: drop it.
       if (!isNavigating() || activeDestination !== dest) return;
       adoptRoute(route, path, intervals, dest, true);
@@ -4583,7 +4711,6 @@
   // matched to the nearest heading-compatible way each fix. Shown only while navigating
   // and only when a limit is known; never the current speed.
 
-  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const SPEED_LIMIT_MATCH_M = 22;      // way must pass this close to the fix
   const SPEED_LIMIT_FORGET_M = 300;    // clear the badge this far past the last matched way
   const IMPLICIT_MAXSPEED = {          // OSM zone tags -> km/h
