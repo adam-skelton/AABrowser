@@ -167,7 +167,7 @@ class CarWebViewHost(
         onMain {
             val quotedId = JSONObject.quote(placeId)
             val quotedTitle = JSONObject.quote(title)
-            evaluateOrQueue(
+            evaluateSearchJs(
                 "window.__aaPickSearchResult && window.__aaPickSearchResult($quotedId,$quotedTitle);"
             )
         }

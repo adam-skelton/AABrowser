@@ -27,7 +27,8 @@ class CarKeyboardScreen(
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 webHost.searchSuggestionsListener = { query, items ->
-                    if (query.isEmpty() || query.equals(typedText.trim(), ignoreCase = true)) {
+                    val catalog = items.any { it.placeId.startsWith("__map") }
+                    if (query.isEmpty() || query.equals(typedText.trim(), ignoreCase = true) || catalog) {
                         suggestions = items
                         invalidate()
                     }
@@ -78,7 +79,9 @@ class CarKeyboardScreen(
             }
             row.setOnClickListener {
                 webHost.chooseSearchSuggestion(hit.placeId, hit.title)
-                screenManager.pop()
+                if (hit.placeId != "__maps__") {
+                    screenManager.pop()
+                }
             }
             builder.addItem(row.build())
         }
