@@ -63,7 +63,10 @@ http.createServer((req, res) => {
         'const GOOGLE_MAPS_API_KEY = ' + JSON.stringify(mapsKey) + ";"
       ));
     }
-    res.writeHead(200, { "Content-Type": types[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": types[ext] || "application/octet-stream",
+      "Cache-Control": "no-store"
+    });
     res.end(data);
   });
 }).listen(port, "127.0.0.1", () => {
