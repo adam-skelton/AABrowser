@@ -2949,6 +2949,100 @@
   const ROUTE_TRAFFIC_FIELDS = ["speedPaths"];
   const ROUTE_NAV_EXTRAS = ["HTML_FORMATTED_NAVIGATION_INSTRUCTIONS"];
 
+  function isPrivateDriveWay(tags){
+    const access = String((tags && tags.access) || "").toLowerCase();
+    const service = String((tags && tags.service) || "").toLowerCase();
+    const motor = String((tags && (tags.motor_vehicle || tags.vehicle)) || "").toLowerCase();
+    if (service === "driveway") return true;
+    if (access === "private" || access === "no") return true;
+    if (motor === "private" || motor === "no") return true;
+    return false;
+  }
+
+  function distPointToWay(point, pts){
+    let best = Infinity;
+    if (!point || !pts || pts.length < 2) return best;
+    for (let i = 1; i < pts.length; i++) {
+      const pr = projectOnSegment(point, pts[i - 1], pts[i]);
+      const d = distanceMetres(point, pr.point);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function nearestOsmWay(point, ways, maxM){
+    let best = null, bestD = maxM;
+    for (let i = 0; i < (ways || []).length; i++) {
+      const d = distPointToWay(point, ways[i].pts);
+      if (d < bestD) { bestD = d; best = ways[i]; }
+    }
+    return best;
+  }
+
+  async function fetchOsmWaysAlongTail(path){
+    if (!path || path.length < 2) return [];
+    const cum = cumulativeLengths(path);
+    const total = cum[cum.length - 1] || 0;
+    const fromM = Math.max(0, total - 320);
+    let start = 0;
+    while (start < cum.length && cum[start] < fromM) start++;
+    start = Math.max(0, start - 1);
+    const tail = path.slice(start);
+    const pts = downsamplePath(tail, 22).map(p => p.lat.toFixed(5) + "," + p.lng.toFixed(5)).join(",");
+    if (!pts) return [];
+    const query = '[out:json][timeout:8];way["highway"](around:20,' + pts + ");out tags geom;";
+    const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
+    const ways = [];
+    (json.elements || []).forEach(el => {
+      if (!Array.isArray(el.geometry) || el.geometry.length < 2) return;
+      ways.push({
+        tags: el.tags || {},
+        pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon }))
+      });
+    });
+    return ways;
+  }
+
+  async function trimPrivateRoadTail(path){
+    if (!path || path.length < 4) return path;
+    let ways = [];
+    try {
+      ways = await fetchOsmWaysAlongTail(path);
+    } catch (err) {
+      console.warn("Private-road tail check failed", err);
+      return path;
+    }
+    if (!ways.length) return path;
+    const cum = cumulativeLengths(path);
+    const total = cum[cum.length - 1] || 0;
+    const minM = Math.max(total - 400, total * 0.82);
+    let minIndex = 1;
+    while (minIndex < path.length - 1 && cum[minIndex] < minM) minIndex++;
+    minIndex = Math.max(1, minIndex);
+    let i = path.length - 1;
+    let sawPrivate = false;
+    let cut = path.length;
+    while (i >= minIndex) {
+      const way = nearestOsmWay(path[i], ways, 18);
+      if (way && isPrivateDriveWay(way.tags)) {
+        sawPrivate = true;
+        cut = i;
+        i -= 1;
+        continue;
+      }
+      if (way && !isPrivateDriveWay(way.tags)) break;
+      if (sawPrivate) {
+        cut = i;
+        i -= 1;
+        continue;
+      }
+      break;
+    }
+    if (!sawPrivate || cut < 3) return path;
+    const trimmed = path.slice(0, Math.max(2, cut));
+    return trimmed.length >= 2 ? trimmed : path;
+  }
+
   // One traffic-aware route. `origin` may carry a `heading` (DirectionalLocation) so a
   // reroute departs the way the car is already pointing. The traffic-on-polyline extra
   // is requested first; if the loaded API build rejects it, retry for a plain route.
@@ -3006,7 +3100,8 @@
       lng: typeof point.lng === "function" ? point.lng() : point.lng
     }));
     if (path.length < 2) throw new Error("Route returned without a usable path.");
-    return { route, path, intervals: routeTrafficIntervals(route, path) };
+    const trimmed = await trimPrivateRoadTail(path);
+    return { route, path: trimmed, intervals: routeTrafficIntervals(route, trimmed) };
   }
 
   // Make `route` the active one: geometry, drawing, card, speed limits, trace metadata.
@@ -3560,6 +3655,7 @@
     for (const leg of legs || []) {
       for (const step of leg.steps || []) {
         const start = stepStartPoint(step);
+        if (start && path && path.length >= 2 && distanceToRoute(start, path).d > 32) continue;
         const m = start ? nearestAlongRoute(start, path, cum) : (out.length ? out[out.length - 1].m : 0);
         out.push({
           m,
