@@ -1708,7 +1708,7 @@
 
   const PARKING_NEAR_M = 420;
   const PARKING_NEAR_FALLBACK_M = 850;
-  const parkingNear = { requestId: 0, destKey: "", options: [], selected: null };
+  const parkingNear = { requestId: 0, walkId: 0, destKey: "", options: [], selected: null };
 
   function osmCoord(el){
     if (Number.isFinite(el.lat) && Number.isFinite(el.lon)) return { lat: el.lat, lng: el.lon };
@@ -1940,34 +1940,217 @@
     parkingWalkLines = [];
   }
 
-  function drawParkingWalk(from, to){
+  function walkNodeKey(lat, lng){
+    return lat.toFixed(5) + "," + lng.toFixed(5);
+  }
+
+  function walkWayCost(tags){
+    const hw = String((tags && tags.highway) || "");
+    const service = String((tags && tags.service) || "");
+    const foot = String((tags && tags.foot) || "");
+    const access = String((tags && tags.access) || "");
+    if (access === "private" || access === "no" || foot === "no") return 0;
+    if (service === "driveway" || service === "parking_aisle") return 0;
+    if (hw === "footway" || hw === "path" || hw === "steps" || hw === "pedestrian" || hw === "bridleway") return 0.72;
+    if (hw === "track" || hw === "cycleway") return 0.88;
+    if (hw === "living_street" || hw === "residential") return 1.2;
+    if (hw === "unclassified" || hw === "service" || hw === "tertiary") return 1.35;
+    return 1.15;
+  }
+
+  function appendWalkEdge(adj, a, b, cost){
+    if (!adj[a]) adj[a] = [];
+    if (!adj[b]) adj[b] = [];
+    adj[a].push({ to: b, cost: cost });
+    adj[b].push({ to: a, cost: cost });
+  }
+
+  function dijkstraWalk(adj, start, goal){
+    const dist = {}, prev = {};
+    const q = [[0, start]];
+    dist[start] = 0;
+    while (q.length) {
+      q.sort((a, b) => a[0] - b[0]);
+      const cur = q.shift();
+      if (!cur) break;
+      const u = cur[1];
+      if (u === goal) break;
+      if (cur[0] !== dist[u]) continue;
+      const edges = adj[u] || [];
+      for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
+        const nd = cur[0] + e.cost;
+        if (dist[e.to] == null || nd < dist[e.to]) {
+          dist[e.to] = nd;
+          prev[e.to] = u;
+          q.push([nd, e.to]);
+        }
+      }
+    }
+    if (dist[goal] == null) return null;
+    const path = [];
+    let n = goal;
+    while (n) {
+      path.push(n);
+      if (n === start) break;
+      n = prev[n];
+    }
+    path.reverse();
+    return path;
+  }
+
+  function nearestWalkNode(nodes, point, maxM){
+    let best = "", bestD = maxM;
+    const keys = Object.keys(nodes);
+    for (let i = 0; i < keys.length; i++) {
+      const d = distanceMetres(point, nodes[keys[i]]);
+      if (d < bestD) { bestD = d; best = keys[i]; }
+    }
+    return best;
+  }
+
+  async function fetchOsmWalkPathGraph(from, to){
+    const pad = 0.0022;
+    const s = Math.min(from.lat, to.lat) - pad;
+    const n = Math.max(from.lat, to.lat) + pad;
+    const w = Math.min(from.lng, to.lng) - pad;
+    const e = Math.max(from.lng, to.lng) + pad;
+    const bbox = s.toFixed(5) + "," + w.toFixed(5) + "," + n.toFixed(5) + "," + e.toFixed(5);
+    const query = '[out:json][timeout:16];(way["highway"~"^(footway|path|track|steps|pedestrian|bridleway|cycleway|living_street|residential|unclassified|service)$"]["foot"!="no"]["access"!="no"]["area"!="yes"](' + bbox + '););out geom;';
+    const json = await overpassJson(query);
+    const nodes = {};
+    const adj = {};
+    (json.elements || []).forEach(el => {
+      const tags = el.tags || {};
+      const costMul = walkWayCost(tags);
+      if (!costMul || !Array.isArray(el.geometry) || el.geometry.length < 2) return;
+      for (let i = 1; i < el.geometry.length; i++) {
+        const a = el.geometry[i - 1], b = el.geometry[i];
+        if (!a || !b) continue;
+        const ka = walkNodeKey(a.lat, a.lon);
+        const kb = walkNodeKey(b.lat, b.lon);
+        nodes[ka] = { lat: a.lat, lng: a.lon };
+        nodes[kb] = { lat: b.lat, lng: b.lon };
+        const metres = distanceMetres(nodes[ka], nodes[kb]);
+        if (metres < 0.4) continue;
+        appendWalkEdge(adj, ka, kb, metres * costMul);
+      }
+    });
+    const start = nearestWalkNode(nodes, from, 95);
+    const goal = nearestWalkNode(nodes, to, 95);
+    if (!start || !goal) return null;
+    if (start !== walkNodeKey(from.lat, from.lng)) {
+      nodes[walkNodeKey(from.lat, from.lng)] = { lat: from.lat, lng: from.lng };
+      appendWalkEdge(adj, walkNodeKey(from.lat, from.lng), start, distanceMetres(from, nodes[start]) * 1.05);
+    }
+    if (goal !== walkNodeKey(to.lat, to.lng)) {
+      nodes[walkNodeKey(to.lat, to.lng)] = { lat: to.lat, lng: to.lng };
+      appendWalkEdge(adj, walkNodeKey(to.lat, to.lng), goal, distanceMetres(to, nodes[goal]) * 1.05);
+    }
+    const fromKey = walkNodeKey(from.lat, from.lng);
+    const toKey = walkNodeKey(to.lat, to.lng);
+    const keys = dijkstraWalk(adj, adj[fromKey] ? fromKey : start, adj[toKey] ? toKey : goal);
+    if (!keys || keys.length < 2) return null;
+    return keys.map(k => nodes[k]).filter(Boolean);
+  }
+
+  async function fetchOsmWalkPathRouter(from, to){
+    const url = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/" +
+      from.lng.toFixed(6) + "," + from.lat.toFixed(6) + ";" +
+      to.lng.toFixed(6) + "," + to.lat.toFixed(6) +
+      "?overview=full&geometries=geojson";
+    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : 0;
+    try {
+      const res = await fetch(url, { signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) throw new Error("foot router " + res.status);
+      const json = await res.json();
+      const coords = json && json.routes && json.routes[0] && json.routes[0].geometry && json.routes[0].geometry.coordinates;
+      if (!coords || coords.length < 2) return null;
+      return coords.map(c => ({ lat: c[1], lng: c[0] }));
+    } catch (err) {
+      if (timer) clearTimeout(timer);
+      return null;
+    }
+  }
+
+  const walkPathCache = {};
+
+  async function fetchOsmWalkPath(from, to){
+    const key = from.lat.toFixed(4) + "," + from.lng.toFixed(4) + ">" + to.lat.toFixed(4) + "," + to.lng.toFixed(4);
+    if (walkPathCache[key] && (Date.now() - walkPathCache[key].at) < 180000) return walkPathCache[key].path.slice();
+    let path = null;
+    try { path = await fetchOsmWalkPathRouter(from, to); } catch (err) {}
+    if (!path || path.length < 2) {
+      try { path = await fetchOsmWalkPathGraph(from, to); } catch (err) { console.warn("OSM walk graph failed", err); }
+    }
+    if (!path || path.length < 2) return [from, to];
+    const straight = distanceMetres(from, to);
+    let walked = 0;
+    for (let i = 1; i < path.length; i++) walked += distanceMetres(path[i - 1], path[i]);
+    if (straight > 20 && walked > Math.max(straight * 4.5, straight + 500)) return [from, to];
+    walkPathCache[key] = { at: Date.now(), path: path };
+    return path.slice();
+  }
+
+  function densifyWalkPath(pts, stepM){
+    const out = [];
+    if (!pts || !pts.length) return out;
+    out.push({ lat: pts[0].lat, lng: pts[0].lng });
+    for (let i = 1; i < pts.length; i++) {
+      const a = out[out.length - 1];
+      const b = pts[i];
+      const d = distanceMetres(a, b);
+      const n = Math.max(1, Math.round(d / Math.max(2, stepM)));
+      for (let k = 1; k <= n; k++) {
+        out.push({ lat: lerp(a.lat, b.lat, k / n), lng: lerp(a.lng, b.lng, k / n) });
+      }
+    }
+    return out;
+  }
+
+  function drawDottedWalk(pts){
+    if (!map3d || !Polyline3DElement || !pts || pts.length < 2) return;
+    const flat = densifyWalkPath(pts, 3);
+    const on = 2;
+    const off = 6;
+    let i = 0;
+    while (i < flat.length - 1) {
+      const end = Math.min(flat.length - 1, i + on);
+      if (end > i) {
+        try {
+          const line = new Polyline3DElement({
+            path: flat.slice(i, end + 1),
+            strokeColor: "#1A73E8",
+            strokeWidth: 2.5,
+            altitudeMode: MODEL_ALTITUDE_MODE,
+            drawsOccludedSegments: true,
+            zIndex: 8
+          });
+          map3d.append(line);
+          parkingWalkLines.push(line);
+        } catch (err) {}
+      }
+      i = end + off;
+    }
+  }
+
+  async function drawParkingWalk(from, to){
+    const id = ++parkingNear.walkId;
     clearParkingWalk();
     if (!map3d || !Polyline3DElement || !from || !to) return;
     const dist = distanceMetres(from, to);
     if (!(dist > 12)) return;
-    const dash = 16, gap = 12, step = dash + gap;
-    const n = Math.max(1, Math.ceil(dist / step));
-    for (let i = 0; i < n; i++) {
-      const t0 = (i * step) / dist;
-      const t1 = Math.min(1, (i * step + dash) / dist);
-      if (t1 <= t0 + 0.002) continue;
-      try {
-        const line = new Polyline3DElement({
-          path: [
-            { lat: lerp(from.lat, to.lat, t0), lng: lerp(from.lng, to.lng, t0) },
-            { lat: lerp(from.lat, to.lat, t1), lng: lerp(from.lng, to.lng, t1) }
-          ],
-          strokeColor: "#1A73E8",
-          outerColor: "#FFFFFF",
-          strokeWidth: 4.5,
-          outerWidth: 0.28,
-          altitudeMode: MODEL_ALTITUDE_MODE,
-          drawsOccludedSegments: true
-        });
-        map3d.append(line);
-        parkingWalkLines.push(line);
-      } catch (err) {}
+    let path = [from, to];
+    try {
+      path = await fetchOsmWalkPath(from, to);
+    } catch (err) {
+      console.warn("Walk path failed", err);
     }
+    if (id !== parkingNear.walkId) return;
+    clearParkingWalk();
+    drawDottedWalk(path && path.length >= 2 ? path : [from, to]);
   }
 
   function frameParkingAndDest(dest, lot){
@@ -2067,13 +2250,17 @@
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
     if (lot && target && !destIsSamePlace(target, lot)) drawParkingWalk(lot, target);
-    else clearParkingWalk();
+    else {
+      parkingNear.walkId += 1;
+      clearParkingWalk();
+    }
     updateParkingRow();
     if (opts && opts.frame && lot && target) frameParkingAndDest(target, lot);
   }
 
   function clearParkingOverlay(){
     parkingNear.requestId += 1;
+    parkingNear.walkId += 1;
     parkingNear.destKey = "";
     parkingNear.options = [];
     parkingNear.selected = null;
