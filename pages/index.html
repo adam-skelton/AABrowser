@@ -1501,7 +1501,7 @@
 
   function customMapPinLook(color){
     const h = cssHue(color);
-    if (h <= 22 || h >= 338) return { color: "#0F9D58", glyph: "pin" };
+    if (h <= 22 || h >= 338) return { color: "#F9AB00", glyph: "pin" };
     if (h >= 85 && h <= 170) return { color: "#0F9D58", glyph: "tick" };
     return { color: color || "#1A73E8", glyph: "pin" };
   }
@@ -2523,6 +2523,24 @@
     return { day: local.getDay(), minutes: local.getHours() * 60 + local.getMinutes() };
   }
 
+  function periodMinutes(pt){
+    return (Number(pt && pt.hour) || 0) * 60 + (Number(pt && pt.minute) || 0);
+  }
+
+  function isAllDayPeriod(period){
+    if (!period || !period.open) return false;
+    if (!period.close) return true;
+    const openM = periodMinutes(period.open);
+    const closeM = periodMinutes(period.close);
+    return openM === 0 && (closeM >= 23 * 60 + 59 || closeM === 0);
+  }
+
+  function isOpen24Hours(periods){
+    if (!periods || !periods.length) return false;
+    if (periods.length === 1 && isAllDayPeriod(periods[0])) return true;
+    return periods.length >= 7 && periods.every(isAllDayPeriod);
+  }
+
   function describeOpeningHours(place){
     const status = place && place.businessStatus;
     if (status === "CLOSED_PERMANENTLY") return { text: "Permanently closed", kind: "closed" };
@@ -2530,9 +2548,7 @@
     const hours = (place && (place.currentOpeningHours || place.regularOpeningHours)) || null;
     const periods = hours && hours.periods;
     if (!periods || !periods.length) return null;
-    if (periods.length === 1 && periods[0].open && !periods[0].close) {
-      return { text: "Open 24 hours", kind: "open24" };
-    }
+    if (isOpen24Hours(periods)) return { text: "Open 24 hours", kind: "open24" };
     const now = placeLocalNow(place);
     const nowAbs = now.day * 1440 + now.minutes;
     const week = 7 * 1440;
@@ -2545,6 +2561,12 @@
       for (let i = 0; i < periods.length; i++) {
         const p = periods[i];
         if (!p || !p.open) continue;
+        if (isAllDayPeriod(p)) {
+          const open = pointAbs(p.open) + wrap * week;
+          const close = open + 1440;
+          if (nowAbs >= open && nowAbs < close) current = { open, close, allDay: true };
+          continue;
+        }
         let open = pointAbs(p.open) + wrap * week;
         let close = p.close ? pointAbs(p.close) + wrap * week : open + 1440;
         if (p.close && close <= open) close += 1440;
@@ -2553,12 +2575,21 @@
       }
     }
     if (current) {
+      if (current.allDay || isAllDayPeriod({ open: { hour: 0, minute: 0 }, close: { hour: Math.floor((current.close % 1440) / 60), minute: (current.close % 1440) % 60 } })) {
+        const closeM = ((current.close % 1440) + 1440) % 1440;
+        if (closeM === 0 || closeM >= 23 * 60 + 59) return { text: "Open 24 hours", kind: "open24" };
+      }
       const remain = current.close - nowAbs;
-      return { text: `Closes at ${formatClockHm(current.close)}`, kind: remain <= 60 ? "soon" : "open" };
+      const closeClock = formatClockHm(current.close);
+      if (closeClock === "23:59" || closeClock === "00:00" || closeClock === "24:00") {
+        return { text: "Open 24 hours", kind: "open24" };
+      }
+      return { text: `Closes at ${closeClock}`, kind: remain <= 60 ? "soon" : "open" };
     }
     if (nextOpen) {
       let text = `Opens at ${formatClockHm(nextOpen.open)}`;
-      if (nextOpen.close) text += ` · Closes at ${formatClockHm(nextOpen.close)}`;
+      const closeClock = nextOpen.close ? formatClockHm(nextOpen.close) : "";
+      if (closeClock && closeClock !== "23:59" && closeClock !== "00:00") text += ` · Closes at ${closeClock}`;
       return { text, kind: "closed" };
     }
     return { text: "Closed", kind: "closed" };
