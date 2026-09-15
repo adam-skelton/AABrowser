@@ -1589,9 +1589,8 @@
           subtitle
         };
       }).filter(item => item.placeId || item.title);
-      const mapsRow = mapsShortcutItem();
       const wantMaps = /^maps?$/i.test(q) || q.toLowerCase().includes("map");
-      pushSearchSuggestions(q, wantMaps ? mapsCatalogItems() : [mapsRow].concat(items));
+      pushSearchSuggestions(q, wantMaps ? mapsCatalogItems() : items);
     } catch (err) {
       console.error(err);
     }
@@ -1612,11 +1611,6 @@
     const id = String(placeId || "").trim();
     const label = String(fallbackName || "").trim();
     if (id.startsWith("__map")) {
-      if (id === "__maps__") {
-        showChrome();
-        pushSearchSuggestions("", mapsCatalogItems());
-        return;
-      }
       hideSearchDropdown();
       await openExploreMap(id);
       return;
@@ -1669,12 +1663,8 @@
     return "Saved map";
   }
 
-  function mapsShortcutItem(){
-    return { placeId: "__maps__", title: "Maps", subtitle: "Saved maps and nearby places", color: "#1A73E8" };
-  }
-
   function mapsCatalogItems(){
-    const items = [mapsShortcutItem()];
+    const items = [];
     if (customMapConfigured()) {
       items.push({ placeId: "__map:custom", title: customMapTitle(), subtitle: "Saved map", color: "#0F9D58" });
     }
@@ -1875,17 +1865,27 @@
   }
 
   function explorePinNode(place, showLabel){
-    const img = document.createElement("img");
-    img.alt = place.name || "";
     const href = rewriteIconHref(place.iconHref);
     const custom = href && !isBlankStockIcon(href);
     if (custom) {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:none";
+      const label = document.createElement("span");
+      const text = explorePinLabelText(place);
+      label.textContent = text;
+      label.style.cssText = "display:" + (showLabel !== false && text ? "block" : "none") + ";max-width:158px;padding:2px 6px;border-radius:7px;background:rgba(16,18,20,.55);color:#fff;font:700 9px/1.2 system-ui,Segoe UI,sans-serif;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+      const img = document.createElement("img");
+      img.alt = place.name || "";
       img.src = href;
       img.width = 40;
       img.height = 40;
       img.style.cssText = "width:40px;height:40px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))";
-      return img;
+      wrap.append(label, img);
+      wrap._labelEl = label;
+      return wrap;
     }
+    const img = document.createElement("img");
+    img.alt = place.name || "";
     applyExplorePinImage(img, place, showLabel !== false);
     return img;
   }
@@ -3141,24 +3141,25 @@
     explore.markers.forEach((marker, i) => {
       const place = (marker._explorePlace) || explore.places[i];
       if (!place) return;
-      const href = rewriteIconHref(place.iconHref);
-      if (href && !isBlankStockIcon(href)) return;
-      const img = marker._pinImg || (marker.querySelector && marker.querySelector("img"));
-      applyExplorePinImage(img, place, markerShowsLabel(place, mode, sparse));
+      const show = markerShowsLabel(place, mode, sparse);
+      const node = marker._pinImg;
+      if (node && node._labelEl) {
+        node._labelEl.style.display = show && place.name ? "block" : "none";
+        return;
+      }
+      const img = node || (marker.querySelector && marker.querySelector("img"));
+      applyExplorePinImage(img, place, show);
     });
   }
 
   function makeExploreMarker(place){
     const Ctor = Marker3DInteractiveElement || Marker3DElement;
-    const href = rewriteIconHref(place.iconHref);
-    const custom = href && !isBlankStockIcon(href);
     const opts = {
       position: { lat: place.lat, lng: place.lng },
       altitudeMode: "CLAMP_TO_GROUND",
       sizePreserved: true,
       drawsWhenOccluded: true
     };
-    if (custom && place.name) opts.label = place.name;
     const marker = new Ctor(opts);
     marker._explorePlace = place;
     const template = document.createElement("template");
@@ -8364,7 +8365,7 @@
 
   let mapDragStart = null;
   let routeCardRestoreTimer = 0;
-  const ROUTE_CARD_RESTORE_MS = 2800;
+  const ROUTE_CARD_RESTORE_MS = 1000;
   function stowRouteCard(){
     if (!document.body.classList.contains("has-route") || document.body.classList.contains("navigating")) return;
     document.body.classList.add("route-card-stowed");

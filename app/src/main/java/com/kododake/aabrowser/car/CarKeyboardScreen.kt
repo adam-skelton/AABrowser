@@ -79,9 +79,7 @@ class CarKeyboardScreen(
             }
             row.setOnClickListener {
                 webHost.chooseSearchSuggestion(hit.placeId, hit.title)
-                if (hit.placeId != "__maps__") {
-                    screenManager.pop()
-                }
+                screenManager.pop()
             }
             builder.addItem(row.build())
         }
