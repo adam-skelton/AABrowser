@@ -44,9 +44,11 @@
     #mapsBrowseBtn svg {width:22px; height:22px; display:block}
     #exploreBack {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(12px,env(safe-area-inset-left))); width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     body.explore-mode #exploreBack {display:flex}
+    body.explore-mode.has-route #exploreBack {display:none}
     body.explore-mode #searchRow,
     body.explore-mode #searchResults {display:none !important}
     html.aa-car.explore-mode #exploreBack,body.aa-car.explore-mode #exploreBack {display:flex; top:12px; left:calc(var(--aa-inset-left) + 12px)}
+    html.aa-car.explore-mode.has-route #exploreBack,body.aa-car.explore-mode.has-route #exploreBack {display:none}
     html.aa-car.debug-open.explore-mode #exploreBack,body.aa-car.debug-open.explore-mode #exploreBack {left:calc(var(--aa-inset-left) + 100px)}
     #exploreBack svg {width:22px; height:22px; display:block}
     #routeParking {display:none; margin-top:12px; width:100%; min-height:48px; border-radius:16px; background:#E8F0FE; color:#174EA6; box-shadow:none; align-items:center; gap:10px; text-align:left; padding:8px 12px}
@@ -102,16 +104,18 @@
     .nav-lane.rec {opacity:1}
     .nav-lane svg {width:18px; height:32px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
     .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
-    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(480px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 168px)); pointer-events:none}
+    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(480px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 168px)); pointer-events:auto; cursor:pointer}
     body:not(.chrome-hidden) #navBanner {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
     html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
     body.nav-browsing #navBanner,
-    body.nav-browsing #navBanner.visible {display:none !important}
-    #navPrimary {display:flex; align-items:center; gap:10px; min-height:76px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
-    #navIconWrap {position:relative; width:64px; height:64px; flex:0 0 auto}
+    body.nav-browsing #navBanner.visible,
+    body.nav-flyover #navBanner,
+    body.nav-flyover #navBanner.visible {display:none !important}
+    #navPrimary {display:flex; align-items:center; gap:10px; min-height:88px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
+    #navIconWrap {position:relative; width:74px; height:74px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
-    #navIcon svg {width:56px; height:56px; display:block; overflow:visible; color:#fff}
+    #navIcon svg {width:66px; height:66px; display:block; overflow:visible; color:#fff}
     #navIcon svg path {fill:currentColor}
     #navIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navPrimaryCopy {min-width:0; display:flex; flex-direction:column; gap:1px}
@@ -119,13 +123,13 @@
     #navClock {display:none}
     #navClock.visible {display:flex !important}
     #navIconWrap.clock #navIcon {opacity:0}
-    #navClock svg {width:64px; height:64px; display:block}
+    #navClock svg {width:74px; height:74px; display:block}
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
     #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     #navThen {display:none; align-items:center; gap:8px; width:max-content; padding:6px 14px 6px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
-    #navThenIcon {width:22px; height:22px; display:flex}
-    #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible; color:#fff}
+    #navThenIcon {width:28px; height:28px; display:flex}
+    #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:min(300px,100%); max-width:100%; min-width:0; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 1 300px}
@@ -179,8 +183,8 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:31; top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px)); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:none; user-select:none; transition:opacity .18s ease, transform .18s ease}
-    html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(96px,env(safe-area-inset-top) + 88px))}
+    #routeCard {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:none; user-select:none; transition:opacity .18s ease, transform .18s ease}
+    html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top)))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
     body.navigating #routeCard,body.suppress-route-card #routeCard {display:none !important}
@@ -288,7 +292,7 @@
   </div>
   <script>try{if(window.Car&&typeof Car.bootPainted==="function")Car.bootPainted()}catch(e){}</script>
   <div id="chromeWake" aria-hidden="true"></div>
-  <button id="exploreBack" type="button" aria-label="Back to map overview">
+  <button id="exploreBack" type="button" aria-label="Exit map">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
   <div id="topPanel">
@@ -485,7 +489,7 @@
   </div>
   <div id="navHud">
     <div id="navLanes" hidden></div>
-    <div id="navBanner" hidden>
+    <div id="navBanner" hidden role="button" aria-label="Skip ahead to next turn">
       <div id="navPrimary">
         <div id="navIconWrap">
           <div id="navIcon"></div>
@@ -841,6 +845,7 @@
   let parkingWalkLines = [];
   let maneuverMarkers = [];
   let infoLevel = 0;
+  let infoSkipMode = false;
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
   const NAV_INFO = {
@@ -1312,11 +1317,57 @@
     return lastCarScale > 0.01 ? lastCarScale : carScaleForCamera();
   }
 
+  function mapsOrientationMatrix(o){
+    const r = (Number(o.roll) || 0) * Math.PI / 180;
+    const t = (Number(o.tilt) || 0) * Math.PI / 180;
+    const h = (Number(o.heading) || 0) * Math.PI / 180;
+    const cr = Math.cos(r), sr = Math.sin(r);
+    const ct = Math.cos(t), st = Math.sin(t);
+    const ch = Math.cos(h), sh = Math.sin(h);
+    const rx = [[1, 0, 0], [0, cr, -sr], [0, sr, cr]];
+    const ry = [[ct, 0, st], [0, 1, 0], [-st, 0, ct]];
+    const rz = [[ch, -sh, 0], [sh, ch, 0], [0, 0, 1]];
+    const mul = (a, b) => {
+      const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) m[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+      }
+      return m;
+    };
+    return mul(rx, mul(ry, rz));
+  }
+
+  function matrixToMapsOrientation(M){
+    const st = clamp(M[0][2], -1, 1);
+    const tilt = Math.asin(st);
+    const ct = Math.cos(tilt);
+    let heading, roll;
+    if (Math.abs(ct) > 1e-6) {
+      heading = Math.atan2(-M[0][1], M[0][0]);
+      roll = Math.atan2(-M[1][2], M[2][2]);
+    } else {
+      heading = Math.atan2(M[1][0], M[1][1]);
+      roll = 0;
+    }
+    return {
+      heading: normaliseHeading(heading * 180 / Math.PI),
+      tilt: tilt * 180 / Math.PI,
+      roll: roll * 180 / Math.PI
+    };
+  }
+
   function wheelOrientation(heading){
     const o = carOrientation(heading);
-    // Maps applies roll, then tilt, then heading. Roll is the model +X axle the
-    // preview rig spins around; adding to tilt lays the disc on the ground.
-    return { heading: o.heading, tilt: o.tilt, roll: o.roll + wheelSpinDeg };
+    if (!wheelSpinDeg) return o;
+    const a = wheelSpinDeg * Math.PI / 180;
+    const c = Math.cos(a), s = Math.sin(a);
+    const spinX = [[1, 0, 0], [0, c, -s], [0, s, c]];
+    const R = mapsOrientationMatrix(o);
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) M[i][j] = R[i][0] * spinX[0][j] + R[i][1] * spinX[1][j] + R[i][2] * spinX[2][j];
+    }
+    return matrixToMapsOrientation(M);
   }
 
   function hubMapPoint(point, heading, hub, scale){
@@ -2058,6 +2109,19 @@
     return keys.some(k => !/^(no|no_parking|no_stopping|no_standing)$/i.test(String(tags[k] || "")));
   }
 
+  function osmTagName(tags){
+    if (!tags) return "";
+    const keys = ["name", "name:en", "official_name", "loc_name", "short_name", "alt_name", "brand"];
+    for (let i = 0; i < keys.length; i++) {
+      const v = String(tags[keys[i]] || "").replace(/\s+/g, " ").trim();
+      if (v) return v;
+    }
+    const op = String(tags.operator || "").replace(/\s+/g, " ").trim();
+    if (op) return op;
+    const ref = String(tags.ref || "").replace(/\s+/g, " ").trim();
+    return ref;
+  }
+
   function osmParkingPlace(el, dest, color){
     const tags = el.tags || {};
     const access = String(tags.access || "").toLowerCase();
@@ -2083,8 +2147,10 @@
     else if (fee === "yes") score -= 8;
     if (cap > 0) score += Math.min(cap, 40);
     if (tags.name) score += 8;
+    if (osmTagName(tags)) score += 24;
     const line = describeOsmParking(tags, dest ? walkM : NaN, kind);
-    let name = tags.name || tags.operator || "";
+    const named = osmTagName(tags);
+    let name = named;
     if (!name) {
       if (kind === "street") name = tags.highway ? "Street parking" : "Street parking";
       else if (kind === "building") name = "Parking building";
@@ -2094,11 +2160,13 @@
     }
     const descBits = [];
     if (line) descBits.push(line);
-    if (tags.operator && tags.operator !== tags.name) descBits.push("Operator: " + tags.operator);
+    if (tags.operator && tags.operator !== named && tags.operator !== name) descBits.push("Operator: " + tags.operator);
     if (tags.description) descBits.push(tags.description);
     return {
       id: "osm-park-" + (el.type || "n") + "-" + el.id,
       name,
+      named: !!named,
+      osmAmenity: String(tags.amenity || ""),
       lat: loc.lat,
       lng: loc.lng,
       color: color || "#1A73E8",
@@ -2176,13 +2244,37 @@
       out.push(place);
     });
     out.sort((a, b) => (b.score - a.score) || (a.walkM - b.walkM));
+    const namedLots = out.filter(place => place.named);
+    out.forEach(place => {
+      if (place.named) return;
+      let best = null, bestD = 80;
+      namedLots.forEach(other => {
+        const d = distanceMetres(place, other);
+        if (d < bestD) { bestD = d; best = other; }
+      });
+      if (best) {
+        place.name = best.name;
+        place.named = true;
+      }
+    });
     const seenStreet = {};
     const trimmed = [];
     out.forEach(place => {
+      if (place.osmAmenity === "parking_entrance" && !place.named) return;
       if (place.parkKind === "street") {
         const key = String(place.name || "").toLowerCase();
         if (seenStreet[key]) return;
         seenStreet[key] = true;
+      }
+      const dup = trimmed.find(k => k.name === place.name && distanceMetres(k, place) < 70);
+      if (dup) {
+        const placeEnt = place.osmAmenity === "parking_entrance";
+        const dupEnt = dup.osmAmenity === "parking_entrance";
+        if (placeEnt && !dupEnt) return;
+        if ((!placeEnt && dupEnt) || place.score > dup.score) {
+          trimmed[trimmed.indexOf(dup)] = place;
+        }
+        return;
       }
       trimmed.push(place);
     });
@@ -3302,6 +3394,12 @@
     cancelStartCountdown();
     closeDescriptionDialog();
     clearParkingOverlay();
+    activeRoute = null;
+    activeDestination = null;
+    activeDriveTo = null;
+    activeRoutePath = [];
+    try { setRouteGeometry([]); } catch (err) {}
+    try { removeRouteLines(); } catch (err) {}
     document.body.classList.remove("has-route", "navigating", "nav-browsing");
     document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
     if (explore.overview && map3d) {
@@ -4620,8 +4718,8 @@
     if (eta) { eta.hidden = true; eta.classList.remove("visible"); }
     if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
     if (wrap) wrap.classList.remove("clock");
-    document.body.classList.remove("has-lanes");
-    document.documentElement.classList.remove("has-lanes");
+    document.body.classList.remove("has-lanes", "nav-flyover");
+    document.documentElement.classList.remove("has-lanes", "nav-flyover");
     navHudKey = "";
     navPassHold = { m: null, until: 0 };
   }
@@ -4667,6 +4765,16 @@
     }
     if (remainEl) remainEl.textContent = `${formatDuration(remainMs)} · ${formatDistance(remainM)}`;
     if (clockEl) clockEl.textContent = formatTime(eta);
+    document.body.classList.toggle("nav-flyover", !!flyover);
+    document.documentElement.classList.toggle("nav-flyover", !!flyover);
+    if (flyover) {
+      const banner = document.getElementById("navBanner");
+      const thenEl = document.getElementById("navThen");
+      if (banner) { banner.hidden = true; banner.classList.remove("visible"); }
+      if (thenEl) { thenEl.hidden = true; thenEl.classList.remove("visible"); }
+      renderLaneBar(null);
+      return;
+    }
 
     const ahead = upcomingNavSteps(progressM);
     const current = ahead[0];
@@ -4690,7 +4798,7 @@
       const iconKey = turn;
       if (icon && icon.dataset.maneuver !== iconKey) {
         icon.dataset.maneuver = iconKey;
-        icon.innerHTML = maneuverIconSvg(turn, 56);
+        icon.innerHTML = maneuverIconSvg(turn, 66);
       }
       const nextTurn = next ? hudManeuver(next) : "";
       if (next && thenEl && thenIcon && maneuverFamily(nextTurn) !== "straight") {
@@ -4698,7 +4806,7 @@
         thenEl.classList.add("visible");
         if (thenIcon.dataset.maneuver !== nextTurn) {
           thenIcon.dataset.maneuver = nextTurn;
-          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 22);
+          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 28);
         }
       } else if (thenEl) {
         thenEl.hidden = true;
@@ -4809,27 +4917,37 @@
   function playTurnCue(side){
     const ctx = resumeNavAudio();
     if (!ctx) return;
-    const t0 = ctx.currentTime + 0.03;
-    const notes = [196, 147];
+    const t0 = ctx.currentTime + 0.02;
+    const notes = [370, 494];
     for (let i = 0; i < notes.length; i++) {
       const osc = ctx.createOscillator();
+      const over = ctx.createOscillator();
       const gain = ctx.createGain();
+      const overGain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
-      osc.type = "sine";
-      const start = t0 + i * 0.18;
-      const dur = 0.14;
+      osc.type = "triangle";
+      over.type = "sine";
+      const start = t0 + i * 0.24;
+      const dur = 0.11;
       osc.frequency.setValueAtTime(notes[i], start);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(80, notes[i] * 0.84), start + dur);
+      over.frequency.setValueAtTime(notes[i] * 2, start);
       filter.type = "lowpass";
-      filter.frequency.value = 900;
+      filter.frequency.value = 2400;
+      filter.Q.value = 0.6;
+      overGain.gain.value = 0.35;
+      const peak = i === 0 ? 0.24 : 0.3;
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.07, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(peak, start + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
       osc.connect(filter);
+      over.connect(overGain);
+      overGain.connect(filter);
       filter.connect(gain);
       connectCueToSpeakers(ctx, gain, side);
       osc.start(start);
-      osc.stop(start + dur + 0.03);
+      over.start(start);
+      osc.stop(start + dur + 0.02);
+      over.stop(start + dur + 0.02);
     }
   }
 
@@ -6039,6 +6157,7 @@
 
   function navInfoMaxLevel(){
     if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
+      if (infoSkipMode) return Math.max(1, navSkipCoverTargets().targets.length);
       return Math.min(NAV_INFO.PEEK_LEVELS, Math.max(1, navTurnCoverTargets().targets.length));
     }
     return NAV_INFO.MAX_LEVEL;
@@ -6092,23 +6211,47 @@
     return { startM, total, targets };
   }
 
+  function navSkipCoverTargets(){
+    const total = routeCum.length ? routeCum[routeCum.length - 1] : 0;
+    const startM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
+    const targets = [];
+    upcomingNavSteps(startM).forEach(step => {
+      const m = Math.min(Number(step.m) || 0, total);
+      if (!(m > startM + 8)) return;
+      if (targets.length && m - targets[targets.length - 1] < 35) {
+        targets[targets.length - 1] = m;
+        return;
+      }
+      targets.push(m);
+    });
+    if (!targets.length || total - targets[targets.length - 1] > 50) targets.push(total);
+    return { startM, total, targets };
+  }
+
   function navInfoPreview(view, baseRange, baseTilt){
     const range0 = Math.max(Number(baseRange) || view.range, 40);
     const maxLevel = navInfoMaxLevel();
     const level = clamp(infoLevel, 0, maxLevel);
     if (level <= 0) return null;
     if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
-      const span = navTurnCoverTargets();
+      const span = infoSkipMode ? navSkipCoverTargets() : navTurnCoverTargets();
       const idx = Math.min(level - 1, Math.max(0, span.targets.length - 1));
       const caps = NAV_INFO.PEEK_RANGE_CAPS;
-      const cap = caps[Math.min(idx, caps.length - 1)];
       const endM = span.targets[idx];
+      const dest = endM >= span.total - 8;
+      const cap = infoSkipMode
+        ? (dest ? 24000 : clamp(1200 * Math.pow(1.55, idx), 1100, 9000))
+        : caps[Math.min(idx, caps.length - 1)];
       const aheadM = Math.max(endM - span.startM, 80);
-      const tilt = clamp(baseTilt - idx * 8 - Math.log2(Math.max(aheadM / 700, 1)) * 2, 52, baseTilt);
+      const tilt = dest
+        ? clamp(baseTilt - Math.log2(Math.max(aheadM / 90, 1)) * 7, NAV_INFO.TURN_TILT_MIN, baseTilt)
+        : clamp(baseTilt - idx * 8 - Math.log2(Math.max(aheadM / 700, 1)) * 2, 52, baseTilt);
       let range = rangeToFitAhead(aheadM, tilt, view.fov, cap);
       range = Math.max(range, range0 * (1.2 + idx * 1.4));
       if (idx > 0) {
-        const prevCap = caps[Math.min(idx - 1, caps.length - 1)];
+        const prevCap = infoSkipMode
+          ? (span.targets[idx - 1] >= span.total - 8 ? 24000 : clamp(1200 * Math.pow(1.55, idx - 1), 1100, 9000))
+          : caps[Math.min(idx - 1, caps.length - 1)];
         const prevAhead = Math.max(span.targets[idx - 1] - span.startM, 80);
         const prevFit = rangeToFitAhead(prevAhead, tilt, view.fov, prevCap);
         range = Math.max(range, prevFit * NAV_INFO.PEEK_PULL);
@@ -6403,6 +6546,7 @@
     if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
     const total = routeCum[routeCum.length - 1];
     if (total < FLYOVER_MIN_M) return;
+    if (speedKalman.speed * 3.6 > 10) return;
     const dest = activeDestination || activeRoutePath[activeRoutePath.length - 1];
     const last = activeRoutePath[activeRoutePath.length - 1];
     const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
@@ -6711,6 +6855,7 @@
   // null keeps the current one. The ticker seeds from the live camera and flies it in.
   function attachFollow(view){
     if (!map3d) return;
+    flyover = null;
     cancelStartCountdown();
     stopDestPreview();
     stopCarInspect();
@@ -7953,6 +8098,14 @@
 
   // `fromTouch`: a real pan/rotate on the screen (not a programmatic detach such as the
   // route overview). In car mode that arms the timed re-follow from the LAST touch.
+  function skipNavFlyover(){
+    if (!flyover) return false;
+    flyover = null;
+    if (isNavigating()) attachFollow("drive");
+    updateNavHud();
+    return true;
+  }
+
   function markUserPanned(fromTouch){
     flyover = null;
     cancelStartCountdown();
@@ -7979,7 +8132,7 @@
     const btn = document.getElementById("recenterBtn");
     if (!btn) return;
     updateNavInfoButton();
-    const show = !!currentGpsPoint && (!following || cam.userRange != null || infoLevel >= navInfoMaxLevel());
+    const show = !!currentGpsPoint && (!following || cam.userRange != null || infoLevel >= navInfoMaxLevel() || (infoSkipMode && infoLevel > 0));
     btn.classList.toggle("visible", show);
     document.body.classList.toggle("has-recenter", show);
     document.documentElement.classList.toggle("has-recenter", show);
@@ -7998,8 +8151,9 @@
   function updateNavInfoButton(){
     const btn = document.getElementById("infoBtn");
     if (!btn) return;
-    if (!isNavigating() && !infoUiAvailable() && (infoBtnArmed || infoLevel)) {
+    if (!isNavigating() && !infoUiAvailable() && (infoBtnArmed || infoLevel || infoSkipMode)) {
       infoLevel = 0;
+      infoSkipMode = false;
       infoBtnArmed = false;
       if (infoIdleTimer) {
         window.clearTimeout(infoIdleTimer);
@@ -8013,9 +8167,9 @@
     document.documentElement.classList.toggle("has-info", show);
   }
 
-  function armNavInfoIdle(){
+  function armNavInfoIdle(always){
     if (infoIdleTimer) window.clearTimeout(infoIdleTimer);
-    if (infoLevel >= navInfoMaxLevel()) {
+    if (!always && infoLevel >= navInfoMaxLevel()) {
       infoIdleTimer = 0;
       return;
     }
@@ -8027,6 +8181,7 @@
 
   function resetNavInfo(hideButton){
     infoLevel = 0;
+    infoSkipMode = false;
     if (hideButton) infoBtnArmed = false;
     if (infoIdleTimer) {
       window.clearTimeout(infoIdleTimer);
@@ -8043,6 +8198,29 @@
     armNavInfoIdle();
   }
 
+  function cycleNavSkip(event){
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!isNavigating() || !infoUiAvailable()) return;
+    flyover = null;
+    if (!following) attachFollow(null);
+    if (!infoSkipMode) {
+      infoSkipMode = true;
+      infoLevel = 0;
+    }
+    if (infoLevel >= navInfoMaxLevel()) {
+      updateRecenterButton();
+      armNavInfoIdle(true);
+      return;
+    }
+    infoLevel += 1;
+    showManeuverMarkers();
+    updateRecenterButton();
+    armNavInfoIdle(true);
+  }
+
   function cycleNavInfo(event){
     if (event) {
       event.preventDefault();
@@ -8051,6 +8229,10 @@
     if (!infoUiAvailable()) return;
     infoBtnArmed = true;
     flyover = null;
+    if (infoSkipMode) {
+      infoSkipMode = false;
+      infoLevel = 0;
+    }
     if (!following) attachFollow(null);
     if (infoLevel >= navInfoMaxLevel()) {
       updateRecenterButton();
@@ -8177,6 +8359,8 @@
     window.__aaRecenter();
   });
   document.getElementById("infoBtn").addEventListener("click", cycleNavInfo);
+  const navBannerEl = document.getElementById("navBanner");
+  if (navBannerEl) navBannerEl.addEventListener("click", cycleNavSkip);
   document.getElementById("compassBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -8220,6 +8404,10 @@
   document.getElementById("routeClose").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
+    if (explore.mode) {
+      exploreShowOverview();
+      return;
+    }
     clearNavigation();
   });
   document.getElementById("routeBack").addEventListener("click", event => {
@@ -8260,13 +8448,10 @@
     exploreBackBtn.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      if (explore.selected) exploreShowOverview();
-      else {
-        exitExploreMode();
-        clearNavigation();
-        recenterToCar();
-        setMessage("");
-      }
+      exitExploreMode();
+      clearNavigation();
+      recenterToCar();
+      setMessage("");
     });
   }
   const routeTitleRow = document.getElementById("routeTitleRow");
@@ -8400,6 +8585,11 @@
     }
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
     if (isChromeUiTarget(event.target)) {
+      mapDragStart = null;
+      return;
+    }
+    if (flyover && isNavigating()) {
+      skipNavFlyover();
       mapDragStart = null;
       return;
     }
@@ -8647,13 +8837,13 @@
     const remainEl = document.getElementById("navEtaRemain");
     const clockEl = document.getElementById("navEtaClock");
     if (banner) { banner.hidden = false; banner.classList.add("visible"); }
-    if (icon) icon.innerHTML = maneuverIconSvg("TURN_RIGHT", 48);
+    if (icon) icon.innerHTML = maneuverIconSvg("TURN_RIGHT", 66);
     if (distEl) distEl.textContent = "250 m";
     if (text) text.textContent = "W 5th Ave";
     if (thenEl && thenIcon) {
       thenEl.hidden = false;
       thenEl.classList.add("visible");
-      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 22);
+      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 28);
     }
     if (eta) { eta.hidden = false; eta.classList.add("visible"); }
     if (remainEl) remainEl.textContent = "14 min · 3.9 km";
