@@ -302,6 +302,7 @@
       <button id="turnCueTestBtn" type="button">Turn cue test</button>
       <button id="playTurnCueBtn" type="button">Play turn audio</button>
       <button id="fenceWalkTestBtn" type="button">Fence walk test</button>
+      <button id="privateTailTestBtn" type="button">Private tail test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
       <button id="navCardTestBtn" type="button">Nav card</button>
@@ -2247,7 +2248,7 @@
   async function nearestPublicRoadPoint(dest){
     if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) return null;
     const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
-    const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary|secondary|primary)$"]["access"!="private"](around:200,' + lat + "," + lng + ");out geom;";
+    const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary|secondary|primary)$"]["access"!="private"]["service"!="driveway"](around:200,' + lat + "," + lng + ");out geom;";
     try {
       const json = await overpassJson(query, 8000);
       let best = null, bestD = 220;
@@ -2283,10 +2284,10 @@
     try {
       road = await Promise.race([
         nearestPublicRoadPoint(dest),
-        new Promise(resolve => setTimeout(() => resolve(null), 1500))
+        new Promise(resolve => setTimeout(() => resolve(null), 4000))
       ]);
     } catch (err) {}
-    if (road && distanceMetres(dest, road) > 35) {
+        new Promise(resolve => setTimeout(() => resolve(null), 4000))
       return { lat: road.lat, lng: road.lng, name: dest.name };
     }
     return dest;
@@ -3536,9 +3537,11 @@
   function isPrivateDriveWay(tags){
     const access = String((tags && tags.access) || "").toLowerCase();
     const service = String((tags && tags.service) || "").toLowerCase();
+    const hw = String((tags && tags.highway) || "").toLowerCase();
     const motor = String((tags && (tags.motor_vehicle || tags.vehicle)) || "").toLowerCase();
     if (service === "driveway") return true;
-    if (access === "private" || access === "no") return true;
+    if (hw === "service" && service !== "parking_aisle" && !tags.name) return true;
+    if (access === "private" || access === "no" || access === "destination") return true;
     if (motor === "private" || motor === "no") return true;
     return false;
   }
@@ -3567,7 +3570,7 @@
     if (!path || path.length < 2) return [];
     const cum = cumulativeLengths(path);
     const total = cum[cum.length - 1] || 0;
-    const fromM = Math.max(0, total - 320);
+    const fromM = Math.max(0, total - 500);
     let start = 0;
     while (start < cum.length && cum[start] < fromM) start++;
     start = Math.max(0, start - 1);
@@ -3599,7 +3602,7 @@
     if (!ways.length) return path;
     const cum = cumulativeLengths(path);
     const total = cum[cum.length - 1] || 0;
-    const minM = Math.max(total - 400, total * 0.82);
+    const minM = Math.max(0, total - 450);
     let minIndex = 1;
     while (minIndex < path.length - 1 && cum[minIndex] < minM) minIndex++;
     minIndex = Math.max(1, minIndex);
@@ -3622,9 +3625,39 @@
       }
       break;
     }
-    if (!sawPrivate || cut < 3) return path;
+    if (!sawPrivate || cut < 2) return path;
     const trimmed = path.slice(0, Math.max(2, cut));
     return trimmed.length >= 2 ? trimmed : path;
+  }
+
+  function trimDriveWalkOverlap(drivePath, walkPath){
+    if (!drivePath || drivePath.length < 4 || !walkPath || walkPath.length < 2) {
+      return { path: drivePath, walk: walkPath, trimmedM: 0 };
+    }
+    const nearM = 22;
+    let firstOverlap = drivePath.length;
+    for (let i = drivePath.length - 1; i >= 2; i--) {
+      if (distPointToWay(drivePath[i], walkPath) <= nearM) firstOverlap = i;
+      else break;
+    }
+    if (firstOverlap >= drivePath.length - 1) return { path: drivePath, walk: walkPath, trimmedM: 0 };
+    const cum = cumulativeLengths(drivePath);
+    const trimmedM = (cum[cum.length - 1] || 0) - (cum[firstOverlap] || 0);
+    if (trimmedM < 40) return { path: drivePath, walk: walkPath, trimmedM: 0 };
+    const path = drivePath.slice(0, firstOverlap + 1);
+    const end = path[path.length - 1];
+    let bestI = 0, bestD = Infinity;
+    for (let i = 0; i < walkPath.length; i++) {
+      const d = distanceMetres(end, walkPath[i]);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return { path: path, walk: snapWalkToDriveEnd(end, walkPath.slice(bestI)), trimmedM: trimmedM };
+  }
+
+  function bucklandsEndsOnFencedDriveway(end, dest){
+    dest = dest || BUCKLANDS_ACCESS_TEST.dest;
+    if (!end || !dest) return true;
+    return end.lng < dest.lng - 0.00085 && end.lat > dest.lat - 0.00075;
   }
 
   // One traffic-aware route. `origin` may carry a `heading` (DirectionalLocation) so a
@@ -3689,7 +3722,7 @@
       try {
         trimmed = await Promise.race([
           trimPrivateRoadTail(path),
-          new Promise(resolve => setTimeout(() => resolve(path), 1800))
+          new Promise(resolve => setTimeout(() => resolve(path), 5000))
         ]);
       } catch (err) {
         trimmed = path;
@@ -3757,17 +3790,35 @@
       const applyRefine = async () => {
         try { await parkingP; } catch (err) {}
         const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
-        if (!refined) return;
-        if (refined.drive && refined.drive.path) {
-          route = refined.drive.route;
-          path = refined.drive.path;
-          intervals = refined.drive.intervals;
+        let useRoute = route;
+        let usePath = path;
+        let useIntervals = intervals;
+        let useWalk = null;
+        if (refined && refined.drive && refined.drive.path) {
+          useRoute = refined.drive.route;
+          usePath = refined.drive.path;
+          useIntervals = refined.drive.intervals;
           if (refined.access) activeDriveTo = refined.access;
-          adoptRoute(route, path, intervals, dest, isNavigating(), refined.walk || null);
-        } else if (refined.walk) {
-          const end = path[path.length - 1];
+          useWalk = refined.walk || null;
+        } else if (refined && refined.walk) {
+          useWalk = refined.walk;
+        }
+        if (!useWalk || useWalk.length < 2) {
+          try {
+            const w = await walkAccessFrom(usePath[usePath.length - 1], destination);
+            useWalk = w && w.path;
+          } catch (err) {}
+        }
+        const overlap = trimDriveWalkOverlap(usePath, useWalk);
+        usePath = overlap.path || usePath;
+        useWalk = overlap.walk || useWalk;
+        if ((refined && refined.drive && refined.drive.path) || overlap.trimmedM > 0) {
+          if (overlap.trimmedM > 0) useIntervals = routeTrafficIntervals(useRoute, usePath);
+          adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
+        } else if (useWalk) {
+          const end = usePath[usePath.length - 1];
           const visual = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : end;
-          drawParkingWalk(visual, dest, refined.walk);
+          drawParkingWalk(visual, dest, useWalk);
         }
       };
       if (opts && opts.refineWalk === false) {
@@ -7180,11 +7231,67 @@
     const end = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : dest;
     if (end && Number.isFinite(end.lat)) frameParkingAndDest(dest, end);
     const walkN = (parkingWalkLines && parkingWalkLines.length) || 0;
-    const fencedSide = end.lng < dest.lng - 0.00085 && end.lat > dest.lat - 0.00075;
+    const fencedSide = bucklandsEndsOnFencedDriveway(end, dest);
     const joined = walkN > 0 ? " Dotted walk joins that end to the playground." : "";
     setMessage(fencedSide
       ? "Fence walk test FAIL: nav still ends on the fenced Devon/driveway side." + joined
-      : "Fence walk test: drive ends at public parking/street, not the fenced driveway." + joined);
+      : "Fence walk test PASS: drive ends at public parking/street, not the fenced driveway." + joined);
+  }
+
+  async function startPrivateTailTest(){
+    if (!map3d || !RouteClass) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    if (isDemoRunning()) stopDemo();
+    if (watchId !== null) stopGps();
+    following = false;
+    autoRefollowArmed = false;
+    document.getElementById("followBtn").textContent = "Following: OFF";
+    setMessage("Private tail test: routing to Bucklands Beach Domain…");
+    const origin = BUCKLANDS_ACCESS_TEST.origin;
+    const dest = BUCKLANDS_ACCESS_TEST.dest;
+    let raw;
+    try {
+      raw = await requestRoute(origin, dest, true, { skipTrim: true });
+    } catch (err) {
+      setMessage("Private tail test FAIL: Google route failed. " + (err && err.message ? err.message : String(err)));
+      return;
+    }
+    const rawPath = raw.path;
+    const rawEnd = rawPath[rawPath.length - 1];
+    const rawM = walkPathLengthM(rawPath);
+    const osmTrimmed = await trimPrivateRoadTail(rawPath.slice());
+    const osmM = Math.max(0, rawM - walkPathLengthM(osmTrimmed));
+    let walk = null;
+    try {
+      const w = await walkAccessFrom(osmTrimmed[osmTrimmed.length - 1], dest);
+      walk = w && w.path;
+    } catch (err) {}
+    const overlap = trimDriveWalkOverlap(osmTrimmed, walk);
+    const used = overlap.path || osmTrimmed;
+    const usedWalk = overlap.walk || walk;
+    const end = used[used.length - 1];
+    const pulledM = Math.max(0, rawM - walkPathLengthM(used));
+    const intervals = routeTrafficIntervals(raw.route, used);
+    setSuppressRouteCard(true);
+    try { cancelStartCountdown(); } catch (err) {}
+    stopDestPreview();
+    adoptRoute(raw.route, used, intervals, dest, false, usedWalk);
+    setMapLabels(true);
+    if (end && Number.isFinite(end.lat)) frameParkingAndDest(dest, end);
+    const stillDriveway = bucklandsEndsOnFencedDriveway(end, dest);
+    const rawWasDriveway = bucklandsEndsOnFencedDriveway(rawEnd, dest);
+    const pass = !stillDriveway && (pulledM >= 40 || !rawWasDriveway);
+    const bits = [
+      "OSM private tail " + Math.round(osmM) + " m",
+      "walk overlap " + Math.round(overlap.trimmedM || 0) + " m",
+      "drive pulled back " + Math.round(pulledM) + " m"
+    ];
+    if (!rawWasDriveway) bits.push("Google already ended off the driveway");
+    setMessage(pass
+      ? "Private tail test PASS: " + bits.join(" · ")
+      : "Private tail test FAIL: still on the private driveway. " + bits.join(" · "));
   }
 
   async function startTurnCueTest(){
@@ -7972,6 +8079,11 @@
     event.preventDefault();
     startBucklandsAccessTest();
   });
+  const privateTailTestBtn = document.getElementById("privateTailTestBtn");
+  if (privateTailTestBtn) privateTailTestBtn.addEventListener("click", event => {
+    event.preventDefault();
+    startPrivateTailTest();
+  });
   document.getElementById("freeFollowBtn").addEventListener("click",startFreeFollow);
   document.addEventListener("pointerdown", () => { resumeNavAudio(); }, { capture: true, passive: true });
   document.getElementById("randomBtn").addEventListener("click",randomRoute);
@@ -8438,7 +8550,7 @@
   let mapRevealDone = false;
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
-  const MAP_REVEAL_MS = 8000;
+  const MAP_REVEAL_MS = 24000;
   function sessionAlreadyRevealed(){
     try { return sessionStorage.getItem(MAP_REVEAL_KEY) === "1"; } catch (err) { return false; }
   }
@@ -8459,6 +8571,7 @@
   }
 
   function armMapReveal(){
+    const armedAt = performance.now();
     let pokeTimer = 0;
     const pokeMap = () => {
       if (mapRevealDone) return;
@@ -8474,7 +8587,9 @@
     pokeMap();
     const finish = () => {
       window.clearTimeout(pokeTimer);
-      revealMap();
+      const remain = Math.max(0, MAP_REVEAL_MS - (performance.now() - armedAt));
+      if (mapRevealTimer) window.clearTimeout(mapRevealTimer);
+      mapRevealTimer = window.setTimeout(revealMap, remain);
     };
     try {
       map3d.addEventListener("gmp-steadychange", finish, { once: true });
