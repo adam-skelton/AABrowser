@@ -300,6 +300,7 @@
       <button id="labelsBtn" type="button">Labels: OFF</button>
       <button id="demoBtn" type="button">Drive route demo</button>
       <button id="turnCueTestBtn" type="button">Turn cue test</button>
+      <button id="playTurnCueBtn" type="button">Play turn audio</button>
       <button id="fenceWalkTestBtn" type="button">Fence walk test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
@@ -7959,6 +7960,13 @@
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
   document.getElementById("turnCueTestBtn").addEventListener("click",startTurnCueTest);
+  document.getElementById("playTurnCueBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    resumeNavAudio();
+    playTurnCue("both");
+    setMessage("Playing turn audio.");
+  });
   const fenceWalkTestBtn = document.getElementById("fenceWalkTestBtn");
   if (fenceWalkTestBtn) fenceWalkTestBtn.addEventListener("click", event => {
     event.preventDefault();
