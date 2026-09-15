@@ -83,8 +83,12 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:34px; height:34px; display:block}
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
-    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + (100% - var(--aa-inset-left) - var(--aa-inset-right)) / 2); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:translateX(-50%); display:flex; align-items:center; gap:12px; pointer-events:none}
-    #speedLimitBadge {display:none; position:relative; left:auto; bottom:auto; z-index:32; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none; flex:0 0 auto}
+    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:none; display:flex; align-items:center; justify-content:center; gap:12px; pointer-events:none}
+    html.has-speed-limit #navBottomCluster,body.has-speed-limit #navBottomCluster {left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)) + 88px)}
+    html.has-recenter #navBottomCluster,body.has-recenter #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 168px)}
+    html.has-info #navBottomCluster,body.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
+    html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
+    #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); z-index:35; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
     #navHud {display:none; pointer-events:none}
     body.navigating #navHud {display:block}
@@ -123,7 +127,7 @@
     #navThenIcon svg {width:22px; height:22px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:min(300px, calc(100vw - var(--aa-inset-left) - var(--aa-inset-right) - 200px)); min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 1 auto}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:min(300px,100%); max-width:100%; min-width:0; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 1 300px}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
     #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:18px; font-weight:650; letter-spacing:-.2px}
@@ -468,8 +472,8 @@
       <path d="M12 21.5L7.8 12h8.4z" fill="#fff"/>
     </svg>
   </button>
+  <div id="speedLimitBadge" aria-live="polite"></div>
   <div id="navBottomCluster">
-    <div id="speedLimitBadge" aria-live="polite"></div>
     <div id="navEtaBar" hidden>
       <button type="button" id="navExit" aria-label="Stop navigation">&times;</button>
       <div id="navEtaCopy">
@@ -547,10 +551,10 @@
     const saved = localStorage.getItem("aaCarModel");
     if (saved && CAR_MODELS[saved]) activeCarModelId = saved;
   } catch (err) {}
-  // Keep a constant on-screen size: about one lane / half a two-lane road.
+  // Keep a constant on-screen size: about one car / one lane, not two.
   const CAR_WIDTH_M = 1.80;
-  const CAR_TARGET_WIDTH_M = 3.5;
-  const CAR_MAX_WORLD_WIDTH_M = 7.0; // zoomed-out cap: 2x the close-up lane width
+  const CAR_TARGET_WIDTH_M = 2.05;
+  const CAR_MAX_WORLD_WIDTH_M = 3.9; // zoomed-out cap, same ratio as before but smaller
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
@@ -1050,7 +1054,7 @@
     const tan = Math.tan((f * Math.PI / 180) / 2);
     const raw = CAR_BASE_SCALE * (range / CAR_REF_RANGE) * (tan / refTan);
     const maxScale = CAR_MAX_WORLD_WIDTH_M / CAR_WIDTH_M;
-    return clamp(raw, CAR_BASE_SCALE * 0.9, maxScale);
+    return clamp(raw, CAR_BASE_SCALE, maxScale);
   }
 
   function applyLiveCarScale(){
@@ -1304,7 +1308,9 @@
 
   function wheelOrientation(heading){
     const o = carOrientation(heading);
-    return { heading: o.heading, tilt: o.tilt + wheelSpinDeg, roll: o.roll };
+    // Preview rig spins wheels around local +X. Maps applies roll, then tilt, then
+    // heading, and roll is that same X axis.
+    return { heading: o.heading, tilt: o.tilt, roll: o.roll + wheelSpinDeg };
   }
 
   function hubMapPoint(point, heading, hub, scale){
@@ -2287,7 +2293,7 @@
         new Promise(resolve => setTimeout(() => resolve(null), 4000))
       ]);
     } catch (err) {}
-        new Promise(resolve => setTimeout(() => resolve(null), 4000))
+    if (road && distanceMetres(dest, road) > 35) {
       return { lat: road.lat, lng: road.lng, name: dest.name };
     }
     return dest;
@@ -5782,6 +5788,8 @@
     if (!el) return;
     const show = speedLimit.current != null && (isNavigating() || freeHudMoving());
     el.classList.toggle("visible", show);
+    document.body.classList.toggle("has-speed-limit", show);
+    document.documentElement.classList.toggle("has-speed-limit", show);
     if (show) el.textContent = String(speedLimit.current);
   }
 
@@ -8550,7 +8558,7 @@
   let mapRevealDone = false;
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
-  const MAP_REVEAL_MS = 24000;
+  const MAP_REVEAL_MS = 6000;
   function sessionAlreadyRevealed(){
     try { return sessionStorage.getItem(MAP_REVEAL_KEY) === "1"; } catch (err) { return false; }
   }
@@ -8571,7 +8579,6 @@
   }
 
   function armMapReveal(){
-    const armedAt = performance.now();
     let pokeTimer = 0;
     const pokeMap = () => {
       if (mapRevealDone) return;
@@ -8587,18 +8594,8 @@
     pokeMap();
     const finish = () => {
       window.clearTimeout(pokeTimer);
-      const remain = Math.max(0, MAP_REVEAL_MS - (performance.now() - armedAt));
-      if (mapRevealTimer) window.clearTimeout(mapRevealTimer);
-      mapRevealTimer = window.setTimeout(revealMap, remain);
+      revealMap();
     };
-    try {
-      map3d.addEventListener("gmp-steadychange", finish, { once: true });
-    } catch (err) {}
-    try {
-      map3d.addEventListener("gmp-centerchange", () => {
-        window.setTimeout(finish, 1200);
-      }, { once: true });
-    } catch (err) {}
     mapRevealTimer = window.setTimeout(finish, MAP_REVEAL_MS);
   }
 
@@ -8646,7 +8643,12 @@
     if (remainEl) remainEl.textContent = "14 min · 3.9 km";
     if (clockEl) clockEl.textContent = "5:31 pm";
     const speed = document.getElementById("speedLimitBadge");
-    if (speed) { speed.textContent = "50"; speed.classList.add("visible"); }
+    if (speed) {
+      speed.textContent = "50";
+      speed.classList.add("visible");
+      document.body.classList.add("has-speed-limit");
+      document.documentElement.classList.add("has-speed-limit");
+    }
     renderLaneBar([
       { dirs: ["left"], rec: false },
       { dirs: ["through"], rec: false },
