@@ -384,7 +384,7 @@ function extractSimpleMesh(file) {
   return { json, positions, uvs, indices, imageBin };
 }
 
-function centerPositions(positions) {
+function centerSpinAxis(positions) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   positions.forEach((p) => {
@@ -393,11 +393,12 @@ function centerPositions(positions) {
       max[k] = Math.max(max[k], p[k]);
     }
   });
-  const c = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const cy = (min[1] + max[1]) / 2;
+  const cz = (min[2] + max[2]) / 2;
   return {
-    positions: positions.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]),
-    center: c,
-    radius: Math.max(...positions.map((p) => Math.hypot(p[1] - c[1], p[2] - c[2])))
+    positions: positions.map((p) => [p[0], p[1] - cy, p[2] - cz]),
+    shift: [0, cy, cz],
+    radius: Math.max(...positions.map((p) => Math.hypot(p[1] - cy, p[2] - cz)))
   };
 }
 
@@ -415,11 +416,12 @@ function retargetMaterial(mat, texIndex) {
   return mat;
 }
 
+const HUB_NUDGE = { y: -0.032, z: 0.022 };
 const DEFAULT_HUBS = [
-  { name: "wheel_fl", x: -0.8256, y: 0.3561, z: 1.3780 },
-  { name: "wheel_fr", x: 0.8018, y: 0.3474, z: 1.3772 },
-  { name: "wheel_rl", x: -0.7819, y: 0.3403, z: -1.3779 },
-  { name: "wheel_rr", x: 0.8095, y: 0.3234, z: -1.3636 }
+  { name: "wheel_fl", x: -0.8256, y: 0.3561 + HUB_NUDGE.y, z: 1.3780 + HUB_NUDGE.z },
+  { name: "wheel_fr", x: 0.8018, y: 0.3474 + HUB_NUDGE.y, z: 1.3772 + HUB_NUDGE.z },
+  { name: "wheel_rl", x: -0.7819, y: 0.3403 + HUB_NUDGE.y, z: -1.3779 + HUB_NUDGE.z },
+  { name: "wheel_rr", x: 0.8095, y: 0.3234 + HUB_NUDGE.y, z: -1.3636 + HUB_NUDGE.z }
 ];
 
 function composeRigGlb(body, wheels, bodyImg, wheelImg, wheelJson) {
@@ -544,29 +546,29 @@ function composeRigGlb(body, wheels, bodyImg, wheelImg, wheelJson) {
 function composeRig(bodyFile, wheelFile, outFile) {
   const body = extractSimpleMesh(bodyFile);
   const wheel = extractSimpleMesh(wheelFile);
-  const centered = centerPositions(wheel.positions);
-  const offset = Math.hypot(centered.center[0], centered.center[1], centered.center[2]);
-  const wheelPos = offset > 0.45 ? centered.positions : wheel.positions;
+  const spun = centerSpinAxis(wheel.positions);
   const bodyImg = body.imageBin || wheel.imageBin;
   const wheelImg = wheel.imageBin || body.imageBin;
   if (!bodyImg || !wheelImg) throw new Error("body/wheel GLB needs a PNG texture");
   const wheels = DEFAULT_HUBS.map((hub) => ({
     name: hub.name,
-    positions: wheelPos,
+    positions: spun.positions,
     uvs: wheel.uvs,
     indices: wheel.indices,
     hub
   }));
   const rig = composeRigGlb(body, wheels, bodyImg, wheelImg, wheel.json);
   fs.writeFileSync(outFile, writeGlb(rig.json, rig.bin));
+  const centeredWheel = meshFrom(spun.positions, wheel.uvs, wheel.indices, wheelImg, wheel.json);
+  fs.writeFileSync(wheelFile, writeGlb(centeredWheel.json, centeredWheel.bin));
   console.log(JSON.stringify({
     mode: "compose",
     body: bodyFile,
     wheel: wheelFile,
     rig: outFile,
     hubs: DEFAULT_HUBS,
-    wheelCenteredBy: offset > 0.45 ? centered.center : [0, 0, 0],
-    radius: offset > 0.45 ? centered.radius : Math.max(...wheel.positions.map((p) => Math.hypot(p[1], p[2]))),
+    spinAxisShift: spun.shift,
+    radius: spun.radius,
     bodyTris: body.indices.length / 3,
     wheelTris: wheel.indices.length / 3
   }, null, 2));
