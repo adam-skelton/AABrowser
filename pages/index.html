@@ -7,7 +7,7 @@
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
+    #mapLoader {position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; background:transparent; gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
     .gmaps-pin svg {width:96px; height:128px; display:block; overflow:visible; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45)); shape-rendering:geometricPrecision}
@@ -257,6 +257,7 @@
     #carModelClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
     @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}button,select{font-size:14px}}
   </style>
+  <script>try{if(window.Car)document.documentElement.classList.add("native-boot")}catch(e){}</script>
 </head>
 <body class="chrome-hidden">
   <div id="map"></div>
@@ -280,6 +281,7 @@
     <div class="gmaps-shadow"></div>
     <div class="gmaps-status" id="mapLoaderStatus" hidden></div>
   </div>
+  <script>try{if(window.Car&&typeof Car.bootPainted==="function")Car.bootPainted()}catch(e){}</script>
   <div id="chromeWake" aria-hidden="true"></div>
   <button id="exploreBack" type="button" aria-label="Back to map overview">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -514,7 +516,27 @@
     return new URL(file, new URL("./", document.baseURI)).href;
   }
   const CAR_MODELS = {
-    forte: { id: "forte", label: "Kia Forte", url: modelFileUrl("forte-new.glb"), previewUrl: modelFileUrl("forte-new.glb"), orbit: "0deg 75deg 8m", target: "0m 0.77m 0m", yawOffset: 90 },
+    forte: {
+      id: "forte",
+      label: "Kia Forte",
+      url: modelFileUrl("forte-new.glb"),
+      bodyUrl: modelFileUrl("forte-new-body.glb"),
+      wheelUrl: modelFileUrl("forte-new-wheel.glb"),
+      rigUrl: modelFileUrl("forte-new-rig.glb"),
+      previewUrl: modelFileUrl("forte-new.glb"),
+      orbit: "0deg 75deg 8m",
+      target: "0m 0.77m 0m",
+      yawOffset: 90,
+      wheels: {
+        radius: 0.367,
+        hubs: [
+          { x: -0.8256, y: 0.3561, z: 1.3780 },
+          { x: 0.8018, y: 0.3474, z: 1.3772 },
+          { x: -0.7819, y: 0.3403, z: -1.3779 },
+          { x: 0.8095, y: 0.3234, z: -1.3636 }
+        ]
+      }
+    },
     cerato: { id: "cerato", label: "Kia Cerato 2021", url: modelFileUrl("cerato.glb"), orbit: "35deg 74deg 8m", target: "0m 0.7m 0m", yawOffset: 90 }
   };
   const HEADING_ARROW_URL = modelFileUrl("heading-arrow.glb");
@@ -543,6 +565,8 @@
   let usingArrow = false;
   let lastCarHeading = 0;
   let lastCarPoint = null;
+  let wheelSpinDeg = 0;
+  let wheelPoseWritten = null;
   let followAlt = null;
   let carAlt = null;
 
@@ -806,7 +830,7 @@
   };
 
   let map3d, Polyline3DElement, Marker3DElement, Marker3DInteractiveElement, Model3DElement, PlaceAutocompleteClass, RouteClass, placeAutocomplete;
-  let userMarker, userCar, userArrow, destinationMarker, parkingMarker;
+  let userMarker, userCar, userWheels = [], userArrow, destinationMarker, parkingMarker;
   let parkingWalkLines = [];
   let maneuverMarkers = [];
   let infoLevel = 0;
@@ -927,7 +951,13 @@
   }
 
   function carModelUrl(){
-    return activeCarModel().url;
+    const m = activeCarModel();
+    return (m.bodyUrl && m.wheelUrl) ? m.bodyUrl : m.url;
+  }
+
+  function carWheelSpec(){
+    const m = activeCarModel();
+    return (m && m.wheels && m.wheels.hubs && m.wheelUrl) ? m : null;
   }
 
   function currentCarPoint(){
@@ -989,9 +1019,12 @@
 
   function prefetchCarModels(){
     Object.keys(CAR_MODELS).forEach(id => {
-      const url = CAR_MODELS[id] && CAR_MODELS[id].url;
-      if (!url) return;
-      try { fetch(url, { cache: "force-cache", mode: "cors" }); } catch (err) {}
+      const m = CAR_MODELS[id];
+      if (!m) return;
+      [m.url, m.bodyUrl, m.wheelUrl, m.rigUrl, m.previewUrl].forEach(url => {
+        if (!url) return;
+        try { fetch(url, { cache: "force-cache", mode: "cors" }); } catch (err) {}
+      });
     });
   }
   prefetchCarModels();
@@ -1024,6 +1057,7 @@
     if (Math.abs(next - lastCarScale) < 0.02) return;
     lastCarScale = next;
     try { userCar.scale = next; } catch (err) {}
+    applyWheelPose(currentCarPoint(), lastCarHeading);
   }
 
   function arrowScaleForCamera(){
@@ -1043,6 +1077,7 @@
     if (userCar) {
       try { userCar.scale = 0.001; } catch (err) {}
     }
+    hideUserWheels();
   }
 
   function detachUserCar(){
@@ -1051,6 +1086,7 @@
       userCar = null;
       carModelReady = false;
     }
+    detachUserWheels();
   }
 
   function showUserCar(){
@@ -1065,6 +1101,9 @@
       return;
     }
     if (!userCar.parentElement && map3d) map3d.append(userCar);
+    userWheels.forEach(el => {
+      if (el && !el.parentElement && map3d) map3d.append(el);
+    });
     // Guarded: this runs on every camera-change event (60x/s while following).
     applyLiveCarScale();
     applyCarPose(pos, heading);
@@ -1190,6 +1229,7 @@
         carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt: Number(lastCarPoint.altitude) || 0 };
       }
     }
+    applyWheelPose(lastCarPoint, lastCarHeading);
     if (userArrow) applyArrowPose(lastCarPoint, lastCarHeading);
     if (userMarker) {
       try { userMarker.position = { lat: lastCarPoint.lat, lng: lastCarPoint.lng }; } catch (err) {}
@@ -1232,6 +1272,7 @@
           userCar.remove();
           userCar = null;
         }
+        detachUserWheels();
         carModelReady = false;
         usingArrow = false;
         if (USE_HEADING_ARROW && isNavigating()) showHeadingArrow();
@@ -1245,11 +1286,138 @@
       try { userCar.scale = scale; } catch (err) {}
       lastCarScale = scale;
       applyCarPose(position, h);
+      attachUserWheels(position, h);
     } catch (err) {
       console.error(err);
       userCar = null;
       usingArrow = false;
     }
+  }
+
+  function currentShownCarScale(){
+    if (!isNavigating() || usingArrow) return 0.001;
+    if (carInspect) return 1;
+    return lastCarScale > 0.01 ? lastCarScale : carScaleForCamera();
+  }
+
+  function wheelOrientation(heading){
+    const o = carOrientation(heading);
+    return { heading: o.heading, tilt: o.tilt + wheelSpinDeg, roll: o.roll };
+  }
+
+  function hubMapPoint(point, heading, hub, scale){
+    const along = lookAhead(point, heading, hub.z * scale);
+    const pos = lookAhead(along, heading + 90, hub.x * scale);
+    pos.altitude = hub.y * scale;
+    return pos;
+  }
+
+  function wheelScaleForHub(scale, hub){
+    if (hub.x < 0) return { x: -scale, y: scale, z: scale };
+    return { x: scale, y: scale, z: scale };
+  }
+
+  function hideUserWheels(){
+    userWheels.forEach(el => {
+      try { el.scale = 0.001; } catch (err) {}
+    });
+    if (wheelPoseWritten) wheelPoseWritten.hidden = true;
+  }
+
+  function detachUserWheels(){
+    userWheels.forEach(el => { try { el.remove(); } catch (err) {} });
+    userWheels = [];
+    wheelPoseWritten = null;
+  }
+
+  function fallbackSolidCar(){
+    detachUserWheels();
+    const full = activeCarModel().url;
+    if (userCar && full) {
+      try { userCar.src = full; } catch (err) {}
+    }
+  }
+
+  function applyWheelPose(point, heading){
+    if (!userWheels.length || !point) return;
+    const spec = carWheelSpec();
+    if (!spec) return;
+    const h = Number.isFinite(heading) ? heading : lastCarHeading;
+    const scale = currentShownCarScale();
+    const hidden = scale <= 0.01;
+    const w = wheelPoseWritten;
+    const samePos = w &&
+      Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
+      Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
+      Math.abs(w.scale - scale) < 0.01;
+    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.4;
+    if (samePos && sameSpin && w.hidden === hidden) return;
+    const orient = wheelOrientation(h);
+    spec.wheels.hubs.forEach((hub, i) => {
+      const el = userWheels[i];
+      if (!el) return;
+      try {
+        if (hidden) {
+          el.scale = 0.001;
+        } else {
+          if (!samePos || !w || w.hidden) {
+            el.position = hubMapPoint(point, h, hub, scale);
+            el.scale = wheelScaleForHub(scale, hub);
+          }
+          if (!sameSpin || !w || w.hidden) el.orientation = orient;
+        }
+      } catch (err) {}
+    });
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, spin: wheelSpinDeg, hidden };
+  }
+
+  function attachUserWheels(position, heading){
+    const spec = carWheelSpec();
+    if (!spec || !Model3DElement || !map3d) return;
+    if (userWheels.length) {
+      applyWheelPose(position, heading);
+      return;
+    }
+    const h = Number.isFinite(heading) ? heading : 0;
+    const scale = currentShownCarScale();
+    const hidden = scale <= 0.01;
+    const placeScale = hidden ? 1 : scale;
+    spec.wheels.hubs.forEach(hub => {
+      try {
+        const el = new Model3DElement({
+          src: spec.wheelUrl,
+          position: hubMapPoint(position, h, hub, placeScale),
+          orientation: wheelOrientation(h),
+          scale: hidden ? 0.001 : wheelScaleForHub(scale, hub),
+          altitudeMode: "RELATIVE_TO_GROUND"
+        });
+        el.addEventListener("gmp-click", event => {
+          try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
+          startCarInspect();
+        });
+        el.addEventListener("gmp-error", () => {
+          console.error("3D wheel model failed to load", spec.wheelUrl);
+          fallbackSolidCar();
+        });
+        map3d.append(el);
+        try { el.src = spec.wheelUrl; } catch (err) {}
+        userWheels.push(el);
+      } catch (err) {
+        console.error(err);
+        fallbackSolidCar();
+      }
+    });
+    wheelPoseWritten = null;
+    applyWheelPose(position, h);
+  }
+
+  function spinCarWheels(dt){
+    const spec = carWheelSpec();
+    if (!spec || !dt || !userWheels.length) return;
+    const speed = Math.max(0, Number(speedKalman.speed) || 0);
+    if (speed < 0.15) return;
+    const radius = Math.max(0.12, spec.wheels.radius || 0.33);
+    wheelSpinDeg = (wheelSpinDeg + (speed / radius) * dt * (180 / Math.PI)) % 360;
   }
 
   function setupAutocomplete(PlaceAutocompleteElement){
@@ -1432,12 +1600,12 @@
     const id = String(placeId || "").trim();
     const label = String(fallbackName || "").trim();
     if (id.startsWith("__map")) {
-      hideSearchDropdown();
-      showChrome();
       if (id === "__maps__") {
-        pushSearchSuggestions("maps", mapsCatalogItems());
+        showChrome();
+        pushSearchSuggestions("", mapsCatalogItems());
         return;
       }
+      hideSearchDropdown();
       await openExploreMap(id);
       return;
     }
@@ -1710,11 +1878,50 @@
     return img;
   }
 
+  async function inflateRawBytes(bytes){
+    if (typeof DecompressionStream !== "function") return null;
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  function zipU16(u8, i){ return u8[i] | (u8[i + 1] << 8); }
+  function zipU32(u8, i){ return (u8[i] | (u8[i + 1] << 8) | (u8[i + 2] << 16) | (u8[i + 3] << 24)) >>> 0; }
+
+  async function kmlFromKmz(u8){
+    const dec = new TextDecoder("utf-8");
+    let i = 0;
+    while (i + 30 <= u8.length) {
+      if (zipU32(u8, i) !== 0x04034b50) break;
+      const method = zipU16(u8, i + 8);
+      const comp = zipU32(u8, i + 18);
+      const nameLen = zipU16(u8, i + 26);
+      const extraLen = zipU16(u8, i + 28);
+      const name = dec.decode(u8.subarray(i + 30, i + 30 + nameLen));
+      const start = i + 30 + nameLen + extraLen;
+      const end = start + comp;
+      if (end > u8.length) break;
+      if (/\.kml$/i.test(name) && name.indexOf("/") !== 0) {
+        let raw = u8.subarray(start, end);
+        if (method === 8) {
+          raw = await inflateRawBytes(raw);
+          if (!raw) return "";
+        } else if (method !== 0) return "";
+        return dec.decode(raw);
+      }
+      i = end;
+    }
+    return "";
+  }
+
   async function loadCustomMapPlaces(){
     if (explore.kmlCache) return explore.kmlCache;
     const res = await fetch("custom-map.kml", { cache: "no-store" });
     if (!res.ok) throw new Error("Could not load custom map");
-    const xml = await res.text();
+    const buf = await res.arrayBuffer();
+    const u8 = new Uint8Array(buf);
+    let xml = "";
+    if (u8.length >= 2 && u8[0] === 0x50 && u8[1] === 0x4b) xml = await kmlFromKmz(u8);
+    if (!xml) xml = new TextDecoder("utf-8").decode(u8);
     const places = parseKmlPlaces(xml);
     if (!places.length) throw new Error("Custom map has no pins");
     explore.kmlCache = places;
@@ -5616,9 +5823,11 @@
     followLastMs = now;
     const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
     if (!map3d) return;
+    spinCarWheels(dtRaw);
     if (destPreview) applyDestPreviewCamera(dtEase, now);
     tickStartCountdown(now);
     if (!puck.fix) {
+      if (userWheels.length) applyWheelPose(currentCarPoint(), lastCarHeading);
       if (carInspect) applyCarInspectCamera(dtEase, now);
       return;
     }
@@ -5925,6 +6134,7 @@
     if (userCar && !usingArrow) {
       lastCarScale = 1;
       try { userCar.scale = 1; } catch (err) {}
+      applyWheelPose(currentCarPoint(), lastCarHeading);
     }
     ensureFollowTicker();
     updateRecenterButton();
@@ -6709,8 +6919,9 @@
 
   function applyViewerModel(viewer, usePreview){
     const model = activeCarModel();
-    const src = (usePreview && model.previewUrl) ? model.previewUrl : model.url;
-    viewer.setAttribute("src", src);
+    const src = usePreview
+      ? (model.previewUrl || model.url)
+      : (model.rigUrl || model.previewUrl || model.url);
     viewer.setAttribute("alt", model.label);
     viewer.setAttribute("camera-orbit", model.orbit || "0deg 75deg 8m");
     viewer.setAttribute("camera-target", model.target || "0m 0.7m 0m");
@@ -6718,6 +6929,23 @@
     viewer.setAttribute("max-camera-orbit", "auto 90deg 24m");
     viewer.setAttribute("field-of-view", "28deg");
     viewer.setAttribute("interpolation-decay", "20");
+    if (model.rigUrl && src === model.rigUrl) {
+      viewer.setAttribute("autoplay", "");
+      viewer.setAttribute("animation-name", "spin");
+      viewer.animationName = "spin";
+    } else {
+      viewer.removeAttribute("autoplay");
+      viewer.removeAttribute("animation-name");
+    }
+    viewer.setAttribute("src", src);
+    const playSpin = () => {
+      try {
+        if (!(model.rigUrl && src === model.rigUrl)) return;
+        viewer.animationName = "spin";
+        if (typeof viewer.play === "function") viewer.play({ repetitions: Infinity });
+      } catch (err) {}
+    };
+    viewer.addEventListener("load", playSpin);
     try { if (typeof viewer.jumpCameraToGoal === "function") viewer.jumpCameraToGoal(); } catch (err) {}
   }
 
@@ -7880,7 +8108,7 @@
       event.preventDefault();
       event.stopPropagation();
       showChrome();
-      pushSearchSuggestions("maps", mapsCatalogItems());
+      pushSearchSuggestions("", mapsCatalogItems());
     });
   }
   const exploreBackBtn = document.getElementById("exploreBack");
@@ -8193,7 +8421,10 @@
       status.textContent = text;
     }
     const loader = document.getElementById("mapLoader");
-    if (loader) loader.style.pointerEvents = "auto";
+    if (loader) {
+      loader.classList.add("has-status");
+      loader.style.pointerEvents = "auto";
+    }
   }
 
   let mapRevealDone = false;

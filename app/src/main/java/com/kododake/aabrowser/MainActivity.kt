@@ -230,6 +230,7 @@ class MainActivity : AppCompatActivity() {
                     requestGoBack = { runOnUiThread { webView?.goBack() } },
                     notifyDebugOverlay = {},
                     notifyMapReady = { dismissMapBootOverlay() },
+                    notifyBootPainted = { dismissMapBootOverlay() },
                     resolveCarApiLevel = { 0 },
                     traceStore = TraceStore(applicationContext)
                 ),
@@ -242,11 +243,8 @@ class MainActivity : AppCompatActivity() {
     private fun dismissMapBootOverlay() {
         val overlay = binding.mapBootOverlay.root
         if (overlay.visibility != View.VISIBLE) return
-        overlay.animate()
-            .alpha(0f)
-            .setDuration(280L)
-            .withEndAction { overlay.visibility = View.GONE }
-            .start()
+        overlay.animate().cancel()
+        overlay.visibility = View.GONE
     }
 
     private fun applyCarPreview(url: String?) {

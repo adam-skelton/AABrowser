@@ -10,6 +10,7 @@ class CarJsBridge(
     private val requestGoBack: () -> Unit,
     private val notifyDebugOverlay: (Boolean) -> Unit,
     private val notifyMapReady: () -> Unit = {},
+    private val notifyBootPainted: () -> Unit = {},
     private val resolveCarApiLevel: () -> Int,
     private val traceStore: TraceStore? = null
 ) {
@@ -44,6 +45,11 @@ class CarJsBridge(
     @JavascriptInterface
     fun mapReady() {
         onMain { notifyMapReady() }
+    }
+
+    @JavascriptInterface
+    fun bootPainted() {
+        onMain { notifyBootPainted() }
     }
 
     @JavascriptInterface

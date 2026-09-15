@@ -57,6 +57,7 @@ class CarWebViewHost(
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
         notifyMapReady = { dismissBootOverlay() },
+        notifyBootPainted = { dismissBootOverlay() },
         resolveCarApiLevel = ::resolvedCarApiLevel,
         traceStore = TraceStore(carContext)
     )
@@ -466,14 +467,9 @@ class CarWebViewHost(
         bootOverlayDismissed = true
         val overlay = bootOverlay ?: return
         bootOverlay = null
-        overlay.animate()
-            .alpha(0f)
-            .setDuration(280L)
-            .withEndAction {
-                overlay.visibility = View.GONE
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-            }
-            .start()
+        overlay.animate().cancel()
+        overlay.visibility = View.GONE
+        (overlay.parent as? ViewGroup)?.removeView(overlay)
     }
 
     private fun wakeRenderer() {
@@ -773,6 +769,7 @@ class CarWebViewHost(
             (function() {
               try {
                 document.documentElement.classList.add('aa-car');
+                document.documentElement.classList.add('native-boot');
                 if (document.body) document.body.classList.add('aa-car');
                 window.dispatchEvent(new Event('resize'));
                 if (typeof window.__aaWakeMap === 'function') window.__aaWakeMap();
@@ -786,6 +783,7 @@ class CarWebViewHost(
               window.__aaBrowserInputHook = true;
               try {
                 document.documentElement.classList.add('aa-car');
+                document.documentElement.classList.add('native-boot');
                 if (document.body) document.body.classList.add('aa-car');
               } catch (err) {}
               function isTextEntry(el) {
