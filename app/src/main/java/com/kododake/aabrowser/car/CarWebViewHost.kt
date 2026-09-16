@@ -56,7 +56,15 @@ class CarWebViewHost(
         requestOpenKeyboard = { notifyInputFocused("") },
         requestGoBack = { goBack() },
         notifyDebugOverlay = { visible -> debugOverlayVisible = visible },
-        notifyMapReady = { dismissBootOverlay() },
+        notifyMapReady = {
+            dismissBootOverlay()
+            webView?.let { view ->
+                view.isFocusable = true
+                view.isFocusableInTouchMode = true
+                view.requestFocus()
+            }
+            resumeRenderer()
+        },
         notifyBootPainted = { dismissBootOverlay() },
         resolveCarApiLevel = ::resolvedCarApiLevel,
         traceStore = TraceStore(carContext)

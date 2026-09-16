@@ -17,7 +17,8 @@
     @keyframes gmapsBounce {0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
     @keyframes gmapsShadow {0%,100%{transform:scale(1); opacity:.35}50%{transform:scale(.72); opacity:.18}}
     @keyframes gmapsRipple {0%{transform:scale(.5); opacity:.65}100%{transform:scale(1.75); opacity:0}}
-    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block; transform:translate3d(0,0,0); will-change:contents; visibility:visible !important; opacity:1 !important}
+    gmp-map-3d {width:100% !important; height:100% !important; min-width:100%; min-height:100%; display:block; transform:translate3d(0,0,0); will-change:contents; visibility:visible !important; opacity:1 !important; outline:none}
+    #map:focus,#map:focus-visible,gmp-map-3d:focus,gmp-map-3d:focus-visible {outline:none}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#carDebugBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:8px; align-items:stretch}
@@ -974,7 +975,12 @@
       map3d.style.width = "100%";
       map3d.style.height = "100%";
       try { map3d.defaultUIHidden = true; } catch (err) {}
-      document.getElementById("map").append(map3d);
+      try { map3d.tabIndex = -1; } catch (err) {}
+      const mapHost = document.getElementById("map");
+      if (mapHost) {
+        try { mapHost.tabIndex = -1; } catch (err) {}
+        mapHost.append(map3d);
+      }
       startGps();
 
       map3d.addEventListener("gmp-centerchange", () => {
@@ -8811,13 +8817,54 @@
     });
   };
   window.__aaWakeMap = function(){
-    window.dispatchEvent(new Event("resize"));
-    if (!map3d) return;
-    const heading = Number(map3d.heading);
-    if (Number.isFinite(heading)) {
-      map3d.heading = heading;
-    }
+    wakeMapRenderer();
   };
+
+  function mapFocusTarget(){
+    if (map3d) {
+      try {
+        const root = map3d.shadowRoot || map3d;
+        const canvas = root && root.querySelector && root.querySelector("canvas, [tabindex], iframe");
+        if (canvas) return canvas;
+      } catch (err) {}
+      return map3d;
+    }
+    return document.getElementById("map");
+  }
+
+  function focusMapElement(el){
+    if (!el || typeof el.focus !== "function") return;
+    try {
+      if (el.nodeType === 1 && el !== document.body && el !== document.documentElement && (el.tabIndex == null || el.tabIndex < 0)) {
+        el.tabIndex = -1;
+      }
+    } catch (err) {}
+    try {
+      el.focus({ preventScroll: true });
+    } catch (err) {
+      try { el.focus(); } catch (err2) {}
+    }
+  }
+
+  function wakeMapRenderer(){
+    try { window.focus(); } catch (err) {}
+    const host = document.getElementById("map");
+    const target = mapFocusTarget();
+    [window, document.body, host, map3d, target].forEach(el => {
+      try { focusMapElement(el); } catch (err) {}
+    });
+    try { window.dispatchEvent(new Event("resize")); } catch (err) {}
+    if (!map3d) return;
+    try {
+      const heading = Number(map3d.heading);
+      if (Number.isFinite(heading)) {
+        map3d.heading = heading + 1e-4;
+        requestAnimationFrame(() => {
+          try { map3d.heading = heading; } catch (err) {}
+        });
+      }
+    } catch (err) {}
+  }
 
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
@@ -9342,6 +9389,10 @@
     try { sessionStorage.setItem(MAP_REVEAL_KEY, "1"); } catch (err) {}
     document.body.classList.add("map-ready");
     document.documentElement.classList.add("map-ready");
+    wakeMapRenderer();
+    requestAnimationFrame(() => wakeMapRenderer());
+    window.setTimeout(wakeMapRenderer, 80);
+    window.setTimeout(wakeMapRenderer, 480);
     if (!placeAutocomplete && PlaceAutocompleteClass) {
       setupAutocomplete(PlaceAutocompleteClass);
     }
