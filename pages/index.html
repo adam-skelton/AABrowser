@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Auckland 3D Route Demo</title>
+  <title>Google 3D Navigation</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
@@ -166,6 +166,8 @@
     #traceClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
+    html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
+    html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
     html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:12px; left:calc(var(--aa-inset-left) + 12px)}
     html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:calc(var(--aa-inset-left) + max(140px,env(safe-area-inset-left) + 128px)); right:calc(var(--aa-inset-right) + 148px); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); top:auto; z-index:30; overflow:visible}
@@ -860,7 +862,7 @@
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
   const NAV_INFO = {
-    IDLE_MS: 15000,
+    IDLE_MS: 5000,
     MAX_LEVEL: 5,
     RANGE_STEPS: [2.2, 4.4, 8.8, 17.6, 35.2],
     TILT_CAPS: [62, 50, 42, 34, 26],
@@ -1368,24 +1370,35 @@
     };
   }
 
+  let wheelEulerWritten = null;
+  function unwrapDeg(prev, next){
+    if (!Number.isFinite(prev)) return next;
+    let x = next;
+    while (x - prev > 180) x -= 360;
+    while (prev - x > 180) x += 360;
+    return x;
+  }
   function wheelOrientation(heading){
     const o = carOrientation(heading);
-    if (!wheelSpinDeg) return o;
-    const a = wheelSpinDeg * Math.PI / 180;
-    const c = Math.cos(a), s = Math.sin(a);
-    const spinX = [[1, 0, 0], [0, c, -s], [0, s, c]];
-    const R = mapsOrientationMatrix(o);
-    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) M[i][j] = R[i][0] * spinX[0][j] + R[i][1] * spinX[1][j] + R[i][2] * spinX[2][j];
-    }
-    return matrixToMapsOrientation(M);
+    const raw = {
+      heading: 90,
+      tilt: -90 + (Number(wheelSpinDeg) || 0),
+      roll: 180 - o.heading
+    };
+    const prev = wheelEulerWritten;
+    if (!prev) return raw;
+    return {
+      heading: unwrapDeg(prev.heading, raw.heading),
+      tilt: unwrapDeg(prev.tilt, raw.tilt),
+      roll: unwrapDeg(prev.roll, raw.roll)
+    };
   }
 
   function hubMapPoint(point, heading, hub, scale){
     const along = lookAhead(point, heading, hub.z * scale);
     const pos = lookAhead(along, heading + 90, hub.x * scale);
-    pos.altitude = hub.y * scale;
+    if (Number.isFinite(point.altitude)) pos.altitude = point.altitude + hub.y * scale;
+    else pos.altitude = hub.y * scale;
     return pos;
   }
 
@@ -1405,6 +1418,7 @@
     userWheels.forEach(el => { try { el.remove(); } catch (err) {} });
     userWheels = [];
     wheelPoseWritten = null;
+    wheelEulerWritten = null;
   }
 
   function fallbackSolidCar(){
@@ -1423,11 +1437,13 @@
     const scale = currentShownCarScale();
     const hidden = scale <= 0.01;
     const w = wheelPoseWritten;
+    const alt = Number(point.altitude) || 0;
     const samePos = w &&
       Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
-      Math.abs(w.scale - scale) < 0.01;
-    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.4;
+      Math.abs(w.scale - scale) < 0.01 &&
+      Math.abs((w.alt || 0) - alt) < 0.02;
+    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.08;
     if (samePos && sameSpin && w.hidden === hidden) return;
     const orient = wheelOrientation(h);
     spec.wheels.hubs.forEach((hub, i) => {
@@ -1443,9 +1459,10 @@
           }
           if (!sameSpin || !w || w.hidden) el.orientation = orient;
         }
-      } catch (err) {}
+        } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, spin: wheelSpinDeg, hidden };
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, spin: wheelSpinDeg, hidden, alt };
+    if (!hidden) wheelEulerWritten = orient;
   }
 
   function attachUserWheels(position, heading){
@@ -1466,7 +1483,7 @@
           position: hubMapPoint(position, h, hub, placeScale),
           orientation: wheelOrientation(h),
           scale: hidden ? 0.001 : wheelScaleForHub(scale, hub),
-          altitudeMode: "RELATIVE_TO_GROUND"
+          altitudeMode: MODEL_ALTITUDE_MODE
         });
         el.addEventListener("gmp-click", event => {
           try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
@@ -1626,6 +1643,7 @@
     box.classList.remove("open");
     box.innerHTML = "";
     chromeLocked = false;
+    closeAaSearchBar();
   }
 
   async function previewSearchSuggestions(query){
@@ -1702,6 +1720,29 @@
   };
   window.__aaSubmitSearch = searchDestinationFromQuery;
   window.__aaPickSearchResult = pickSearchResult;
+
+  function closeAaSearchBar(){
+    document.documentElement.classList.remove("aa-search-open");
+    document.body.classList.remove("aa-search-open");
+  }
+
+  window.__aaRequestSearch = function(){
+    const kmh = (Number(speedKalman.speed) || 0) * 3.6;
+    if (kmh > 10) {
+      document.documentElement.classList.add("aa-search-open");
+      document.body.classList.add("aa-search-open");
+      try {
+        if (!String((placeAutocomplete && placeAutocomplete.value) || "").trim()) previewSearchSuggestions("");
+      } catch (err) {}
+      return false;
+    }
+    closeAaSearchBar();
+    try {
+      const value = (placeAutocomplete && placeAutocomplete.value != null) ? String(placeAutocomplete.value) : "";
+      if (window.Car && typeof Car.onInputFocused === "function") Car.onInputFocused(value);
+    } catch (err) {}
+    return true;
+  };
 
   const EXPLORE_RADIUS_M = 10000;
   const EXPLORE_POI_MAPS = [
@@ -2036,6 +2077,7 @@
   const PARKING_NEAR_M = 420;
   const PARKING_NEAR_FALLBACK_M = 850;
   const parkingNear = { requestId: 0, walkId: 0, destKey: "", options: [], selected: null };
+  let routeGen = 0;
 
   function osmCoord(el){
     if (Number.isFinite(el.lat) && Number.isFinite(el.lon)) return { lat: el.lat, lng: el.lon };
@@ -2845,7 +2887,7 @@
       const newEnd = routed.path[routed.path.length - 1];
       const joined = await walkAccessFrom(newEnd, dest);
       if (joined.walkM > current.walkM - 28) return { walk: snapWalkToDriveEnd(driveEnd, current.path), walkM: current.walkM, drive: null, access: null };
-      if (best.lot) setSelectedParking(best.lot, dest, { skipWalk: true });
+      if (best.lot) setSelectedParking(best.lot, dest, { skipWalk: true, skipReroute: true });
       return { walk: snapWalkToDriveEnd(newEnd, joined.path), walkM: joined.walkM, drive: routed, access: driveTo };
     } catch (err) {
       console.warn("Access reroute failed", err);
@@ -2928,22 +2970,40 @@
     drawDottedWalk(drawn);
   }
 
+  function attachPreviewParking(lot, dest){
+    if (!lot || !dest || !Number.isFinite(lot.lat) || !Number.isFinite(dest.lat)) return;
+    if (isNavigating()) return;
+    const pin = { lat: lot.lat, lng: lot.lng };
+    if (destPreview) {
+      destPreview.lot = pin;
+      const now = performance.now();
+      const u = clamp((now - destPreview.startMs) / DEST_PREVIEW.SWOOP_MS, 0, 1);
+      if (u >= 1 && map3d) {
+        const c = readMapCenter();
+        destPreview.from = {
+          lat: c.lat,
+          lng: c.lng,
+          heading: numOr(map3d.heading, destPreview.from.heading),
+          range: numOr(map3d.range, destPreview.from.range),
+          tilt: numOr(map3d.tilt, destPreview.from.tilt)
+        };
+        destPreview.startMs = now;
+        cam.lat = destPreview.from.lat;
+        cam.lng = destPreview.from.lng;
+        cam.range = destPreview.from.range;
+        cam.tilt = destPreview.from.tilt;
+        cam.heading = destPreview.from.heading;
+        cam.seeded = true;
+      }
+      return;
+    }
+    if (!document.body.classList.contains("has-route")) return;
+    startDestPreview(dest);
+    if (destPreview) destPreview.lot = pin;
+  }
+
   function frameParkingAndDest(dest, lot){
-    if (!map3d || !dest || !lot) return;
-    stopDestPreview();
-    following = false;
-    autoRefollowArmed = false;
-    document.getElementById("followBtn").textContent = "Following: OFF";
-    const mid = { lat: (dest.lat + lot.lat) / 2, lng: (dest.lng + lot.lng) / 2 };
-    const alt = followGroundAltitude(mid, 1);
-    if (Number.isFinite(alt)) mid.altitude = alt;
-    const span = Math.max(distanceMetres(dest, lot), 80);
-    map3d.center = mid;
-    map3d.heading = 0;
-    map3d.tilt = 40;
-    map3d.range = clamp(span * 2.4, 380, 5200);
-    cam.seeded = false;
-    updateRecenterButton();
+    attachPreviewParking(lot, dest);
   }
 
   function recenterOnDestination(){
@@ -2951,6 +3011,7 @@
     if (!dest || !Number.isFinite(dest.lat)) return;
     startDestPreview(dest);
     if (destPreview) destPreview.noSpin = true;
+    if (parkingNear.selected) attachPreviewParking(parkingNear.selected, dest);
   }
 
   function hideParkingRow(){
@@ -3027,19 +3088,38 @@
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
     if (lot && target && !destIsSamePlace(target, lot)) {
-      if (!(opts && opts.skipWalk)) {
-        const start = (activeRoutePath && activeRoutePath.length >= 2)
-          ? activeRoutePath[activeRoutePath.length - 1]
-          : lot;
-        drawParkingWalk(start, target);
+      if (!(opts && opts.skipWalk)) drawParkingWalk(lot, target);
+      if (!(opts && opts.skipReroute) && !isNavigating() && activeRoutePath.length >= 2) {
+        rerouteDriveToParking(lot, target);
       }
-    }
-    else {
+    } else {
       parkingNear.walkId += 1;
       clearParkingWalk();
     }
     updateParkingRow();
-    if (opts && opts.frame && lot && target) frameParkingAndDest(target, lot);
+    if (lot && target) attachPreviewParking(lot, target);
+  }
+
+  async function rerouteDriveToParking(lot, dest){
+    if (!lot || !dest || isNavigating() || !RouteClass || !map3d) return;
+    if (destIsSamePlace(dest, lot)) return;
+    const origin = getRouteOrigin();
+    if (!origin || !Number.isFinite(origin.lat)) return;
+    if (activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28) return;
+    const id = ++routeGen;
+    const placeId = usablePlaceId(lot.placeId);
+    const driveTo = placeId
+      ? { lat: lot.lat, lng: lot.lng, name: lot.name, placeId }
+      : { lat: lot.lat, lng: lot.lng, name: lot.name };
+    activeDriveTo = driveTo;
+    try {
+      const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true);
+      if (id !== routeGen || isNavigating()) return;
+      adoptRoute(route, path, intervals, dest, false, null);
+      drawParkingWalk(lot, dest);
+    } catch (err) {
+      console.warn("Parking reroute failed", err);
+    }
   }
 
   function clearParkingOverlay(){
@@ -3435,25 +3515,14 @@
     hideSearchDropdown();
     cancelStartCountdown();
     stopDestPreview();
-    startDestPreview(place);
-    if (destPreview) destPreview.noSpin = true;
     const dest = Object.assign({}, place, { name: place.name });
-    if (place.placeId) {
-      try {
-        const { Place } = await google.maps.importLibrary("places");
-        const googlePlace = new Place({ id: place.placeId });
-        const extra = await fetchPlaceDestination(googlePlace, place.name);
-        if (extra) Object.assign(dest, extra, { description: place.description || extra.address, snippet: place.snippet || snippetOf(extra.address, 110), lat: dest.lat, lng: dest.lng, name: dest.name });
-      } catch (err) {}
-    }
-    await enrichPlaceFromGoogle(dest);
     activeRoute = null;
     activeDriveTo = null;
     activeRoutePath = [];
     try { setRouteGeometry([]); } catch (err) {}
     try { removeRouteLines(); } catch (err) {}
     try { clearParkingWalk(); } catch (err) {}
-    activeDestination = Object.assign({}, dest);
+    activeDestination = dest;
     document.body.classList.add("has-route");
     document.documentElement.classList.add("has-route");
     document.body.classList.remove("navigating");
@@ -3463,10 +3532,26 @@
     routeTimeEl.textContent = "";
     routeStatsEl.textContent = dest.address || "";
     showExploreSnippet(activeDestination);
+    startDestPreview(place);
+    if (destPreview) destPreview.noSpin = true;
     fetchParkingNear(dest);
     updateRecenterButton();
     applyExploreLabelMode(true);
     setMessage(dest.name);
+    if (place.placeId) {
+      try {
+        const { Place } = await google.maps.importLibrary("places");
+        const googlePlace = new Place({ id: place.placeId });
+        const extra = await fetchPlaceDestination(googlePlace, place.name);
+        if (extra) Object.assign(dest, extra, { description: place.description || extra.address, snippet: place.snippet || snippetOf(extra.address, 110), lat: dest.lat, lng: dest.lng, name: dest.name });
+      } catch (err) {}
+    }
+    await enrichPlaceFromGoogle(dest);
+    if (activeDestination !== dest && !(activeDestination && destIsSamePlace(activeDestination, dest))) return;
+    activeDestination = Object.assign({}, dest);
+    fillRouteCardExtras(activeDestination);
+    routeStatsEl.textContent = activeDestination.address || routeStatsEl.textContent;
+    showExploreSnippet(activeDestination);
   }
 
   function exploreShowOverview(){
@@ -3934,8 +4019,12 @@
       if (parkingNear.destKey !== key) fetchParkingNear(destination);
     }
     const visualEnd = (driven && driven.length) ? driven[driven.length - 1] : driveEnd;
-    if (destination && visualEnd && !destIsSamePlace(destination, visualEnd)) {
-      drawParkingWalk(visualEnd, destination, walkPath);
+    const lot = parkingNear.selected;
+    const walkFrom = (lot && Number.isFinite(lot.lat) && destination && !destIsSamePlace(destination, lot))
+      ? lot
+      : visualEnd;
+    if (destination && walkFrom && !destIsSamePlace(destination, walkFrom)) {
+      drawParkingWalk(walkFrom, destination, walkPath);
     } else {
       parkingNear.walkId += 1;
       clearParkingWalk();
@@ -3952,23 +4041,58 @@
     try {
       const noCard = !!(opts && opts.noCard);
       setSuppressRouteCard(noCard);
-      const parkingP = fetchParkingNear(destination);
-      const fast = !!(opts && opts.refineWalk === false);
-      const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
-      activeDriveTo = driveTo;
-      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true, { skipTrim: fast });
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
         lat: destination.lat,
         lng: destination.lng
       });
+      activeDestination = dest;
+      if (!noCard) {
+        document.body.classList.add("has-route");
+        document.documentElement.classList.add("has-route");
+        document.body.classList.remove("navigating");
+        document.documentElement.classList.remove("navigating");
+        routeTitleEl.textContent = dest.name || "";
+        fillRouteCardExtras(dest);
+        if (!routeTimeEl.textContent) routeTimeEl.textContent = "";
+        if (!routeStatsEl.textContent) routeStatsEl.textContent = dest.address || "";
+        following = false;
+        autoRefollowArmed = false;
+        const followBtn = document.getElementById("followBtn");
+        if (followBtn) followBtn.textContent = "Following: OFF";
+        if (!destPreview) startDestPreview(dest);
+        if (explore.mode && destPreview) destPreview.noSpin = true;
+        updateRecenterButton();
+      }
+      const gen = ++routeGen;
+      const parkingP = fetchParkingNear(destination);
+      const fast = !!(opts && opts.refineWalk === false);
+      if (!fast) {
+        try {
+          await Promise.race([
+            parkingP,
+            new Promise(resolve => setTimeout(resolve, 900))
+          ]);
+        } catch (err) {}
+      }
+      const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
+      if (gen !== routeGen) return;
+      activeDriveTo = driveTo;
+      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true, { skipTrim: fast });
+      if (gen !== routeGen) return;
       adoptRoute(route, path, intervals, dest, false, null);
-      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters);
+      const lot = parkingNear.selected;
+      if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && distanceMetres(driveTo, lot) > 28) {
+        rerouteDriveToParking(lot, dest);
+      }
+      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters, { keepPreview: true });
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
 
       const applyRefine = async () => {
         try { await parkingP; } catch (err) {}
+        if (gen !== routeGen) return;
         const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
+        if (gen !== routeGen) return;
         let useRoute = route;
         let usePath = path;
         let useIntervals = intervals;
@@ -3993,11 +4117,12 @@
         useWalk = overlap.walk || useWalk;
         if ((refined && refined.drive && refined.drive.path) || overlap.trimmedM > 0) {
           if (overlap.trimmedM > 0) useIntervals = routeTrafficIntervals(useRoute, usePath);
+          if (gen !== routeGen) return;
           adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
         } else if (useWalk) {
-          const end = usePath[usePath.length - 1];
-          const visual = (activeRoutePath && activeRoutePath.length) ? activeRoutePath[activeRoutePath.length - 1] : end;
-          drawParkingWalk(visual, dest, useWalk);
+          const lot = parkingNear.selected;
+          const end = (lot && Number.isFinite(lot.lat)) ? lot : usePath[usePath.length - 1];
+          drawParkingWalk(end, dest, useWalk);
         }
       };
       if (opts && opts.refineWalk === false) {
@@ -5350,13 +5475,13 @@
     fillRouteCardExtras({});
   }
 
-  function showRoutePreview(origin, destination, distanceMeters){
+  function showRoutePreview(origin, destination, distanceMeters, opts){
     following = false;
     autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     updateRecenterButton();
     setMapLabels(true);
-    startDestPreview(destination || origin);
+    if (!(opts && opts.keepPreview) || !destPreview) startDestPreview(destination || origin);
     if (explore.mode && destPreview) destPreview.noSpin = true;
     if (!explore.mode) startStartCountdown();
   }
@@ -5746,6 +5871,23 @@
       disengageRoutePuck();
       followAlt = null;
       carAlt = null;
+    }
+    if (!prev && following && map3d && !destPreview && !exploreFly && !isNavigating()) {
+      const here = { lat: puck.lat, lng: puck.lng };
+      const from = cam.seeded && Number.isFinite(cam.lat)
+        ? { lat: cam.lat, lng: cam.lng }
+        : readMapCenter();
+      if (from && Number.isFinite(from.lat) && distanceMetres(from, here) > 400) {
+        cam.lat = here.lat;
+        cam.lng = here.lng;
+        cam.seeded = true;
+        cam.rejoin = false;
+        followAlt = null;
+        const center = { lat: here.lat, lng: here.lng };
+        const alt = followGroundAltitude(center, 1);
+        if (Number.isFinite(alt)) center.altitude = alt;
+        map3d.center = center;
+      }
     }
 
     // A trustworthy course: moving, measured (not a held-over value), and not flagged inaccurate.
@@ -6528,6 +6670,26 @@
     return clamp(((visLeft + visRight) / 2) / w, 0.56, 0.82);
   }
 
+  function destPreviewFocus(){
+    const dest = destPreview && destPreview.dest;
+    const lot = destPreview && destPreview.lot;
+    if (!dest) return dest;
+    if (!lot || !Number.isFinite(lot.lat) || !Number.isFinite(lot.lng)) return dest;
+    return { lat: (dest.lat + lot.lat) / 2, lng: (dest.lng + lot.lng) / 2 };
+  }
+
+  function destPreviewRange(){
+    const dest = destPreview && destPreview.dest;
+    const lot = destPreview && destPreview.lot;
+    if (!dest || !lot || !Number.isFinite(lot.lat)) return DEST_PREVIEW.RANGE;
+    const span = Math.max(distanceMetres(dest, lot), 40);
+    return clamp(span * 2.7, DEST_PREVIEW.RANGE, 2800);
+  }
+
+  function destPreviewTilt(){
+    return destPreview && destPreview.lot ? Math.min(DEST_PREVIEW.TILT, 52) : DEST_PREVIEW.TILT;
+  }
+
   function destPreviewCenter(dest, heading, range){
     if (!dest) return dest;
     const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
@@ -6543,14 +6705,15 @@
 
   function applyDestPreviewCamera(dtEase, now){
     if (!destPreview || !map3d) return;
-    const dest = destPreview.dest;
+    const dest = destPreviewFocus();
+    if (!dest) return;
     const from = destPreview.from;
     const u = clamp((now - destPreview.startMs) / DEST_PREVIEW.SWOOP_MS, 0, 1);
     const e = u * u * (3 - 2 * u);
     cam.lat = lerp(from.lat, dest.lat, e);
     cam.lng = lerp(from.lng, dest.lng, e);
-    cam.range = lerp(from.range, DEST_PREVIEW.RANGE, e);
-    cam.tilt = lerp(from.tilt, DEST_PREVIEW.TILT, e);
+    cam.range = lerp(from.range, destPreviewRange(), e);
+    cam.tilt = lerp(from.tilt, destPreviewTilt(), e);
     if (u < 1) {
       cam.heading = from.heading;
     } else if (destPreview.noSpin) {
@@ -8701,7 +8864,7 @@
     updateRecenterButton();
   }
   window.addEventListener("pointerdown", event => {
-    if (startCountdown && performance.now() >= startCountdown.startMs && !(event.target.closest && event.target.closest("#routeGo"))) {
+    if (startCountdown && !(event.target.closest && event.target.closest("#routeGo"))) {
       cancelStartCountdown();
     }
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
@@ -8709,6 +8872,7 @@
       mapDragStart = null;
       return;
     }
+    closeAaSearchBar();
     if (flyover && isNavigating()) {
       skipNavFlyover();
       mapDragStart = null;

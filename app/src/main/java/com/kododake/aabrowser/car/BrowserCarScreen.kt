@@ -51,7 +51,7 @@ class BrowserCarScreen(
         return Action.Builder()
             .setIcon(searchPinIcon())
             .setTitle(carContext.getString(R.string.car_action_search))
-            .setOnClickListener { openKeyboard("") }
+            .setOnClickListener { webHost.requestSearch() }
             .build()
     }
 

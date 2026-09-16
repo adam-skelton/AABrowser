@@ -150,6 +150,15 @@ class CarWebViewHost(
         }
     }
 
+    fun requestSearch() {
+        onMain {
+            webView?.evaluateJavascript(
+                "window.__aaRequestSearch && window.__aaRequestSearch();",
+                null
+            )
+        }
+    }
+
     fun setDebugOverlay(visible: Boolean) {
         onMain {
             debugOverlayVisible = visible
