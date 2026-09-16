@@ -666,7 +666,9 @@
   }
 
   function isSplitView(){
-    return (Number(viewSafe.left) + Number(viewSafe.right) + Number(viewSafe.top) + Number(viewSafe.bottom)) > 24;
+    const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
+    const side = Math.max(Number(viewSafe.left) || 0, Number(viewSafe.right) || 0);
+    return side > Math.max(120, w * 0.16);
   }
 
   // Vela CarMapRenderer.navZoom: one zoom level per speed band (km/h upper bound -> zoom).
@@ -874,8 +876,13 @@
     PEEK_MAX_RANGE: 1100,
     PEEK_RANGE_CAPS: [1100, 2600, 5200],
     PEEK_PULL: 1.65,
-    CLOSE_TURN_M: 280
+    CLOSE_TURN_M: 280,
+    SKIP_HOLD_MS: 5000,
+    SKIP_FLY_MPS: 72,
+    SKIP_FLY_MIN_MS: 1400,
+    SKIP_FLY_MAX_MS: 3400
   };
+  let skipFly = null;
   let watchId = null, following = true, labelsOn = false, demoTimer = null, demoActive = false, demoKind = null;
   let previousFix = null, currentGpsPoint = null, activeRoute = null, activeDestination = null, activeDriveTo = null;
   let activeRoutePath = [];
@@ -2189,19 +2196,26 @@
     if (kind === "street" && tags.highway && tags.amenity !== "parking") {
       if (tags.service === "driveway" || tags.service === "parking_aisle") return null;
       if (walkM > 180) return null;
-      if (!tags.name && walkM > 90) return null;
+      if (!tags.name && walkM > 160) return null;
     }
     const cap = parseInt(tags.capacity, 10);
     const fee = String(tags.fee || "").toLowerCase();
-    let score = Number.isFinite(walkM) ? -walkM * 4 : 0;
-    if (kind === "street" && walkM < 200) score += 70;
-    if (kind === "building" && walkM < 320) score += 55;
-    if (kind === "lot" && walkM < 220) score += 48;
-    if (fee === "no") score += 18;
-    else if (fee === "yes") score -= 8;
-    if (cap > 0) score += Math.min(cap, 40);
-    if (tags.name) score += 8;
-    if (osmTagName(tags)) score += 24;
+    const hw = String(tags.highway || "").toLowerCase();
+    const busyRoad = /^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link)$/.test(hw);
+    let score = Number.isFinite(walkM) ? -walkM * 3.2 : 0;
+    if (kind === "street") {
+      if (busyRoad) score += 12;
+      else score += 170;
+    } else if (kind === "building") {
+      score += busyRoad ? 70 : 42;
+    } else if (kind === "lot") {
+      score += 40;
+    }
+    if (fee === "no") score += 12;
+    else if (fee === "yes") score -= 6;
+    if (cap > 0) score += Math.min(cap, 16);
+    if (tags.name) score += 6;
+    if (osmTagName(tags)) score += 10;
     const line = describeOsmParking(tags, dest ? walkM : NaN, kind);
     const named = osmTagName(tags);
     let name = named;
@@ -2227,6 +2241,7 @@
       iconHref: "",
       kind: "parking",
       parkKind: kind,
+      busyRoad,
       walkM,
       score,
       parking: { fee, capacity: cap > 0 ? cap : 0, access, type: kind, line },
@@ -2285,6 +2300,10 @@
       'nwr["amenity"="parking_entrance"]' + parkAround + ";" +
       'nwr["building"="parking"]' + parkAround + ";" +
       'nwr["parking"~"^(street_side|lane|multi-storey|underground|surface)$"]' + parkAround + ";" +
+      'way["highway"]["parking:lane"~"."]' + parkAround + ";" +
+      'way["highway"]["parking:lane:both"~"."]' + parkAround + ";" +
+      'way["highway"]["parking:lane:left"~"."]' + parkAround + ";" +
+      'way["highway"]["parking:lane:right"~"."]' + parkAround + ";" +
       ");out tags center;";
     const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
     const seen = {};
@@ -2303,6 +2322,7 @@
       if (place.named) return;
       let best = null, bestD = 80;
       namedLots.forEach(other => {
+        if (other.parkKind !== place.parkKind) return;
         const d = distanceMetres(place, other);
         if (d < bestD) { bestD = d; best = other; }
       });
@@ -2320,7 +2340,7 @@
         if (seenStreet[key]) return;
         seenStreet[key] = true;
       }
-      const dup = trimmed.find(k => k.name === place.name && distanceMetres(k, place) < 70);
+      const dup = trimmed.find(k => k.parkKind === place.parkKind && k.name === place.name && distanceMetres(k, place) < 70);
       if (dup) {
         const placeEnt = place.osmAmenity === "parking_entrance";
         const dupEnt = dup.osmAmenity === "parking_entrance";
@@ -3226,6 +3246,8 @@
       }
       parkingNear.options = lots;
       let pick = lots[0] || (dest.kind === "parking" ? dest : null);
+      const quietStreet = lots.find(lot => lot.parkKind === "street" && !lot.busyRoad && lot.walkM < 160);
+      if (quietStreet && dest.kind !== "parking") pick = quietStreet;
       if (dest.kind === "parking") {
         pick = lots.find(lot => destIsSamePlace(dest, lot)) || dest;
       }
@@ -4274,6 +4296,7 @@
   }
 
   const MANEUVER_ICONS = {
+    dest: svgIconUrl('<path fill="#fff" d="M32 12c8.3 0 15 6.6 15 14.8C47 36.8 32 52 32 52S17 36.8 17 26.8C17 18.6 23.7 12 32 12zm0 20.2a6 6 0 1 0 0-12 6 6 0 0 0 0 12z"/>'),
     straight: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" d="M32 50V22"/><path fill="#fff" d="M21 24.5L32 8l11 16.5z"/>'),
     right: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M24 50V24h18"/><path fill="#fff" d="M34 15l18 11-18 11z"/>'),
     left: svgIconUrl('<path fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" d="M40 50V24H22"/><path fill="#fff" d="M30 15L12 26l18 11z"/>'),
@@ -4360,9 +4383,51 @@
     maneuverMarkers = [];
   }
 
+  function maneuverTypeFromNav(maneuver){
+    const fam = maneuverFamily(maneuver);
+    const m = String(maneuver || "").toUpperCase();
+    if (fam === "dest") return "dest";
+    if (fam === "uturn") return "uturn";
+    if (fam === "roundabout") return "roundabout";
+    if (fam === "left") return m.includes("SLIGHT") ? "slight-left" : "left";
+    if (fam === "right") return m.includes("SLIGHT") ? "slight-right" : "right";
+    return "straight";
+  }
+
+  function skipFocusStep(){
+    if (!infoSkipMode || infoLevel <= 0) return null;
+    const span = navSkipCoverTargets();
+    if (!span.targets.length) return null;
+    const idx = Math.min(infoLevel - 1, span.targets.length - 1);
+    const targetM = span.targets[idx];
+    const all = upcomingNavSteps(0, { hold: false });
+    let best = null;
+    all.forEach(step => {
+      if (!best || Math.abs(step.m - targetM) < Math.abs(best.m - targetM)) best = step;
+    });
+    return best;
+  }
+
+  function markerItemForStep(step){
+    if (!step || !Number.isFinite(step.m) || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return null;
+    const at = pointAtMetres(activeRoutePath, routeCum, step.m);
+    if (!at || !at.point) return null;
+    return { point: at.point, m: step.m, type: maneuverTypeFromNav(step.maneuver) };
+  }
+
   function showManeuverMarkers(){
     clearManeuverMarkers();
     if (!Marker3DElement || !map3d || activeRoutePath.length < 3) return;
+    if (infoSkipMode && infoLevel > 0) {
+      const item = markerItemForStep(skipFocusStep());
+      if (!item) return;
+      try {
+        const marker = makeManeuverMarker(item);
+        map3d.append(marker);
+        maneuverMarkers.push(marker);
+      } catch (err) {}
+      return;
+    }
     const startM = Number.isFinite(puck.progressM) ? puck.progressM - 20 : 0;
     const items = routeManeuvers().filter(item => item.m >= startM);
     const max = 24;
@@ -6468,6 +6533,43 @@
     return { startM, total, targets };
   }
 
+  function startSkipFlyTo(toM){
+    if (!map3d || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
+    const total = routeCum[routeCum.length - 1] || 0;
+    const fromM = skipFly && Number.isFinite(skipFly.m)
+      ? skipFly.m
+      : clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
+    const destM = clamp(Number(toM) || 0, 0, total);
+    const dist = Math.abs(destM - fromM);
+    skipFly = {
+      fromM,
+      toM: destM,
+      m: fromM,
+      startMs: performance.now(),
+      durMs: clamp(NAV_INFO.SKIP_FLY_MIN_MS + dist / NAV_INFO.SKIP_FLY_MPS * 1000, NAV_INFO.SKIP_FLY_MIN_MS, NAV_INFO.SKIP_FLY_MAX_MS),
+      fromRange: numOr(map3d.range, 480),
+      fromTilt: numOr(map3d.tilt, 58)
+    };
+  }
+
+  function skipFlyFrame(now){
+    if (!skipFly || !infoSkipMode || infoLevel <= 0) return null;
+    if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return null;
+    const u = clamp((now - skipFly.startMs) / Math.max(skipFly.durMs, 1), 0, 1);
+    const e = u * u * (3 - 2 * u);
+    skipFly.m = lerp(skipFly.fromM, skipFly.toM, e);
+    const at = pointAtMetres(activeRoutePath, routeCum, skipFly.m);
+    const ahead = pointAtMetres(activeRoutePath, routeCum, skipFly.m + 55);
+    const degenerate = Math.abs(ahead.point.lat - at.point.lat) + Math.abs(ahead.point.lng - at.point.lng) < 1e-7;
+    const dest = skipFly.toM >= (routeCum[routeCum.length - 1] || 0) - 8;
+    return {
+      point: at.point,
+      bearing: degenerate ? at.bearing : bearingDegrees(at.point, ahead.point),
+      range: lerp(skipFly.fromRange, dest ? 720 : 500, e),
+      tilt: lerp(skipFly.fromTilt, dest ? 52 : 56, e)
+    };
+  }
+
   function navInfoPreview(view, baseRange, baseTilt){
     const range0 = Math.max(Number(baseRange) || view.range, 40);
     const maxLevel = navInfoMaxLevel();
@@ -7012,7 +7114,7 @@
       headingTarget = (cam.latched || puck.engaged) && Number.isFinite(puck.heading) ? puck.heading : cam.heading;
     }
     const car = { lat: puck.lat, lng: puck.lng };
-    const fly = flyoverFrame(now);
+    const fly = flyoverFrame(now) || skipFlyFrame(now);
     const destIntro = !!(fly && flyover && flyover.kind === "destPath" && flyover.phase !== "alongPath");
     const info = (!fly && infoLevel > 0) ? navInfoPreview(view, tgtRange, tiltTarget) : null;
     if (fly) {
@@ -7051,9 +7153,9 @@
     }
     let extra = flight * FOLLOW.FLIGHT_TAU + (cam.rejoin ? FOLLOW.RECENTER_EXTRA : 0);
     let extraZoom = flight * FOLLOW.FLIGHT_ZOOM_TAU + (cam.rejoin ? FOLLOW.RECENTER_ZOOM_EXTRA : 0);
-    if (infoSkipMode && infoLevel > 0 && !fly) {
-      extra = 0.12;
-      extraZoom = 0.16;
+    if (infoSkipMode && infoLevel > 0 && !(flyover || skipFly)) {
+      extra = 0.28;
+      extraZoom = 0.32;
     }
     if (!fly && cam.rejoinLift && cam.rejoinPhase === "rise") {
       extra = 0.2;
@@ -8462,6 +8564,7 @@
   function resetNavInfo(hideButton){
     infoLevel = 0;
     infoSkipMode = false;
+    skipFly = null;
     if (hideButton) infoBtnArmed = false;
     if (infoIdleTimer) {
       window.clearTimeout(infoIdleTimer);
@@ -8476,6 +8579,14 @@
     infoBtnArmed = true;
     updateNavInfoButton();
     armNavInfoIdle();
+  }
+
+  function armSkipHold(){
+    if (infoIdleTimer) window.clearTimeout(infoIdleTimer);
+    infoIdleTimer = window.setTimeout(() => {
+      infoIdleTimer = 0;
+      resetNavInfo(true);
+    }, NAV_INFO.SKIP_HOLD_MS);
   }
 
   function cycleNavSkip(event){
@@ -8495,14 +8606,17 @@
     }
     if (infoLevel >= navInfoMaxLevel()) {
       updateRecenterButton();
-      armNavInfoIdle(true);
+      armSkipHold();
       return;
     }
     infoLevel += 1;
+    const span = navSkipCoverTargets();
+    const idx = Math.min(infoLevel - 1, Math.max(0, span.targets.length - 1));
+    startSkipFlyTo(span.targets[idx]);
     showManeuverMarkers();
     updateRecenterButton();
     updateNavHud();
-    armNavInfoIdle(true);
+    armSkipHold();
   }
 
   function cycleNavInfo(event){
