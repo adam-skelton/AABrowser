@@ -3,6 +3,7 @@ package com.kododake.aabrowser.car
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
+import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.Row
 import androidx.car.app.model.SearchTemplate
@@ -58,13 +59,29 @@ class CarKeyboardScreen(
             }
         }
 
-        return SearchTemplate.Builder(callback)
+        val builder = SearchTemplate.Builder(callback)
             .setHeaderAction(Action.BACK)
             .setShowKeyboardByDefault(true)
             .setSearchHint(carContext.getString(R.string.car_keyboard_hint))
             .setInitialSearchText(typedText)
             .setItemList(suggestionList())
-            .build()
+        if (typedText.isNotBlank()) {
+            builder.setActionStrip(
+                ActionStrip.Builder()
+                    .addAction(
+                        Action.Builder()
+                            .setTitle(carContext.getString(R.string.car_keyboard_clear))
+                            .setOnClickListener {
+                                typedText = ""
+                                onTextChanged("")
+                                onClearRequest()
+                            }
+                            .build()
+                    )
+                    .build()
+            )
+        }
+        return builder.build()
     }
 
     private fun suggestionList(): ItemList {
@@ -73,6 +90,7 @@ class CarKeyboardScreen(
             builder.addItem(
                 Row.Builder()
                     .setTitle(carContext.getString(R.string.car_keyboard_clear))
+                    .addText(carContext.getString(R.string.car_keyboard_clear_hint))
                     .setOnClickListener {
                         typedText = ""
                         onTextChanged("")

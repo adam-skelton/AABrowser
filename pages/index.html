@@ -22,14 +22,13 @@
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#carDebugBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:8px; align-items:stretch}
+    #searchRow.has-query {grid-template-columns:minmax(0,1fr) 44px 48px}
     #searchHost {position:relative; min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
     #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
     #searchHost gmp-place-autocomplete::part(input),
     #searchHost gmp-place-autocomplete::part(search) {border:0; border-radius:12px; background:transparent; min-height:44px}
-    #searchHost.has-query gmp-place-autocomplete::part(input),
-    #searchHost.has-query gmp-place-autocomplete::part(search) {padding-right:40px}
-    #searchClear {display:none; position:absolute; right:4px; top:50%; transform:translateY(-50%); z-index:3; width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:transparent; box-shadow:none; font-size:22px; line-height:1; color:#5F6368}
-    #searchHost.has-query #searchClear {display:flex; align-items:center; justify-content:center}
+    #searchClear {display:none; width:44px; height:44px; min-height:44px; padding:0; border-radius:12px; background:#E8EAED; color:#3C4043; box-shadow:0 2px 10px rgba(0,0,0,.18); font-size:26px; line-height:1; align-items:center; justify-content:center}
+    #searchRow.has-query #searchClear {display:flex}
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
@@ -85,7 +84,7 @@
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
     #carDebugBtn {display:none; position:absolute; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(12px,env(safe-area-inset-left))); z-index:32; width:76px; height:76px; min-height:76px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
     #carDebugBtn svg {width:34px; height:34px; fill:currentColor}
-    body.debug-open #carDebugBtn {background:#1A73E8}
+    html.debug-cog-visible body.debug-open #carDebugBtn,body.debug-cog-visible.debug-open #carDebugBtn {background:#1A73E8}
     #recenterBtn {position:absolute; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:32; display:none; align-items:center; gap:10px; min-height:76px; padding:0 24px 0 18px; border-radius:38px; font:inherit; font-size:18px; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #recenterBtn.visible {display:flex}
     #recenterBtn svg {width:24px; height:32px; display:block; flex:0 0 auto; fill:currentColor}
@@ -94,8 +93,7 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:34px; height:34px; display:block}
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
-    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:none; display:flex; align-items:center; justify-content:center; gap:12px; pointer-events:none}
-    html.has-speed-limit #navBottomCluster,body.has-speed-limit #navBottomCluster {left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)) + 88px)}
+    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)) + 88px); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:none; display:flex; align-items:center; justify-content:center; gap:12px; pointer-events:none}
     html.has-recenter #navBottomCluster,body.has-recenter #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 168px)}
     html.has-info #navBottomCluster,body.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
     html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
@@ -104,7 +102,7 @@
     #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); align-items:flex-start; gap:10px; pointer-events:none}
     body.navigating #navHud {display:flex}
     body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
-    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + 100px)}
+    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + 124px)}
     html.aa-split #navHud,body.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     html.aa-car.aa-split #navHud,body.aa-car.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-start; gap:6px; min-height:0; padding:10px 12px 11px; margin-top:12px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
@@ -147,7 +145,7 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:100%; min-width:300px; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 0 300px; transform:translateX(-10vw)}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:100%; min-width:300px; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 0 300px; transform:translateX(22px)}
     html.aa-split #navEtaBar,body.aa-split #navEtaBar {width:auto; min-width:0; flex:0 0 auto; padding-right:16px}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
@@ -182,6 +180,7 @@
     html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
     html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:12px; left:calc(var(--aa-inset-left) + 12px)}
+    html.aa-car:not(.debug-cog-visible) #carDebugBtn,body.aa-car:not(.debug-cog-visible) #carDebugBtn {opacity:0}
     html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:calc(var(--aa-inset-left) + max(140px,env(safe-area-inset-left) + 128px)); right:calc(var(--aa-inset-right) + 148px); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); top:auto; z-index:30; overflow:visible}
     html.aa-car #buttonRow button,html.aa-car #buttonRow select,
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
@@ -286,7 +285,7 @@
     #carModelHost model-viewer {width:100%; height:100%; --poster-color:transparent; touch-action:none}
     #carModelHint {padding:8px 14px; font-size:13px; font-weight:600; color:rgba(255,255,255,.7); text-align:center}
     #carModelClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
-    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}button,select{font-size:14px}}
+    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}#searchRow.has-query{grid-template-columns:minmax(0,1fr) 44px 48px}button,select{font-size:14px}}
   </style>
   <script>try{if(window.Car)document.documentElement.classList.add("native-boot")}catch(e){}</script>
 </head>
@@ -322,9 +321,8 @@
   </button>
   <div id="topPanel">
     <div id="searchRow">
-      <div id="searchHost">
-        <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
-      </div>
+      <div id="searchHost"></div>
+      <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
       <button id="mapsBrowseBtn" type="button" aria-label="Maps">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
       </button>
@@ -548,6 +546,9 @@
   const CUSTOM_MAP_NAME = "__CUSTOM_MAP_NAME__";
   // Cloud-based 3D Hybrid style: roads + locality labels, POIs/transit/landmarks off.
   const GOOGLE_MAPS_MAP_ID = "a6855643070a44926567285b";
+  // Debug gear (top-left on Android Auto). 0 = hidden, triple-tap that corner to open.
+  // Set to 1 to show the cog again.
+  var SHOW_DEBUG_COG = 0;
 
   const AUCKLAND = { lat: -36.848461, lng: 174.763336 };
   // Maps Model3DElement only accepts URLs that end in ".glb" — no query strings.
@@ -831,9 +832,10 @@
   };
   const CAR_INSPECT = {
     SWOOP_MS: 900,
-    RANGE: 16,
-    TILT: 62,
-    FOV: 30,
+    RANGE: 18,
+    TILT: 46,
+    FOV: 32,
+    LOOK_AT_M: 1.25,
     SPIN_MS: 12000,
     PAUSE_MS: 1500,
     IDLE_MS: 10000
@@ -1412,12 +1414,14 @@
   }
   function wheelOrientation(heading){
     const o = carOrientation(heading);
-    // Rest pose is tilt 270 / roll 90. Adding spin to roll yaws the disc
-    // (rim turns into the body). Tilt is the hub axle, same as the preview rig.
+    // Maps applies Rx(roll)*Ry(tilt)*Rz(heading). Rest pose is tilt 270 / roll 90
+    // with the hub axle on local +X. Adding spin to tilt or roll alone only matches
+    // that axle at one car heading and flaps on every other. The equivalent Euler
+    // that spins around the axle at every heading is:
     const raw = {
-      heading: o.heading,
-      tilt: o.tilt + (Number(wheelSpinDeg) || 0),
-      roll: o.roll
+      heading: 90,
+      tilt: 270 + (Number(wheelSpinDeg) || 0),
+      roll: 180 - o.heading
     };
     const prev = wheelEulerWritten;
     if (!prev) return raw;
@@ -1603,9 +1607,11 @@
   }
 
   function syncSearchClear(){
+    const row = document.getElementById("searchRow");
     const host = document.getElementById("searchHost");
     const btn = document.getElementById("searchClear");
     const has = !!searchQueryValue();
+    if (row) row.classList.toggle("has-query", has);
     if (host) host.classList.toggle("has-query", has);
     if (btn) {
       btn.hidden = !has;
@@ -6856,8 +6862,8 @@
     }
     cam.heading = normaliseHeading(carInspect.fromHeading + yaw + (Number(carInspect.spinAcc) || 0));
     const center = { lat: car.lat, lng: car.lng };
-    const alt = followGroundAltitude(center, dtEase);
-    if (Number.isFinite(alt)) center.altitude = alt + 1.8;
+    const ground = inspectGroundAltitude(car, dtEase);
+    if (Number.isFinite(ground)) center.altitude = ground + CAR_INSPECT.LOOK_AT_M;
     map3d.center = center;
     if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
     if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
@@ -8513,6 +8519,19 @@
     return carAlt;
   }
 
+  function inspectGroundAltitude(point, dtEase){
+    const heading = Number.isFinite(lastCarHeading) ? lastCarHeading : 0;
+    let g = carGroundAltitude(point, heading, dtEase);
+    if (!Number.isFinite(g)) g = followGroundAltitude(point, dtEase);
+    if (!Number.isFinite(g)) g = terrainAltitude(point.lat, point.lng);
+    if (!Number.isFinite(g) && Number.isFinite(point && point.altitude)) g = Number(point.altitude);
+    if (!Number.isFinite(g)) {
+      const live = readMapCenter();
+      if (live && Number.isFinite(live.altitude) && Math.abs(live.altitude) > 1) g = live.altitude;
+    }
+    return g;
+  }
+
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
     if (carInspect) {
@@ -8994,9 +9013,25 @@
       startTraceReplay(btn.dataset.trace);
     }
   });
+  if (SHOW_DEBUG_COG) {
+    document.documentElement.classList.add("debug-cog-visible");
+    document.body.classList.add("debug-cog-visible");
+  }
+  let debugCogTaps = 0;
+  let debugCogTapMs = 0;
   document.getElementById("carDebugBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
+    if (SHOW_DEBUG_COG) {
+      window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
+      return;
+    }
+    const now = performance.now();
+    if (now - debugCogTapMs > 1500) debugCogTaps = 0;
+    debugCogTapMs = now;
+    debugCogTaps += 1;
+    if (debugCogTaps < 3) return;
+    debugCogTaps = 0;
     window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
   });
   document.getElementById("routeClose").addEventListener("click", event => {
