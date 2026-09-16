@@ -226,6 +226,16 @@ class CarWebViewHost(
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
         onMain {
+            if (jsBridge.carInspecting) {
+                endDrag()
+                val dHeading = distanceX * 0.18f
+                val dTilt = distanceY * 0.12f
+                webView?.evaluateJavascript(
+                    "window.__aaNudgeCamera && window.__aaNudgeCamera($dHeading,$dTilt);",
+                    null
+                )
+                return@onMain
+            }
             if (SystemClock.uptimeMillis() < twoFingerUntil) {
                 extendTwoFingerSession()
                 endDrag()
@@ -243,6 +253,7 @@ class CarWebViewHost(
 
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
+            if (jsBridge.carInspecting) return@onMain
             if (SystemClock.uptimeMillis() < twoFingerUntil) return@onMain
             endDrag()
             webView?.flingScroll(velocityX.toInt(), velocityY.toInt())

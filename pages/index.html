@@ -50,7 +50,11 @@
     html.aa-car.explore-mode.has-route #exploreBack,body.aa-car.explore-mode.has-route #exploreBack {display:none}
     html.aa-car.debug-open.explore-mode #exploreBack,body.aa-car.debug-open.explore-mode #exploreBack {left:calc(var(--aa-inset-left) + 100px)}
     #exploreBack svg {width:22px; height:22px; display:block}
-    #routeParking {display:none; margin-top:12px; width:100%; min-height:48px; border-radius:16px; background:#E8F0FE; color:#174EA6; box-shadow:none; align-items:center; gap:10px; text-align:left; padding:8px 12px}
+    #carInspectClose {display:none; position:absolute; z-index:37; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); right:calc(var(--aa-inset-right) + max(12px,env(safe-area-inset-right))); width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
+    body.car-inspect #carInspectClose {display:flex}
+    html.aa-car.car-inspect #carInspectClose,body.aa-car.car-inspect #carInspectClose {top:12px; right:calc(var(--aa-inset-right) + 12px)}
+    #carInspectClose svg {width:22px; height:22px; display:block}
+    #routeParking {display:none; margin-top:8px; width:100%; min-height:42px; border-radius:14px; background:#E8F0FE; color:#174EA6; box-shadow:none; align-items:center; gap:10px; text-align:left; padding:6px 10px}
     #routeParking.visible {display:flex}
     #routeParkingBadge {flex:0 0 auto; width:28px; height:28px; border-radius:50%; background:#1A73E8; color:#fff; font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:center}
     #routeParkingCopy {flex:1; min-width:0; font-size:14px; font-weight:650; line-height:1.3}
@@ -192,7 +196,7 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(380px,calc(100vw - 160px)); padding:10px 16px 16px; border-radius:24px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:none; user-select:none; transition:opacity .18s ease, transform .18s ease}
+    #routeCard {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(248px,calc(100vw - 210px)); max-height:min(46vh, 380px); overflow:hidden; padding:6px 10px 10px; border-radius:16px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto; user-select:none; transition:opacity .18s ease, transform .18s ease}
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top)))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
@@ -201,15 +205,15 @@
     #routeCard * {pointer-events:none}
     #routeCardHead button,#routeGo,#routeParking,#routeTitleRow {pointer-events:auto}
     #routePhoto {-webkit-user-drag:none; user-select:none}
-    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -8px 8px}
+    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 4px}
     #routeCardHeadSpacer {flex:1}
-    #routeBack,#routeClose {width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
-    #routeBack svg,#routeClose svg {width:22px; height:22px; display:block}
-    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:center}
-    #routePlace.has-photo {grid-template-columns:112px minmax(0,1fr)}
-    #routePhoto {width:112px; height:112px; border-radius:16px; object-fit:cover; background:#DADCE0}
+    #routeBack,#routeClose {width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeBack svg,#routeClose svg {width:20px; height:20px; display:block}
+    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:6px; align-items:center}
+    #routePlace.has-photo {grid-template-columns:64px minmax(0,1fr)}
+    #routePhoto {width:64px; height:64px; border-radius:10px; object-fit:cover; background:#DADCE0}
     #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; cursor:pointer}
-    #routeTitle {margin:0; flex:1; min-width:0; font-size:22px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
+    #routeTitle {margin:0; flex:1; min-width:0; font-size:15px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
     #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#80868B; display:flex}
     #routeTitleChevron svg {width:22px; height:22px; display:block}
     #routeRating {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
@@ -218,15 +222,15 @@
     #routeHours.soon {color:#E8710A}
     #routeHours.closed {color:#D93025}
     #routeHours.open24 {color:#188038}
-    #routeTime {margin-top:14px; font-size:28px; font-weight:750; letter-spacing:-.6px; line-height:1.1; color:#188038}
-    #routeStats {margin-top:2px; font-size:16px; font-weight:550; color:#3C4043; opacity:1}
-    #routeSub {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
+    #routeTime {margin-top:6px; font-size:18px; font-weight:750; letter-spacing:-.4px; line-height:1.1; color:#188038}
+    #routeStats {margin-top:2px; font-size:14px; font-weight:550; color:#3C4043; opacity:1}
+    #routeSub {margin-top:3px; font-size:13px; font-weight:600; color:#5F6368}
     #routeSub:empty {display:none}
     #routeSub.traffic-delay {color:#E8710A}
-    #routeGo {position:relative; overflow:hidden; margin-top:14px; width:100%; min-height:52px; border-radius:26px; background:#12756C; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeGo {position:relative; overflow:hidden; margin-top:8px; width:100%; min-height:40px; border-radius:20px; background:#12756C; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
     #routeGoProgress {position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(255,255,255,.28); transform:scaleX(var(--go-p, 0)); transform-origin:left center}
     #routeGo.counting #routeGoProgress {opacity:1}
-    #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:18px; font-weight:700}
+    #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:16px; font-weight:700}
     #routeGoLabel svg {width:18px; height:18px; display:block}
     #status {display:none}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
@@ -243,6 +247,7 @@
     body:not(.map-ready) #navHud,
     body:not(.map-ready) #turnCueHud,
     body:not(.map-ready) #routeCard,
+    body:not(.map-ready) #carInspectClose,
     body:not(.map-ready) #parkDialog,
     body:not(.map-ready) #viewSpecPanel {
       display:none !important;
@@ -303,6 +308,9 @@
   <div id="chromeWake" aria-hidden="true"></div>
   <button id="exploreBack" type="button" aria-label="Exit map">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <button id="carInspectClose" type="button" aria-label="Close car view">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
   </button>
   <div id="topPanel">
     <div id="searchRow">
@@ -816,7 +824,8 @@
     TILT: 75,
     FOV: 30,
     SPIN_MS: 12000,
-    PAUSE_MS: 1500
+    PAUSE_MS: 1500,
+    IDLE_MS: 10000
   };
   const START_COUNTDOWN_MS = 10000;
   const START_COUNTDOWN_IGNORE_MS = 450;
@@ -864,7 +873,7 @@
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
   const NAV_INFO = {
-    IDLE_MS: 5000,
+    IDLE_MS: 6500,
     MAX_LEVEL: 5,
     RANGE_STEPS: [2.2, 4.4, 8.8, 17.6, 35.2],
     TILT_CAPS: [62, 50, 42, 34, 26],
@@ -1388,9 +1397,9 @@
   function wheelOrientation(heading){
     const o = carOrientation(heading);
     const raw = {
-      heading: 90,
-      tilt: -90 + (Number(wheelSpinDeg) || 0),
-      roll: 180 - o.heading
+      heading: o.heading,
+      tilt: o.tilt,
+      roll: o.roll + (Number(wheelSpinDeg) || 0)
     };
     const prev = wheelEulerWritten;
     if (!prev) return raw;
@@ -1404,8 +1413,7 @@
   function hubMapPoint(point, heading, hub, scale){
     const along = lookAhead(point, heading, hub.z * scale);
     const pos = lookAhead(along, heading + 90, hub.x * scale);
-    if (Number.isFinite(point.altitude)) pos.altitude = point.altitude + hub.y * scale;
-    else pos.altitude = hub.y * scale;
+    pos.altitude = hub.y * scale;
     return pos;
   }
 
@@ -1450,7 +1458,7 @@
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01 &&
       Math.abs((w.alt || 0) - alt) < 0.02;
-    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.08;
+    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.02;
     if (samePos && sameSpin && w.hidden === hidden) return;
     const orient = wheelOrientation(h);
     spec.wheels.hubs.forEach((hub, i) => {
@@ -1490,7 +1498,7 @@
           position: hubMapPoint(position, h, hub, placeScale),
           orientation: wheelOrientation(h),
           scale: hidden ? 0.001 : wheelScaleForHub(scale, hub),
-          altitudeMode: MODEL_ALTITUDE_MODE
+          altitudeMode: "RELATIVE_TO_GROUND"
         });
         el.addEventListener("gmp-click", event => {
           try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
@@ -1955,8 +1963,8 @@
     const pinX = Math.round((width - 31) / 2);
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="60" viewBox="0 0 ' + width + ' 60">' +
-      '<rect x="1" y="1" rx="7" width="' + (width - 2) + '" height="18" fill="#101214" fill-opacity="0.55"/>' +
-      '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
+      '<rect x="0.5" y="0.5" rx="8" width="' + (width - 1) + '" height="19" fill="#F1F3F4" fill-opacity="1" stroke="#DADCE0" stroke-width="1"/>' +
+      '<text x="' + (width / 2) + '" y="14" text-anchor="middle" fill="#202124" font-size="9" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + escaped + "</text>" +
       pin.replace("PINX", String(pinX)).replace("PINY", "18") +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
@@ -1977,7 +1985,7 @@
     }
   }
 
-  function explorePinNode(place){
+  function explorePinNode(place, showLabel){
     const href = rewriteIconHref(place.iconHref);
     const custom = href && !isBlankStockIcon(href);
     const img = document.createElement("img");
@@ -1989,7 +1997,7 @@
       img.style.cssText = "width:40px;height:40px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))";
       return img;
     }
-    applyExplorePinImage(img, place, false);
+    applyExplorePinImage(img, place, !!showLabel);
     return img;
   }
 
@@ -3137,6 +3145,7 @@
       if (id !== routeGen || isNavigating()) return;
       adoptRoute(route, path, intervals, dest, false, null);
       drawParkingWalk(lot, dest);
+      maybeStartRouteCountdown();
     } catch (err) {
       console.warn("Parking reroute failed", err);
     }
@@ -3412,8 +3421,11 @@
       const place = (marker._explorePlace) || explore.places[i];
       if (!place) return;
       const show = !!(ids[place.id] && place.name);
-      const text = show ? explorePinLabelText(place) : "";
-      try { marker.label = text || null; } catch (err) {}
+      const href = rewriteIconHref(place.iconHref);
+      const custom = href && !isBlankStockIcon(href);
+      try { marker.label = null; } catch (err) {}
+      if (custom) return;
+      applyExplorePinImage(marker._pinImg, place, show);
     });
   }
 
@@ -3427,10 +3439,10 @@
     };
     const marker = new Ctor(opts);
     marker._explorePlace = place;
+    try { marker.label = null; } catch (err) {}
     const template = document.createElement("template");
     const ids = labeledExploreIds(explore.places, Number(map3d && map3d.range));
-    if (ids[place.id] && place.name) marker.label = explorePinLabelText(place);
-    const pin = explorePinNode(place);
+    const pin = explorePinNode(place, !!(ids[place.id] && place.name));
     marker._pinImg = pin;
     template.content.append(pin);
     marker.append(template);
@@ -4053,6 +4065,7 @@
     }
     offRoute.hits = 0;
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
+    if (!keepNav) maybeStartRouteCountdown();
   }
 
   async function calculateRoute(origin, destination, destinationName, opts){
@@ -4082,7 +4095,7 @@
         autoRefollowArmed = false;
         const followBtn = document.getElementById("followBtn");
         if (followBtn) followBtn.textContent = "Following: OFF";
-        if (!destPreview) startDestPreview(dest);
+        if ((!opts || opts.preview !== false) && !destPreview) startDestPreview(dest);
         if (explore.mode && destPreview) destPreview.noSpin = true;
         updateRecenterButton();
       }
@@ -4098,16 +4111,23 @@
         } catch (err) {}
       }
       const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
-      if (gen !== routeGen) return;
+      if (gen !== routeGen) {
+        if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
+        return;
+      }
       activeDriveTo = driveTo;
       let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true, { skipTrim: fast });
-      if (gen !== routeGen) return;
+      if (gen !== routeGen) {
+        if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
+        return;
+      }
       adoptRoute(route, path, intervals, dest, false, null);
       const lot = parkingNear.selected;
       if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && distanceMetres(driveTo, lot) > 28) {
         rerouteDriveToParking(lot, dest);
       }
       if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters, { keepPreview: true });
+      else if (!noCard) maybeStartRouteCountdown();
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
 
       const applyRefine = async () => {
@@ -5548,7 +5568,7 @@
     setMapLabels(true);
     if (!(opts && opts.keepPreview) || !destPreview) startDestPreview(destination || origin);
     if (explore.mode && destPreview) destPreview.noSpin = true;
-    if (!explore.mode) startStartCountdown();
+    if (!explore.mode) maybeStartRouteCountdown();
   }
 
   // `opts.flyover` (default true): sweep the route from the destination back to the car
@@ -6667,6 +6687,17 @@
 
   function stopCarInspect(){
     carInspect = null;
+    window.__aaCarInspect = false;
+    document.body.classList.remove("car-inspect");
+    document.documentElement.classList.remove("car-inspect");
+    try { if (window.Car && typeof Car.setCarInspect === "function") Car.setCarInspect(false); } catch (err) {}
+  }
+
+  function exitCarInspect(){
+    if (!carInspect) return;
+    stopCarInspect();
+    if (isNavigating()) attachFollow("drive");
+    else updateRecenterButton();
   }
 
   function startCarInspect(){
@@ -6691,8 +6722,12 @@
       userTilt: CAR_INSPECT.TILT,
       yaw: 0,
       spinAcc: 0,
-      lastInteractMs: 0
+      lastInteractMs: performance.now()
     };
+    window.__aaCarInspect = true;
+    document.body.classList.add("car-inspect");
+    document.documentElement.classList.add("car-inspect");
+    try { if (window.Car && typeof Car.setCarInspect === "function") Car.setCarInspect(true); } catch (err) {}
     cam.lat = car.lat;
     cam.lng = car.lng;
     cam.heading = heading;
@@ -6715,6 +6750,11 @@
     if (!carInspect || !map3d) return;
     const car = currentCarPoint() || (puck.fix ? { lat: puck.lat, lng: puck.lng } : lastCarPoint);
     if (!car || !Number.isFinite(car.lat)) return;
+    const idleFrom = Math.max(carInspect.startMs, carInspect.lastInteractMs || 0);
+    if (now - idleFrom >= CAR_INSPECT.IDLE_MS) {
+      exitCarInspect();
+      return;
+    }
     const u = clamp((now - carInspect.startMs) / CAR_INSPECT.SWOOP_MS, 0, 1);
     const e = u * u * (3 - 2 * u);
     const targetRange = clamp(Number(carInspect.userRange) || CAR_INSPECT.RANGE, 8, 90);
@@ -6847,6 +6887,7 @@
 
   function startStartCountdown(){
     if (!routeGoEl || explore.mode) return;
+    if (isNavigating()) return;
     startCountdown = {
       startMs: performance.now() + START_COUNTDOWN_IGNORE_MS,
       durMs: START_COUNTDOWN_MS
@@ -6854,6 +6895,15 @@
     setGoProgress(0);
     routeGoEl.classList.add("counting");
     ensureFollowTicker();
+  }
+
+  function maybeStartRouteCountdown(){
+    if (explore.mode || isNavigating()) return;
+    if (document.body.classList.contains("suppress-route-card")) return;
+    if (!document.body.classList.contains("has-route")) return;
+    if (!activeRoutePath || activeRoutePath.length < 2) return;
+    if (startCountdown) return;
+    startStartCountdown();
   }
 
   function cancelStartCountdown(){
@@ -6930,21 +6980,27 @@
     const liveRange = numOr(map3d && map3d.range, cam.range);
     const liveTilt = numOr(map3d && map3d.tilt, cam.tilt);
     const liveHeading = numOr(map3d && map3d.heading, cam.heading);
+    const holdRange = alreadyAtDest ? (liveRange > 0 ? liveRange : DEST_PREVIEW.RANGE) : FLYOVER.DEST_RANGE;
+    const holdTilt = alreadyAtDest ? (Number.isFinite(liveTilt) ? liveTilt : DEST_PREVIEW.TILT) : FLYOVER.DEST_TILT;
+    const holdHeading = alreadyAtDest ? liveHeading : arrivalBrg;
     flyover = {
       kind: "destPath",
-      phase: alreadyAtDest ? "risePath" : "dollyIn",
+      phase: alreadyAtDest ? "holdDest" : "dollyIn",
       dest: { lat: dest.lat, lng: dest.lng },
       total,
       dollyStartMs: performance.now(),
-      riseStartMs: alreadyAtDest ? performance.now() : 0,
-      holdUntil: 0,
+      riseStartMs: 0,
+      holdUntil: alreadyAtDest ? performance.now() + FLYOVER.DEST_HOLD_MS : 0,
       pathStartMs: 0,
       pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
       pathRange: clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE),
-      pathHoldMs: alreadyAtDest ? FLYOVER.PATH_HOLD_FROM_PREVIEW_MS : FLYOVER.PATH_HOLD_MS,
-      fromRange: alreadyAtDest ? (liveRange > 0 ? liveRange : DEST_PREVIEW.RANGE) : FLYOVER.DEST_RANGE,
-      fromTilt: alreadyAtDest ? (Number.isFinite(liveTilt) ? liveTilt : DEST_PREVIEW.TILT) : FLYOVER.DEST_TILT,
-      fromHeading: alreadyAtDest ? liveHeading : arrivalBrg
+      pathHoldMs: FLYOVER.PATH_HOLD_MS,
+      fromRange: holdRange,
+      fromTilt: holdTilt,
+      fromHeading: holdHeading,
+      holdRange,
+      holdTilt,
+      holdHeading
     };
     cam.lat = dest.lat;
     cam.lng = dest.lng;
@@ -6992,7 +7048,12 @@
         flyover.phase = "risePath";
         flyover.riseStartMs = now;
       }
-      return { point: destPt, bearing: arrivalBrg, range: FLYOVER.DEST_RANGE, tilt: FLYOVER.DEST_TILT };
+      return {
+        point: destPt,
+        bearing: Number.isFinite(flyover.holdHeading) ? flyover.holdHeading : arrivalBrg,
+        range: Number.isFinite(flyover.holdRange) ? flyover.holdRange : FLYOVER.DEST_RANGE,
+        tilt: Number.isFinite(flyover.holdTilt) ? flyover.holdTilt : FLYOVER.DEST_TILT
+      };
     }
     if (flyover.phase === "risePath") {
       const u = clamp((now - flyover.riseStartMs) / FLYOVER.RISE_MS, 0, 1);
@@ -8408,7 +8469,13 @@
   window.__aaRecenter = function(){
     recenterToCar();
   };
-  window.__aaUserPanned = function(){ markUserPanned(true); };
+  window.__aaUserPanned = function(){
+    if (carInspect) {
+      carInspect.lastInteractMs = performance.now();
+      return;
+    }
+    markUserPanned(true);
+  };
   // Host day/night (Android Auto's CarContext.isDarkMode - not wall-clock).
   window.__aaSetNight = function(on){
     document.documentElement.classList.toggle("night", !!on);
@@ -8841,6 +8908,14 @@
       pushSearchSuggestions("", mapsCatalogItems());
     });
   }
+  const carInspectCloseBtn = document.getElementById("carInspectClose");
+  if (carInspectCloseBtn) {
+    carInspectCloseBtn.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      exitCarInspect();
+    });
+  }
   const exploreBackBtn = document.getElementById("exploreBack");
   if (exploreBackBtn) {
     exploreBackBtn.addEventListener("click", event => {
@@ -8935,7 +9010,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #descDialog, #parkDialog, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
@@ -8978,14 +9053,16 @@
     updateRecenterButton();
   }
   window.addEventListener("pointerdown", event => {
-    if (startCountdown && !(event.target.closest && event.target.closest("#routeGo"))) {
-      cancelStartCountdown();
-    }
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
     if (isChromeUiTarget(event.target)) {
       mapDragStart = null;
       return;
     }
+    if (carInspect) {
+      mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
+      return;
+    }
+    if (startCountdown) cancelStartCountdown();
     closeAaSearchBar();
     if (flyover && isNavigating()) {
       skipNavFlyover();
@@ -9031,7 +9108,10 @@
       startCarInspect();
       return;
     }
-    if (carInspect) stopCarInspect();
+    if (carInspect) {
+      carInspect.lastInteractMs = performance.now();
+      return;
+    }
     onNavMapTap();
     scheduleRestoreRouteCard();
   }, { capture:true, passive:true });

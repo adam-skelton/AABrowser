@@ -57,6 +57,15 @@ class CarJsBridge(
         return resolveCarApiLevel().coerceAtLeast(0)
     }
 
+    @Volatile
+    var carInspecting: Boolean = false
+        private set
+
+    @JavascriptInterface
+    fun setCarInspect(on: Boolean) {
+        carInspecting = on
+    }
+
     // Recorded drive traces (the page records/replays; the host only persists). These run
     // on the WebView's JS bridge thread; file I/O there is fine for these small files.
 
