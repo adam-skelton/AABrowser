@@ -17,7 +17,8 @@ class CarKeyboardScreen(
     private val initialText: String,
     private val webHost: CarWebViewHost,
     private val onTextChanged: (String) -> Unit,
-    private val onSubmitted: (String) -> Unit
+    private val onSubmitted: (String) -> Unit,
+    private val onClearRequest: () -> Unit = {}
 ) : Screen(carContext) {
 
     private var typedText = initialText
@@ -68,7 +69,19 @@ class CarKeyboardScreen(
 
     private fun suggestionList(): ItemList {
         val builder = ItemList.Builder()
-        if (suggestions.isEmpty()) {
+        if (typedText.isNotBlank()) {
+            builder.addItem(
+                Row.Builder()
+                    .setTitle(carContext.getString(R.string.car_keyboard_clear))
+                    .setOnClickListener {
+                        typedText = ""
+                        onTextChanged("")
+                        onClearRequest()
+                    }
+                    .build()
+            )
+        }
+        if (suggestions.isEmpty() && typedText.isBlank()) {
             builder.setNoItemsMessage(carContext.getString(R.string.car_keyboard_empty))
             return builder.build()
         }

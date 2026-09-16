@@ -152,6 +152,8 @@ class CarWebViewHost(
 
     fun requestSearch() {
         onMain {
+            lastInputNotifyAt = 0L
+            suppressFocusUntil = 0L
             webView?.evaluateJavascript(
                 "window.__aaRequestSearch && window.__aaRequestSearch();",
                 null
@@ -833,6 +835,7 @@ class CarWebViewHost(
               document.addEventListener('click', function(e) {
                 var el = e.target;
                 if (!el || !el.closest || !el.closest('#searchHost')) return;
+                if (el.closest('#searchClear')) return;
                 try { Car.onInputFocused(searchValue(el)); } catch (err) {}
               }, true);
             })();
