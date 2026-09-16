@@ -92,26 +92,33 @@
     html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
     #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); z-index:35; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
-    #navHud {display:none; pointer-events:none}
-    body.navigating #navHud {display:block}
-    #navLanes {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); width:max-content; max-width:min(200px,46vw); justify-content:flex-end; align-items:flex-end; gap:3px; min-height:0; padding:6px 7px 7px; border-radius:14px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden}
+    #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); align-items:flex-start; gap:10px; pointer-events:none}
+    body.navigating #navHud {display:flex}
+    body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
+    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + 100px)}
+    html.aa-split #navHud,body.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
+    html.aa-car.aa-split #navHud,body.aa-car.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
+    #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-start; gap:6px; min-height:0; padding:10px 12px 11px; margin-top:12px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
     #navLanes.visible {display:flex !important}
     body:not(.chrome-hidden) #navLanes,
     body:not(.chrome-hidden) #navLanes.visible {display:none !important}
-    html.aa-car #navLanes,body.aa-car #navLanes {left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)))}
-    .nav-lane {width:20px; height:34px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
+    .nav-lane {width:32px; height:54px; opacity:.38; display:flex; align-items:flex-end; justify-content:center}
     .nav-lane.rec {opacity:1}
-    .nav-lane svg {width:18px; height:32px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+    .nav-lane svg {width:30px; height:52px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
     .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
-    #navBanner {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); max-width:min(480px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 168px)); pointer-events:auto; cursor:pointer}
-    body:not(.chrome-hidden) #navBanner {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
-    html.aa-car #navBanner,body.aa-car #navBanner {left:calc(var(--aa-inset-left) + 100px); max-width:min(520px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 116px))}
+    #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(480px, calc(100% - 160px)); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
+    html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(520px, calc(100% - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
+    #navBanner:focus,#navBanner:active,#navBanner:focus-visible,#navPrimary:active {outline:none; box-shadow:none; filter:none; transform:none}
     body.nav-browsing #navBanner,
     body.nav-browsing #navBanner.visible,
     body.nav-flyover #navBanner,
-    body.nav-flyover #navBanner.visible {display:none !important}
-    #navPrimary {display:flex; align-items:center; gap:10px; min-height:88px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28)}
+    body.nav-flyover #navBanner.visible,
+    body.nav-browsing #navLanes,
+    body.nav-browsing #navLanes.visible,
+    body.nav-flyover #navLanes,
+    body.nav-flyover #navLanes.visible {display:none !important}
+    #navPrimary {display:flex; align-items:center; gap:10px; min-height:88px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28); outline:none; -webkit-tap-highlight-color:transparent}
     #navIconWrap {position:relative; width:74px; height:74px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
     #navIcon svg {width:66px; height:66px; display:block; overflow:visible; color:#fff}
@@ -131,7 +138,8 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:min(300px,100%); max-width:100%; min-width:0; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 1 300px}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:100%; min-width:300px; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 0 300px}
+    html.aa-split #navEtaBar,body.aa-split #navEtaBar {width:auto; min-width:0; flex:0 0 auto; padding-right:16px}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
     #navEtaCopy {flex:1; min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:18px; font-weight:650; letter-spacing:-.2px}
@@ -487,7 +495,6 @@
     </div>
   </div>
   <div id="navHud">
-    <div id="navLanes" hidden></div>
     <div id="navBanner" hidden role="button" aria-label="Skip ahead to next turn">
       <div id="navPrimary">
         <div id="navIconWrap">
@@ -510,6 +517,7 @@
         <span id="navThenIcon"></span>
       </div>
     </div>
+    <div id="navLanes" hidden></div>
   </div>
 
 <script>
@@ -650,9 +658,13 @@
     const h = Math.max(1, viewSafe.height || window.innerHeight || 1);
     const top = viewSafe.top || 0;
     const visH = Math.max(1, h - top - (viewSafe.bottom || 0));
-    const split = (viewSafe.left + viewSafe.right + viewSafe.top + viewSafe.bottom) > 24;
+    const split = isSplitView();
     const frac = split ? 0.55 : (!isNavigating() ? FOLLOW.FREE_CAR_SCREEN_Y : FOLLOW.CAR_SCREEN_Y);
     return (top + visH * frac) / h;
+  }
+
+  function isSplitView(){
+    return (Number(viewSafe.left) + Number(viewSafe.right) + Number(viewSafe.top) + Number(viewSafe.bottom)) > 24;
   }
 
   // Vela CarMapRenderer.navZoom: one zoom level per speed band (km/h upper bound -> zoom).
@@ -775,7 +787,7 @@
     DEST_START_TILT: 50,
     DEST_TILT: 58,
     DEST_IN_MS: 1700,
-    DEST_HOLD_MS: 700,
+    DEST_HOLD_MS: 1700,
     PATH_TILT: 32,         // flatter so locality labels sit on the imagery, not behind buildings
     PATH_MIN_RANGE: 1600,  // suburb/locality names need more altitude than the dest pin shot
     PATH_MAX_RANGE: 7200,
@@ -882,6 +894,8 @@
   const routeSnippetEl = document.getElementById("routeSnippet");
   const routeGoEl = document.getElementById("routeGo");
   let destPreview = null;
+  let exploreFly = null;
+  const EXPLORE_OVERVIEW_MS = 900;
   let carInspect = null;
   let startCountdown = null;
 
@@ -1701,7 +1715,7 @@
     { id: "hospital", title: "Hospitals", subtitle: "Emergency care", type: "hospital", color: "#D93025" },
     { id: "lodging", title: "Hotels", subtitle: "Places to stay", type: "lodging", color: "#5F6368" }
   ];
-  const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null, labelMode: "", mapId: "" };
+  const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null, labelBucket: null, mapId: "" };
 
   function customMapConfigured(){
     const id = String(CUSTOM_MAP_ID || "").trim();
@@ -3160,13 +3174,15 @@
       explore.places = [];
       explore.title = "";
       explore.mapId = "";
+      explore.labelBucket = null;
+      exploreFly = null;
       clearExploreMarkers();
     }
   }
 
-  function fitExploreCamera(places){
+  function computeExploreOverview(places){
     const pts = places || explore.places;
-    if (!map3d || !pts.length) return;
+    if (!pts || !pts.length) return null;
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
     pts.forEach(p => {
       minLat = Math.min(minLat, p.lat);
@@ -3179,54 +3195,122 @@
       distanceMetres({ lat: minLat, lng: minLng }, { lat: maxLat, lng: maxLng }),
       500
     );
+    return { center: mid, range: clamp(span * 1.55, 800, 48000), tilt: 28, heading: 0 };
+  }
+
+  function fitExploreCamera(places){
+    const ov = computeExploreOverview(places);
+    if (!map3d || !ov) return;
     following = false;
     autoRefollowArmed = false;
     document.getElementById("followBtn").textContent = "Following: OFF";
     stopDestPreview();
+    exploreFly = null;
     cam.seeded = false;
-    map3d.center = mid;
-    map3d.heading = 0;
-    map3d.tilt = 28;
-    map3d.range = clamp(span * 1.55, 800, 48000);
-    explore.overview = { center: mid, range: map3d.range, tilt: 28, heading: 0 };
+    map3d.center = ov.center;
+    map3d.heading = ov.heading;
+    map3d.tilt = ov.tilt;
+    map3d.range = ov.range;
+    explore.overview = ov;
     updateRecenterButton();
   }
 
-  function exploreLabelModeForRange(range){
-    if (explore.mapId === "custom") return "all";
-    if (!Number.isFinite(range) || range >= 15000) return "none";
-    if (range >= 7500) return "sparse";
-    return "all";
+  function startExploreOverviewFly(overview){
+    if (!map3d || !overview || !overview.center) return;
+    following = false;
+    autoRefollowArmed = false;
+    document.getElementById("followBtn").textContent = "Following: OFF";
+    stopDestPreview();
+    const c = readMapCenter();
+    const heading = numOr(map3d.heading, 0);
+    const range = numOr(map3d.range, 0);
+    exploreFly = {
+      from: {
+        lat: c.lat,
+        lng: c.lng,
+        heading,
+        range: range > 0 ? range : overview.range,
+        tilt: numOr(map3d.tilt, overview.tilt)
+      },
+      to: overview,
+      startMs: performance.now()
+    };
+    cam.lat = exploreFly.from.lat;
+    cam.lng = exploreFly.from.lng;
+    cam.heading = exploreFly.from.heading;
+    cam.range = exploreFly.from.range;
+    cam.tilt = exploreFly.from.tilt;
+    cam.seeded = true;
+    ensureFollowTicker();
+    updateRecenterButton();
   }
 
-  function sparseLabelIds(places){
-    const cells = {};
-    (places || []).forEach(place => {
-      const key = Math.round(place.lat * 55) + ":" + Math.round(place.lng * 55);
-      if (!cells[key]) cells[key] = place.id;
+  function applyExploreOverviewCamera(dtEase, now){
+    if (!exploreFly || !map3d) return;
+    const from = exploreFly.from;
+    const to = exploreFly.to;
+    const u = clamp((now - exploreFly.startMs) / EXPLORE_OVERVIEW_MS, 0, 1);
+    const e = u * u * (3 - 2 * u);
+    cam.lat = lerp(from.lat, to.center.lat, e);
+    cam.lng = lerp(from.lng, to.center.lng, e);
+    cam.range = lerp(from.range, to.range, e);
+    cam.tilt = lerp(from.tilt, to.tilt, e);
+    const dH = ((to.heading - from.heading + 540) % 360) - 180;
+    cam.heading = normaliseHeading(from.heading + dH * e);
+    const center = { lat: cam.lat, lng: cam.lng };
+    const alt = followGroundAltitude(center, dtEase);
+    if (Number.isFinite(alt)) center.altitude = alt;
+    map3d.center = center;
+    if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
+    if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
+    if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
+    updateCompassNeedle(cam.heading);
+    applyExploreLabelMode();
+    if (u >= 1) exploreFly = null;
+  }
+
+  function exploreLabelScore(place){
+    if (!place) return 0;
+    const rating = Number(place.rating) || 0;
+    const reviews = Number(place.userRatingCount) || 0;
+    let score = rating * (Math.log10(reviews + 10) + 0.4);
+    if (place.name) score += 1.2;
+    if (explore.selected && place.id === explore.selected.id) score += 1000;
+    return score;
+  }
+
+  function labeledExploreIds(places, range){
+    const pts = (places || []).filter(p => p && p.name);
+    if (!pts.length) return {};
+    const r = Number.isFinite(range) && range > 0 ? range : 8000;
+    const minSep = clamp(r * 0.12, 160, 2600);
+    const ranked = pts.slice().sort((a, b) => {
+      const d = exploreLabelScore(b) - exploreLabelScore(a);
+      if (Math.abs(d) > 0.001) return d;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+    const kept = [];
+    ranked.forEach(place => {
+      if (kept.some(other => distanceMetres(other, place) < minSep)) return;
+      kept.push(place);
     });
     const ids = {};
-    Object.keys(cells).forEach(key => { ids[cells[key]] = true; });
+    kept.forEach(place => { ids[place.id] = true; });
     return ids;
-  }
-
-  function markerShowsLabel(place, mode, sparseIds){
-    if (mode === "none") return false;
-    if (mode === "all") return true;
-    return !!(sparseIds && sparseIds[place.id]);
   }
 
   function applyExploreLabelMode(force){
     if (!explore.mode || !explore.markers.length || !map3d) return;
-    const mode = exploreLabelModeForRange(Number(map3d.range));
-    if (!force && mode === explore.labelMode) return;
-    explore.labelMode = mode;
-    const sparse = mode === "sparse" ? sparseLabelIds(explore.places) : null;
+    const range = Number(map3d.range);
+    const bucket = Math.round((Number.isFinite(range) ? range : 0) / 350);
+    if (!force && bucket === explore.labelBucket) return;
+    explore.labelBucket = bucket;
+    const ids = labeledExploreIds(explore.places, range);
     explore.markers.forEach((marker, i) => {
       const place = (marker._explorePlace) || explore.places[i];
       if (!place) return;
-      const show = markerShowsLabel(place, mode, sparse);
-      const text = show && place.name ? explorePinLabelText(place) : "";
+      const show = !!(ids[place.id] && place.name);
+      const text = show ? explorePinLabelText(place) : "";
       try { marker.label = text || null; } catch (err) {}
     });
   }
@@ -3242,9 +3326,8 @@
     const marker = new Ctor(opts);
     marker._explorePlace = place;
     const template = document.createElement("template");
-    const sparse = explore.labelMode === "sparse" ? sparseLabelIds(explore.places) : null;
-    const showLabel = markerShowsLabel(place, explore.labelMode || "all", sparse);
-    if (showLabel && place.name) marker.label = explorePinLabelText(place);
+    const ids = labeledExploreIds(explore.places, Number(map3d && map3d.range));
+    if (ids[place.id] && place.name) marker.label = explorePinLabelText(place);
     const pin = explorePinNode(place);
     marker._pinImg = pin;
     template.content.append(pin);
@@ -3262,7 +3345,7 @@
     clearExploreMarkers();
     if (!map3d) return;
     explore.places = places;
-    explore.labelMode = exploreLabelModeForRange(Number(map3d.range));
+    explore.labelBucket = null;
     places.forEach(place => {
       try {
         const marker = makeExploreMarker(place);
@@ -3382,6 +3465,7 @@
     showExploreSnippet(activeDestination);
     fetchParkingNear(dest);
     updateRecenterButton();
+    applyExploreLabelMode(true);
     setMessage(dest.name);
   }
 
@@ -3400,15 +3484,11 @@
     try { removeRouteLines(); } catch (err) {}
     document.body.classList.remove("has-route", "navigating", "nav-browsing");
     document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
-    if (explore.overview && map3d) {
-      map3d.center = explore.overview.center;
-      map3d.range = explore.overview.range;
-      map3d.tilt = explore.overview.tilt;
-      map3d.heading = explore.overview.heading;
-      cam.seeded = false;
-    } else {
-      fitExploreCamera(explore.places);
-    }
+    const overview = explore.overview || computeExploreOverview(explore.places);
+    explore.overview = overview;
+    if (overview && map3d) startExploreOverviewFly(overview);
+    else fitExploreCamera(explore.places);
+    applyExploreLabelMode(true);
     setMessage(explore.title || customMapTitle());
   }
 
@@ -4761,7 +4841,11 @@
       etaBar.hidden = false;
       etaBar.classList.add("visible");
     }
-    if (remainEl) remainEl.textContent = `${formatDuration(remainMs)} · ${formatDistance(remainM)}`;
+    if (remainEl) {
+      remainEl.textContent = isSplitView()
+        ? formatDuration(remainMs)
+        : `${formatDuration(remainMs)} · ${formatDistance(remainM)}`;
+    }
     if (clockEl) clockEl.textContent = formatTime(eta);
     document.body.classList.toggle("nav-flyover", !!flyover);
     document.documentElement.classList.toggle("nav-flyover", !!flyover);
@@ -4774,9 +4858,22 @@
       return;
     }
 
-    const ahead = upcomingNavSteps(progressM);
-    const current = ahead[0];
-    const next = ahead[1];
+    const ahead = upcomingNavSteps(progressM, { hold: !infoSkipMode });
+    let current = ahead[0];
+    let next = ahead[1];
+    if (infoSkipMode && infoLevel > 0) {
+      const span = navSkipCoverTargets();
+      const idx = Math.min(infoLevel - 1, Math.max(0, span.targets.length - 1));
+      const targetM = span.targets[idx];
+      const all = upcomingNavSteps(0, { hold: false });
+      let best = all[0];
+      all.forEach(step => {
+        if (!best || Math.abs(step.m - targetM) < Math.abs(best.m - targetM)) best = step;
+      });
+      current = best || current;
+      const curIdx = all.indexOf(current);
+      next = curIdx >= 0 ? all[curIdx + 1] : next;
+    }
     const banner = document.getElementById("navBanner");
     const icon = document.getElementById("navIcon");
     const text = document.getElementById("navPrimaryText");
@@ -4817,7 +4914,7 @@
       }
       const speed = speedKalman.speed;
       const etaS = dist / Math.max(speed, 0.35);
-      const showClock = speed > 0.8 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
+      const showClock = !infoSkipMode && speed > 0.8 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
       if (clock && wrap && clockNum) {
         if (showClock) {
           const secs = Math.max(1, Math.ceil(etaS));
@@ -5997,7 +6094,8 @@
     const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
     if (!map3d) return;
     spinCarWheels(dtRaw);
-    if (destPreview) applyDestPreviewCamera(dtEase, now);
+    if (exploreFly) applyExploreOverviewCamera(dtEase, now);
+    else if (destPreview) applyDestPreviewCamera(dtEase, now);
     tickStartCountdown(now);
     if (!puck.fix) {
       if (userWheels.length) applyWheelPose(currentCarPoint(), lastCarHeading);
@@ -6008,10 +6106,12 @@
     applyCarPose({ lat: puck.lat, lng: puck.lng }, puck.heading);
     updateTraversedRoute();
     // Car mode: a pan let go of the car; re-attach once the screen has been untouched long enough.
-    if (!following && !destPreview && !carInspect && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
+    if (!following && !destPreview && !exploreFly && !carInspect && autoRefollowArmed && isAndroidAuto() && currentGpsPoint && now - lastTouchMs > AUTO_REFOLLOW_MS) {
       attachFollow(currentView === "overview" ? "drive" : null);
     }
-    if (destPreview) {
+    if (exploreFly) {
+      // overview fly owns the camera
+    } else if (destPreview) {
       // preview owns the camera until Start or a pan
     } else if (carInspect) {
       applyCarInspectCamera(dtEase, now);
@@ -6234,12 +6334,23 @@
     if (isNavigating() && activeRoutePath.length >= 2 && routeCum.length === activeRoutePath.length) {
       const span = infoSkipMode ? navSkipCoverTargets() : navTurnCoverTargets();
       const idx = Math.min(level - 1, Math.max(0, span.targets.length - 1));
-      const caps = NAV_INFO.PEEK_RANGE_CAPS;
       const endM = span.targets[idx];
       const dest = endM >= span.total - 8;
-      const cap = infoSkipMode
-        ? (dest ? 24000 : clamp(1200 * Math.pow(1.55, idx), 1100, 9000))
-        : caps[Math.min(idx, caps.length - 1)];
+      if (infoSkipMode) {
+        const at = pointAtMetres(activeRoutePath, routeCum, endM);
+        const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(0, endM - 70));
+        const heading = dest
+          ? (Number.isFinite(at.bearing) ? at.bearing : 0)
+          : bearingDegrees(behind.point, at.point);
+        return {
+          range: dest ? 720 : 480,
+          tilt: dest ? 52 : 58,
+          heading,
+          aim: at.point
+        };
+      }
+      const caps = NAV_INFO.PEEK_RANGE_CAPS;
+      const cap = caps[Math.min(idx, caps.length - 1)];
       const aheadM = Math.max(endM - span.startM, 80);
       const tilt = dest
         ? clamp(baseTilt - Math.log2(Math.max(aheadM / 90, 1)) * 7, NAV_INFO.TURN_TILT_MIN, baseTilt)
@@ -6247,9 +6358,7 @@
       let range = rangeToFitAhead(aheadM, tilt, view.fov, cap);
       range = Math.max(range, range0 * (1.2 + idx * 1.4));
       if (idx > 0) {
-        const prevCap = infoSkipMode
-          ? (span.targets[idx - 1] >= span.total - 8 ? 24000 : clamp(1200 * Math.pow(1.55, idx - 1), 1100, 9000))
-          : caps[Math.min(idx - 1, caps.length - 1)];
+        const prevCap = caps[Math.min(idx - 1, caps.length - 1)];
         const prevAhead = Math.max(span.targets[idx - 1] - span.startM, 80);
         const prevFit = rangeToFitAhead(prevAhead, tilt, view.fov, prevCap);
         range = Math.max(range, prevFit * NAV_INFO.PEEK_PULL);
@@ -6284,6 +6393,7 @@
 
   function startDestPreview(destination){
     if (!map3d || !destination || !Number.isFinite(destination.lat) || !Number.isFinite(destination.lng)) return;
+    exploreFly = null;
     const c = readMapCenter();
     const heading = numOr(map3d.heading, 0);
     const range = numOr(map3d.range, 0);
@@ -6778,6 +6888,10 @@
     }
     let extra = flight * FOLLOW.FLIGHT_TAU + (cam.rejoin ? FOLLOW.RECENTER_EXTRA : 0);
     let extraZoom = flight * FOLLOW.FLIGHT_ZOOM_TAU + (cam.rejoin ? FOLLOW.RECENTER_ZOOM_EXTRA : 0);
+    if (infoSkipMode && infoLevel > 0 && !fly) {
+      extra = 0.12;
+      extraZoom = 0.16;
+    }
     if (!fly && cam.rejoinLift && cam.rejoinPhase === "rise") {
       extra = 0.2;
       extraZoom = 0.45;
@@ -8064,6 +8178,9 @@
     };
     apply(document.documentElement);
     apply(document.body);
+    const split = isSplitView();
+    document.documentElement.classList.toggle("aa-split", split);
+    document.body.classList.toggle("aa-split", split);
     updateNavHud();
   };
   // Host accelerometer: world-frame horizontal acceleration (m/s^2, East/North).
@@ -8117,6 +8234,8 @@
       lastTouchMs = performance.now();
       autoRefollowArmed = true;
     }
+    if (fromTouch && isNavigating()) infoBtnArmed = true;
+    exploreFly = null;
     if (following) {
       following = false;
       cam.seeded = false; // re-attach eases in from wherever the user leaves the camera
@@ -8201,6 +8320,9 @@
       event.preventDefault();
       event.stopPropagation();
     }
+    if (event && event.currentTarget && typeof event.currentTarget.blur === "function") {
+      event.currentTarget.blur();
+    }
     if (!isNavigating() || !infoUiAvailable()) return;
     flyover = null;
     if (!following) attachFollow(null);
@@ -8216,6 +8338,7 @@
     infoLevel += 1;
     showManeuverMarkers();
     updateRecenterButton();
+    updateNavHud();
     armNavInfoIdle(true);
   }
 
@@ -8763,7 +8886,7 @@
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
   const MAP_REVEAL_MIN_MS = 900;
-  const MAP_REVEAL_MAX_MS = 5000;
+  const MAP_REVEAL_MAX_MS = 3000;
   function revealMap(){
     if (mapRevealDone) return;
     mapRevealDone = true;
