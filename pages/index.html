@@ -1413,75 +1413,18 @@
     return lastCarScale > 0.01 ? lastCarScale : carScaleForCamera();
   }
 
-  function mapsMatMul(a, b){
-    const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) m[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
-    }
-    return m;
-  }
-
-  // Maps applies roll, then tilt, then heading → R = Rz(heading) · Ry(tilt) · Rx(roll).
-  function mapsOrientationMatrix(o){
-    const r = (Number(o.roll) || 0) * Math.PI / 180;
-    const t = (Number(o.tilt) || 0) * Math.PI / 180;
-    const h = (Number(o.heading) || 0) * Math.PI / 180;
-    const cr = Math.cos(r), sr = Math.sin(r);
-    const ct = Math.cos(t), st = Math.sin(t);
-    const ch = Math.cos(h), sh = Math.sin(h);
-    const rx = [[1, 0, 0], [0, cr, -sr], [0, sr, cr]];
-    const ry = [[ct, 0, st], [0, 1, 0], [-st, 0, ct]];
-    const rz = [[ch, -sh, 0], [sh, ch, 0], [0, 0, 1]];
-    return mapsMatMul(rz, mapsMatMul(ry, rx));
-  }
-
-  function matrixToMapsOrientation(M){
-    const sy = clamp(-M[2][0], -1, 1);
-    const tilt = Math.asin(sy);
-    const cy = Math.cos(tilt);
-    let heading, roll;
-    if (Math.abs(cy) > 1e-6) {
-      heading = Math.atan2(M[1][0], M[0][0]);
-      roll = Math.atan2(M[2][1], M[2][2]);
-    } else {
-      heading = Math.atan2(-M[0][1], M[1][1]);
-      roll = 0;
-    }
-    return {
-      heading: normaliseHeading(heading * 180 / Math.PI),
-      tilt: normaliseHeading(tilt * 180 / Math.PI),
-      roll: normaliseHeading(roll * 180 / Math.PI)
-    };
-  }
-
-  let wheelEulerWritten = null;
-  function unwrapDeg(prev, next){
-    if (!Number.isFinite(prev)) return next;
-    let x = next;
-    while (x - prev > 180) x -= 360;
-    while (prev - x > 180) x += 360;
-    return x;
-  }
-  function mapsRotZ(deg){
-    const a = (Number(deg) || 0) * Math.PI / 180;
-    const c = Math.cos(a), s = Math.sin(a);
-    return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
-  }
-  function wheelOrientation(heading){
+  function wheelOrientation(heading, hub){
     const rest = carOrientation(heading);
-    const spin = Number(wheelSpinDeg) || 0;
-    // Hub axle in the wheel GLB is +X, but Maps' roll/tilt/heading rest pose
-    // (tilt 270, roll 90) puts that axle on local Z. Inspect screenshots: Rx/Ry
-    // lay the tyre on the road; Rz keeps the disc vertical at every heading.
-    const raw = Math.abs(spin) < 0.05
-      ? rest
-      : matrixToMapsOrientation(mapsMatMul(mapsOrientationMatrix(rest), mapsRotZ(spin)));
-    const prev = wheelEulerWritten;
-    if (!prev) return raw;
+    const flip = !!(hub && hub.x > 0);
+    // The extracted mesh is a right wheel with the alloy on +X, but Maps' rest
+    // pose points that face inboard on the right side. Yaw those 180° so the
+    // alloy faces outboard. Don't use negative scale — that greys the backs.
+    // Don't add spin to roll/tilt/heading: this rest pose is at a gimbal lock
+    // (tilt 270), so extra Euler components tumble the tyre instead of rolling it.
     return {
-      heading: unwrapDeg(prev.heading, raw.heading),
-      tilt: unwrapDeg(prev.tilt, raw.tilt),
-      roll: unwrapDeg(prev.roll, raw.roll)
+      heading: rest.heading + (flip ? 180 : 0),
+      tilt: rest.tilt,
+      roll: rest.roll
     };
   }
 
@@ -1492,8 +1435,7 @@
     return pos;
   }
 
-  function wheelScaleForHub(scale, hub){
-    if (hub.x < 0) return { x: -scale, y: scale, z: scale };
+  function wheelScaleForHub(scale){
     return { x: scale, y: scale, z: scale };
   }
 
@@ -1508,7 +1450,6 @@
     userWheels.forEach(el => { try { el.remove(); } catch (err) {} });
     userWheels = [];
     wheelPoseWritten = null;
-    wheelEulerWritten = null;
   }
 
   function fallbackSolidCar(){
@@ -1533,9 +1474,7 @@
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01 &&
       Math.abs((w.alt || 0) - alt) < 0.02;
-    const sameSpin = w && Math.abs(((w.spin - wheelSpinDeg + 540) % 360) - 180) < 0.02;
-    if (samePos && sameSpin && w.hidden === hidden) return;
-    const orient = wheelOrientation(h);
+    if (samePos && w.hidden === hidden) return;
     spec.wheels.hubs.forEach((hub, i) => {
       const el = userWheels[i];
       if (!el) return;
@@ -1545,14 +1484,13 @@
         } else {
           if (!samePos || !w || w.hidden) {
             el.position = hubMapPoint(point, h, hub, scale);
-            el.scale = wheelScaleForHub(scale, hub);
+            el.scale = wheelScaleForHub(scale);
+            el.orientation = wheelOrientation(h, hub);
           }
-          if (!sameSpin || !w || w.hidden) el.orientation = orient;
         }
         } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, spin: wheelSpinDeg, hidden, alt };
-    if (!hidden) wheelEulerWritten = orient;
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt };
   }
 
   function attachUserWheels(position, heading){
@@ -1571,8 +1509,8 @@
         const el = new Model3DElement({
           src: spec.wheelUrl,
           position: hubMapPoint(position, h, hub, placeScale),
-          orientation: wheelOrientation(h),
-          scale: hidden ? 0.001 : wheelScaleForHub(scale, hub),
+          orientation: wheelOrientation(h, hub),
+          scale: hidden ? 0.001 : wheelScaleForHub(scale),
           altitudeMode: "RELATIVE_TO_GROUND"
         });
         el.addEventListener("gmp-click", event => {

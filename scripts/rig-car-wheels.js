@@ -123,11 +123,38 @@ function packU32(arr) {
   return buf;
 }
 
+function computeNormals(positions, indices) {
+  const nrm = positions.map(() => [0, 0, 0]);
+  for (let i = 0; i < indices.length; i += 3) {
+    const ia = indices[i], ib = indices[i + 1], ic = indices[i + 2];
+    const a = positions[ia], b = positions[ib], c = positions[ic];
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const cr = [
+      ab[1] * ac[2] - ab[2] * ac[1],
+      ab[2] * ac[0] - ab[0] * ac[2],
+      ab[0] * ac[1] - ab[1] * ac[0]
+    ];
+    [ia, ib, ic].forEach((idx) => {
+      nrm[idx][0] += cr[0];
+      nrm[idx][1] += cr[1];
+      nrm[idx][2] += cr[2];
+    });
+  }
+  return nrm.map((v) => {
+    const len = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / len, v[1] / len, v[2] / len];
+  });
+}
+
 function meshFrom(positions, uvs, indices, imageBin, jsonIn) {
-  const posBuf = packVecs(positions, 3);
-  const uvBuf = packVecs(uvs, 2);
+  const normals = computeNormals(positions, indices);
   const idxBuf = packU32(indices);
-  const parts = [idxBuf, posBuf, imageBin, uvBuf];
+  const posBuf = packVecs(positions, 3);
+  const nrmBuf = packVecs(normals, 3);
+  const imgBuf = pad4(imageBin, 0);
+  const uvBuf = packVecs(uvs, 2);
+  const parts = [idxBuf, posBuf, nrmBuf, imgBuf, uvBuf];
   const offsets = [];
   let off = 0;
   parts.forEach((p) => {
@@ -143,7 +170,8 @@ function meshFrom(positions, uvs, indices, imageBin, jsonIn) {
       posMax[k] = Math.max(posMax[k], p[k]);
     }
   });
-  const mat = jsonIn.materials[0];
+  const mat = retargetMaterial(JSON.parse(JSON.stringify(jsonIn.materials[0])), 0);
+  mat.doubleSided = true;
   const json = {
     asset: { version: "2.0", generator: "AABrowser-wheel-rig" },
     scene: 0,
@@ -152,25 +180,27 @@ function meshFrom(positions, uvs, indices, imageBin, jsonIn) {
     meshes: [{
       name: "mesh",
       primitives: [{
-        attributes: { POSITION: 1, TEXCOORD_0: 2 },
+        attributes: { POSITION: 1, NORMAL: 2, TEXCOORD_0: 3 },
         indices: 0,
         mode: 4,
         material: 0
       }]
     }],
-    materials: [JSON.parse(JSON.stringify(mat))],
-    images: [{ bufferView: 2, mimeType: jsonIn.images[0].mimeType || "image/png" }],
+    materials: [mat],
+    images: [{ bufferView: 3, mimeType: jsonIn.images[0].mimeType || "image/png" }],
     textures: [{ source: 0 }],
     accessors: [
       { componentType: 5125, type: "SCALAR", bufferView: 0, count: indices.length, max: [positions.length - 1], min: [0] },
       { componentType: 5126, type: "VEC3", bufferView: 1, count: positions.length, min: posMin, max: posMax },
-      { componentType: 5126, type: "VEC2", bufferView: 3, count: uvs.length }
+      { componentType: 5126, type: "VEC3", bufferView: 2, count: normals.length },
+      { componentType: 5126, type: "VEC2", bufferView: 4, count: uvs.length }
     ],
     bufferViews: [
       { buffer: 0, byteOffset: offsets[0], byteLength: idxBuf.length },
       { buffer: 0, byteOffset: offsets[1], byteLength: posBuf.length },
-      { buffer: 0, byteOffset: offsets[2], byteLength: imageBin.length },
-      { buffer: 0, byteOffset: offsets[3], byteLength: uvBuf.length }
+      { buffer: 0, byteOffset: offsets[2], byteLength: nrmBuf.length },
+      { buffer: 0, byteOffset: offsets[3], byteLength: imgBuf.length },
+      { buffer: 0, byteOffset: offsets[4], byteLength: uvBuf.length }
     ],
     buffers: [{ byteLength: bin.length }]
   };
@@ -393,12 +423,15 @@ function centerSpinAxis(positions) {
       max[k] = Math.max(max[k], p[k]);
     }
   });
-  const cy = (min[1] + max[1]) / 2;
-  const cz = (min[2] + max[2]) / 2;
+  const c = [
+    (min[0] + max[0]) / 2,
+    (min[1] + max[1]) / 2,
+    (min[2] + max[2]) / 2
+  ];
   return {
-    positions: positions.map((p) => [p[0], p[1] - cy, p[2] - cz]),
-    shift: [0, cy, cz],
-    radius: Math.max(...positions.map((p) => Math.hypot(p[1] - cy, p[2] - cz)))
+    positions: positions.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]),
+    shift: c,
+    radius: Math.max(...positions.map((p) => Math.hypot(p[1] - c[1], p[2] - c[2])))
   };
 }
 
