@@ -1413,6 +1413,15 @@
     return lastCarScale > 0.01 ? lastCarScale : carScaleForCamera();
   }
 
+  function mapsMatMul(a, b){
+    const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) m[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+    }
+    return m;
+  }
+
+  // Maps applies roll, then tilt, then heading → R = Rz(heading) · Ry(tilt) · Rx(roll).
   function mapsOrientationMatrix(o){
     const r = (Number(o.roll) || 0) * Math.PI / 180;
     const t = (Number(o.tilt) || 0) * Math.PI / 180;
@@ -1423,32 +1432,25 @@
     const rx = [[1, 0, 0], [0, cr, -sr], [0, sr, cr]];
     const ry = [[ct, 0, st], [0, 1, 0], [-st, 0, ct]];
     const rz = [[ch, -sh, 0], [sh, ch, 0], [0, 0, 1]];
-    const mul = (a, b) => {
-      const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) m[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
-      }
-      return m;
-    };
-    return mul(rx, mul(ry, rz));
+    return mapsMatMul(rz, mapsMatMul(ry, rx));
   }
 
   function matrixToMapsOrientation(M){
-    const st = clamp(M[0][2], -1, 1);
-    const tilt = Math.asin(st);
-    const ct = Math.cos(tilt);
+    const sy = clamp(-M[2][0], -1, 1);
+    const tilt = Math.asin(sy);
+    const cy = Math.cos(tilt);
     let heading, roll;
-    if (Math.abs(ct) > 1e-6) {
-      heading = Math.atan2(-M[0][1], M[0][0]);
-      roll = Math.atan2(-M[1][2], M[2][2]);
+    if (Math.abs(cy) > 1e-6) {
+      heading = Math.atan2(M[1][0], M[0][0]);
+      roll = Math.atan2(M[2][1], M[2][2]);
     } else {
-      heading = Math.atan2(M[1][0], M[1][1]);
+      heading = Math.atan2(-M[0][1], M[1][1]);
       roll = 0;
     }
     return {
       heading: normaliseHeading(heading * 180 / Math.PI),
-      tilt: tilt * 180 / Math.PI,
-      roll: roll * 180 / Math.PI
+      tilt: normaliseHeading(tilt * 180 / Math.PI),
+      roll: normaliseHeading(roll * 180 / Math.PI)
     };
   }
 
@@ -1460,17 +1462,20 @@
     while (prev - x > 180) x += 360;
     return x;
   }
+  function mapsRotZ(deg){
+    const a = (Number(deg) || 0) * Math.PI / 180;
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
+  }
   function wheelOrientation(heading){
-    const o = carOrientation(heading);
-    // Maps applies Rx(roll)*Ry(tilt)*Rz(heading). Rest pose is tilt 270 / roll 90
-    // with the hub axle on local +X. Adding spin to tilt or roll alone only matches
-    // that axle at one car heading and flaps on every other. The equivalent Euler
-    // that spins around the axle at every heading is:
-    const raw = {
-      heading: 90,
-      tilt: 270 + (Number(wheelSpinDeg) || 0),
-      roll: 180 - o.heading
-    };
+    const rest = carOrientation(heading);
+    const spin = Number(wheelSpinDeg) || 0;
+    // Hub axle in the wheel GLB is +X, but Maps' roll/tilt/heading rest pose
+    // (tilt 270, roll 90) puts that axle on local Z. Inspect screenshots: Rx/Ry
+    // lay the tyre on the road; Rz keeps the disc vertical at every heading.
+    const raw = Math.abs(spin) < 0.05
+      ? rest
+      : matrixToMapsOrientation(mapsMatMul(mapsOrientationMatrix(rest), mapsRotZ(spin)));
     const prev = wheelEulerWritten;
     if (!prev) return raw;
     return {
@@ -4761,36 +4766,60 @@
     return `<svg viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true">${inner}</svg>`;
   }
 
-  function laneGlyph(dir){
-    const d = String(dir || "through").toLowerCase();
-    if (d === "left" || d === "sharp_left") return "M30 40V18H14";
-    if (d === "slight_left" || d === "merge_to_left") return "M28 40V24L14 12";
-    if (d === "right" || d === "sharp_right") return "M18 40V18h16";
-    if (d === "slight_right" || d === "merge_to_right") return "M20 40V24L34 12";
-    if (d === "reverse") return "M22 40V24c0-4.5-3.2-8-7.5-8S7 19.5 7 24h5c0-1.7 1.4-3 3-3s3 1.3 3 3v16h4zM12 28L6 34l6 6V28z";
-    return "M16 6l11 13h-7v21h-8V19H5z";
+  function laneDirKey(dir){
+    const d = String(dir || "through").toLowerCase().replace(/-/g, "_");
+    if (d.includes("reverse") || d.includes("uturn")) return "reverse";
+    if (d.includes("slight") && d.includes("left")) return "slight_left";
+    if (d.includes("slight") && d.includes("right")) return "slight_right";
+    if (d.includes("merge") && d.includes("left")) return "slight_left";
+    if (d.includes("merge") && d.includes("right")) return "slight_right";
+    if (d.includes("left") || d.includes("west")) return "left";
+    if (d.includes("right") || d.includes("east")) return "right";
+    return "through";
   }
 
-  function dirToManeuver(dir){
-    const d = String(dir || "").toLowerCase();
-    if (d.includes("slight") && d.includes("left")) return "TURN_SLIGHT_LEFT";
-    if (d.includes("slight") && d.includes("right")) return "TURN_SLIGHT_RIGHT";
-    if (d.includes("left") || d.includes("west")) return "TURN_LEFT";
-    if (d.includes("right") || d.includes("east")) return "TURN_RIGHT";
-    if (d.includes("reverse") || d.includes("uturn")) return "UTURN_LEFT";
-    return "STRAIGHT";
+  function laneArrowHead(x, y, ux, uy){
+    const len = 7.2, w = 4.6;
+    const px = -uy, py = ux;
+    const tx = x + ux * len, ty = y + uy * len;
+    return `<path fill="currentColor" d="M${tx.toFixed(1)} ${ty.toFixed(1)}L${(x - px * w).toFixed(1)} ${(y - py * w).toFixed(1)}L${(x + px * w).toFixed(1)} ${(y + py * w).toFixed(1)}Z"/>`;
   }
 
   function laneColumnSvg(dirs){
-    const list = (dirs && dirs.length ? dirs : ["through"]).slice(0, 2);
-    const paths = list.map((dir, i) => {
-      const dual = list.length === 2;
-      const y = dual ? (i === 0 ? -8 : 8) : 0;
-      const inner = maneuverIconSvg(dirToManeuver(dir), 48).replace(/<\/?svg[^>]*>/g, "");
-      const scale = dual ? 0.82 : 1;
-      return `<g transform="translate(24 24) scale(${scale}) translate(-24 ${y - 24})">${inner}</g>`;
-    }).join("");
-    return `<svg viewBox="0 0 48 48" aria-hidden="true">${paths}</svg>`;
+    const order = ["left", "slight_left", "through", "slight_right", "right", "reverse"];
+    const keys = [...new Set((dirs && dirs.length ? dirs : ["through"]).map(laneDirKey))];
+    keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const set = new Set(keys.slice(0, 2));
+    const sw = 'fill="none" stroke="currentColor" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"';
+    const through = set.has("through");
+    const left = set.has("left") || set.has("slight_left");
+    const right = set.has("right") || set.has("slight_right");
+    const slightL = set.has("slight_left");
+    const slightR = set.has("slight_right");
+
+    if (set.has("reverse") && !through && !left && !right) {
+      return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="M20 44V24c0-4.4-3.1-8-7-8s-7 3.6-7 8H6v16"/>${laneArrowHead(6, 40, 0, 1)}</svg>`;
+    }
+
+    let d = "M16 46V28";
+    let heads = "";
+    if (through) {
+      d += "V14";
+      heads += laneArrowHead(16, 12.5, 0, -1);
+    }
+    if (left) {
+      d += slightL ? "M16 28L8 16" : "M16 28H7.5";
+      heads += slightL ? laneArrowHead(8, 16, -0.64, -0.77) : laneArrowHead(7.2, 28, -1, 0);
+    }
+    if (right) {
+      d += slightR ? "M16 28L24 16" : "M16 28h8.5";
+      heads += slightR ? laneArrowHead(24, 16, 0.64, -0.77) : laneArrowHead(24.8, 28, 1, 0);
+    }
+    if (!through && !left && !right) {
+      d = "M16 46V14";
+      heads = laneArrowHead(16, 12.5, 0, -1);
+    }
+    return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="${d}"/>${heads}</svg>`;
   }
 
   function geometryManeuverAt(metres){
