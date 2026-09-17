@@ -91,7 +91,7 @@ androidComponents {
         )
 
         val vNameStr = android.defaultConfig.versionName ?: "unknown"
-        val appNameStr = "AABrowser"
+        val appNameStr = "ImmersiveNav"
         val isDebug = variant.buildType == "debug"
         val debugSuffixStr = if (isDebug) "_debug" else ""
 

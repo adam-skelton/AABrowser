@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed (monochrome) launcher layer: single-colour silhouette of the 3D map tile,
+     two buildings, the route and the puck. The system applies the theme tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="52.5"
+        android:scaleX="1.1"
+        android:scaleY="1.1">
+        <!-- tile top rim -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M54,33L81.7,49L54,65L26.3,49Z M54,36.4L29.8,50.4L54,64.4L78.2,50.4Z" />
+        <!-- tile sides -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M26.3,49L54,65L54,71.5L26.3,55.5Z M54,65L81.7,49L81.7,55.5L54,71.5Z" />
+        <!-- hero building -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M66.1,26L72.2,29.5L72.2,47.5L66.1,51L60.1,47.5L60.1,29.5Z" />
+        <!-- second building -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M51.4,26.5L57.5,30L57.5,41L51.4,44.5L45.3,41L45.3,30Z" />
+        <!-- route -->
+        <path
+            android:pathData="M39.3,56.5L53.1,48.5L66.1,56"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeWidth="2.6" />
+        <!-- destination -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M63.3,56a2.8,2.8 0 1 1 5.6,0a2.8,2.8 0 1 1 -5.6,0z" />
+        <!-- puck -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M40.7,53.4a3.9,3.9 0 1 1 7.8,0a3.9,3.9 0 1 1 -7.8,0z" />
+    </group>
+</vector>

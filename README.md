@@ -1,4 +1,4 @@
-# <img src="https://github.com/user-attachments/assets/fa4252fa-b71e-4c87-9b93-d8ad832434cc" width="48" height="48" valign="bottom" /> AA Browser
+# <img src="https://github.com/user-attachments/assets/fa4252fa-b71e-4c87-9b93-d8ad832434cc" width="48" height="48" valign="bottom" /> Immersive Navigation
 
 [![Android](https://img.shields.io/badge/Android-15%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://www.android.com/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
@@ -56,7 +56,7 @@ To use this app, you must unlock the hidden Developer Settings.
 ## ❓ Troubleshooting
 
 **App not starting?**
-If the app fails to launch, try opening a non-Google Maps navigation app (such as **Waze**) first, then open AA Browser.
+If the app fails to launch, try opening a non-Google Maps navigation app (such as **Waze**) first, then open Immersive Navigation.
 
 ---
 
@@ -69,12 +69,12 @@ If the app fails to launch, try opening a non-Google Maps navigation app (such a
 
 ## 🤝 Contributors
 
-Every contribution makes AA Browser better!
+Every contribution makes Immersive Navigation better!
 
 - 🐛 **Found a bug?** Check for existing issues and open a new one with reproduction steps if none are found.
 - 💡 **Got an idea?** Start a discussion.
 - 🔧 **Wanna code?** Fork the repo and submit a PR!
-- 📸 **Show it off:** Share a photo of AA Browser on your dashboard in the Discussions tab!
+- 📸 **Show it off:** Share a photo of Immersive Navigation on your dashboard in the Discussions tab!
 
 <table width="100%">
   <tr>
@@ -124,7 +124,7 @@ I care about the app's growth, but I care about your privacy even more. This app
 
 ## ☕ Support a Student Developer
 
-If AA Browser makes your "car life" better, please consider a donation! As a student developer on a tight budget, your support covers daily expenses.
+If Immersive Navigation makes your "car life" better, please consider a donation! As a student developer on a tight budget, your support covers daily expenses.
 
 **Bitcoin (BTC):**
 `bc1qnpqpfq7e8pjtlqj7aa6x2y2c9ctnpts5u9lx7v`

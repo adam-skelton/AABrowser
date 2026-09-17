@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">AABrowser</string>
-    <string name="app_credit">AABrowser — by Kododake</string>
+    <string name="app_name">Immersive Nav</string>
+    <string name="app_credit">Immersive Navigation — by Kododake</string>
     <string name="author_name">Kododake</string>
-    <string name="menu_title">AABrowser</string>
+    <string name="menu_title">Immersive Navigation</string>
     <string name="menu_close">Close</string>
     <string name="menu_address_label">Address or search</string>
     
@@ -60,7 +60,7 @@
     
     <string name="settings_title">Settings</string>
     <string name="settings_user_agent">User agent</string>
-    <string name="settings_user_agent_description">Choose how AABrowser identifies itself when loading pages.</string>
+    <string name="settings_user_agent_description">Choose how Immersive Nav identifies itself when loading pages.</string>
     <string name="settings_user_agent_android">Android Chrome (default)</string>
     <string name="settings_user_agent_android_subtitle">Mobile: Android Chrome. Desktop mode uses Windows Chrome UA.</string>
     <string name="settings_user_agent_safari">Safari (iOS/macOS)</string>

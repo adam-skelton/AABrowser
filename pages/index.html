@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Google 3D Navigation</title>
+  <title>Immersive Navigation</title>
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#070b14; overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
     #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; background:radial-gradient(ellipse 85% 60% at 50% 36%, #3a5578 0%, #24364f 38%, #152033 68%, #0c121c 100%); gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     .gmaps-pin {position:relative; width:96px; height:128px; animation:gmapsBounce 1.1s ease-in-out infinite}
-    .gmaps-pin svg {width:96px; height:128px; display:block; overflow:visible; filter:drop-shadow(0 12px 14px rgba(0,0,0,.45)); shape-rendering:geometricPrecision}
-    .gmaps-pin::after {content:""; position:absolute; left:50%; top:34%; width:108px; height:108px; margin:-54px 0 0 -54px; border-radius:50%; background:rgba(66,133,244,.22); animation:gmapsRipple 1.4s ease-out infinite; z-index:-1}
-    .gmaps-shadow {width:48px; height:12px; border-radius:50%; background:rgba(0,0,0,.45); animation:gmapsShadow 1.1s ease-in-out infinite}
+    .gmaps-pin svg {width:96px; height:128px; display:block; overflow:visible; filter:drop-shadow(0 14px 16px rgba(0,0,0,.42)) drop-shadow(0 2px 3px rgba(0,0,0,.25)); shape-rendering:geometricPrecision}
+    .gmaps-pin::after {content:""; position:absolute; left:50%; top:34%; width:108px; height:108px; margin:-54px 0 0 -54px; border-radius:50%; background:radial-gradient(circle, rgba(66,133,244,.30) 0%, rgba(66,133,244,.18) 55%, rgba(66,133,244,0) 100%); animation:gmapsRipple 1.4s ease-out infinite; z-index:-1}
+    .gmaps-shadow {width:48px; height:12px; border-radius:50%; background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,.30) 55%, rgba(0,0,0,0) 100%); animation:gmapsShadow 1.1s ease-in-out infinite}
     .gmaps-status {color:#fff; font-weight:650; letter-spacing:.2px; font-size:15px; opacity:.88; max-width:70%; text-align:center}
     @keyframes gmapsBounce {0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
     @keyframes gmapsShadow {0%,100%{transform:scale(1); opacity:.35}50%{transform:scale(.72); opacity:.18}}
@@ -41,10 +41,11 @@
     #searchResults .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
     #searchResults button.search-hit {display:flex; align-items:center; gap:12px}
     #searchResults .search-hit-copy {min-width:0; flex:1}
-    #searchResults .search-ico {flex:0 0 auto; width:36px; height:36px; border-radius:10px; background:#E8F0FE; color:#1A73E8; display:flex; align-items:center; justify-content:center}
+    #searchResults .search-ico {flex:0 0 auto; width:36px; height:36px; border-radius:11px; background:#E8F0FE; color:#1A73E8; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(26,115,232,.15)}
     #searchResults .search-ico svg {width:20px; height:20px; display:block}
+    #searchResults .search-hit-copy > span:first-child {font-weight:700; letter-spacing:-.1px}
     #mapsBrowseBtn {width:48px; min-height:44px; padding:0; border-radius:12px; background:rgba(255,255,255,.96); color:#1A73E8; display:flex; align-items:center; justify-content:center}
-    #mapsBrowseBtn svg {width:22px; height:22px; display:block}
+    #mapsBrowseBtn svg {width:20px; height:26px; display:block; filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
     #exploreBack {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(12px,env(safe-area-inset-left))); width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     body.explore-mode #exploreBack {display:flex}
     body.explore-mode.has-route #exploreBack {display:none}
@@ -58,23 +59,39 @@
     body.car-inspect #carInspectClose {display:flex}
     html.aa-car.car-inspect #carInspectClose,body.aa-car.car-inspect #carInspectClose {top:12px; right:calc(var(--aa-inset-right) + 12px)}
     #carInspectClose svg {width:22px; height:22px; display:block}
-    #routeParking {display:none; margin-top:8px; width:100%; min-height:42px; border-radius:14px; background:#E8F0FE; color:#174EA6; box-shadow:none; align-items:center; gap:10px; text-align:left; padding:6px 10px}
+    #routeParking {display:none; margin-top:8px; width:100%; min-height:42px; border-radius:12px; background:#E8F0FE; color:#174EA6; box-shadow:inset 0 0 0 1px rgba(26,115,232,.14); align-items:center; gap:10px; text-align:left; padding:6px 8px 6px 7px; transition:background .15s ease}
+    #routeParking:active {background:#D2E3FC}
     #routeParking.visible {display:flex}
-    #routeParkingBadge {flex:0 0 auto; width:28px; height:28px; border-radius:50%; background:#1A73E8; color:#fff; font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:center}
-    #routeParkingCopy {flex:1; min-width:0; font-size:14px; font-weight:650; line-height:1.3}
-    #routeParkingChevron {flex:0 0 auto; width:20px; height:20px; color:#174EA6; opacity:.55; display:flex}
+    #routeParkingBadge {flex:0 0 auto; width:28px; height:28px; border-radius:7px; background:#1A73E8; color:#fff; font-size:15px; font-weight:800; line-height:1; letter-spacing:-.2px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(26,115,232,.35)}
+    #routeParkingCopy {flex:1; min-width:0; font-size:14px; font-weight:650; line-height:1.3; color:#174EA6}
+    #routeParkingChevron {flex:0 0 auto; width:20px; height:20px; color:#1A73E8; opacity:.7; display:flex}
     #routeParkingChevron svg {width:20px; height:20px; display:block}
     #parkDialog {display:none; position:absolute; inset:0; z-index:48; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto; padding:24px}
     #parkDialog.open {display:flex}
-    #parkDialogCard {position:relative; width:min(560px,92vw); max-height:min(70vh,520px); border-radius:20px; background:#F1F3F4; color:#202124; box-shadow:0 12px 40px rgba(0,0,0,.45); overflow:hidden; display:flex; flex-direction:column}
-    #parkDialogTitle {padding:16px 52px 8px 18px; font-size:18px; font-weight:750}
-    #parkDialogList {flex:1; min-height:0; overflow:auto; padding:0 10px 12px}
-    #parkDialogList button {display:block; width:100%; min-height:56px; border:0; border-radius:12px; box-shadow:none; text-align:left; padding:10px 12px; background:transparent; margin:0 0 2px}
+    #parkDialogCard {position:relative; width:min(560px,92vw); max-height:min(70vh,520px); border-radius:20px; background:#FFFFFF; color:#202124; box-shadow:0 2px 6px rgba(0,0,0,.18), 0 16px 48px rgba(0,0,0,.42); overflow:hidden; display:flex; flex-direction:column; -webkit-font-smoothing:antialiased}
+    #parkDialogTitle {padding:14px 56px 10px 16px; font-size:18px; font-weight:750; letter-spacing:-.2px; display:flex; align-items:center; gap:10px}
+    #parkDialogTitle::before {content:"P"; flex:0 0 auto; width:28px; height:28px; border-radius:7px; background:#1A73E8; color:#fff; font-size:15px; font-weight:800; line-height:1; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(26,115,232,.35)}
+    #parkDialogList {flex:1; min-height:0; overflow:auto; padding:2px 8px 10px}
+    #parkDialogList button {display:flex; align-items:center; gap:12px; width:100%; min-height:58px; border:0; border-radius:14px; box-shadow:none; text-align:left; padding:8px 12px 8px 8px; background:transparent; margin:0 0 2px; transition:background .12s ease}
+    #parkDialogList button:active {background:#F1F3F4; transform:none}
     #parkDialogList button.selected {background:#E8F0FE}
-    #parkDialogList .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
-    #parkDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#DADCE0; color:#202124; box-shadow:none; font-size:22px; line-height:1}
-    #routeSnippet {display:none; margin-top:8px; font-size:14px; font-weight:550; color:#3C4043; line-height:1.35; cursor:pointer}
-    #routeSnippet.visible {display:block}
+    #parkDialogList button.selected .park-ico {background:#1A73E8; color:#fff; box-shadow:0 1px 3px rgba(26,115,232,.35)}
+    #parkDialogList button.selected .park-name {color:#174EA6}
+    #parkDialogList .park-ico {flex:0 0 auto; width:40px; height:40px; border-radius:11px; background:#F1F3F4; color:#3C4043; display:flex; align-items:center; justify-content:center}
+    #parkDialogList .park-ico svg {width:22px; height:22px; display:block}
+    #parkDialogList .park-copy {flex:1; min-width:0}
+    #parkDialogList .park-name {display:block; font-size:15px; font-weight:700; letter-spacing:-.1px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    #parkDialogList .sub {display:block; font-size:13px; font-weight:500; color:#5F6368; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    #parkDialogList .park-walk {flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:1px; padding-left:6px; font-variant-numeric:tabular-nums}
+    #parkDialogList .park-walk b {font-size:15px; font-weight:750; color:#202124; letter-spacing:-.2px}
+    #parkDialogList button.selected .park-walk b {color:#174EA6}
+    #parkDialogList .park-walk span {font-size:11.5px; font-weight:600; color:#80868B; text-transform:uppercase; letter-spacing:.3px}
+    #parkDialogList .park-check {flex:0 0 auto; width:22px; height:22px; display:flex; visibility:hidden; color:#1A73E8}
+    #parkDialogList .park-check svg {width:22px; height:22px; display:block}
+    #parkDialogList button.selected .park-check {visibility:visible}
+    #parkDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; font-size:22px; line-height:1}
+    #routeSnippet {display:none; margin-top:6px; font-size:13px; font-weight:500; color:#5F6368; line-height:1.35; cursor:pointer; overflow:hidden; display:none; -webkit-line-clamp:2; -webkit-box-orient:vertical}
+    #routeSnippet.visible {display:-webkit-box}
     #descDialog {display:none; position:absolute; inset:0; z-index:48; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto; padding:24px}
     #descDialog.open {display:flex}
     #descDialogCard {position:relative; width:min(560px,92vw); max-height:min(70vh,520px); border-radius:20px; background:#F1F3F4; color:#202124; box-shadow:0 12px 40px rgba(0,0,0,.45); overflow:hidden; display:flex; flex-direction:column}
@@ -145,16 +162,18 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:100%; min-width:300px; min-height:76px; padding:0 18px 0 6px; border-radius:38px; background:#2E3134; color:#fff; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); pointer-events:auto; box-sizing:border-box; flex:0 0 300px; transform:translateX(22px)}
-    html.aa-split #navEtaBar,body.aa-split #navEtaBar {width:auto; min-width:0; flex:0 0 auto; padding-right:16px}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:300px; max-width:100%; min-width:300px; min-height:76px; padding:0 20px 0 8px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; gap:12px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 300px; transform:translateX(22px); -webkit-font-smoothing:antialiased}
+    html.aa-split #navEtaBar,body.aa-split #navEtaBar {width:auto; min-width:0; flex:0 0 auto; padding-right:22px}
     #navEtaBar.visible {display:flex !important}
-    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:transparent; color:#fff; box-shadow:none; font-size:28px; line-height:1; font-weight:400; flex:0 0 auto}
-    #navEtaCopy {flex:1; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:18px; font-weight:650; letter-spacing:-.2px}
-    html.aa-split #navEtaCopy,body.aa-split #navEtaCopy {justify-content:flex-start; gap:8px}
-    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-    #navEtaSep {display:none; flex:0 0 auto; opacity:.9; font-weight:700; line-height:1}
-    html.aa-split #navEtaSep.visible,body.aa-split #navEtaSep.visible {display:inline-flex; align-items:center}
-    #navEtaClock {flex:0 0 auto; opacity:.95}
+    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
+    #navExit:active {background:rgba(255,255,255,.18); transform:none}
+    #navExit svg {width:20px; height:20px; display:block}
+    #navEtaCopy {flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:2px}
+    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:22px; font-weight:800; letter-spacing:-.4px; line-height:1.05; color:#81C995; font-variant-numeric:tabular-nums}
+    #navEtaMeta {display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; font-size:14px; font-weight:600; line-height:1.2; color:rgba(255,255,255,.74); font-variant-numeric:tabular-nums}
+    #navEtaSep {display:none; flex:0 0 auto; opacity:.55; font-weight:700; line-height:1}
+    #navEtaSep.visible {display:inline}
+    #navEtaDist,#navEtaClock {flex:0 0 auto}
     #compassBtn {display:none !important; position:absolute; left:max(16px,env(safe-area-inset-left)); bottom:max(108px,calc(env(safe-area-inset-bottom) + 88px)); z-index:32; width:64px; height:64px; min-height:64px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
     #compassBtn.visible {display:none !important}
     #compassBtn svg {width:38px; height:38px; display:block}
@@ -203,7 +222,7 @@
     #viewSpecPanel button {min-height:26px; width:26px; padding:0; background:#2E3134; color:#fff; box-shadow:none; font-size:15px; font-weight:700; border-radius:8px}
     #viewSpecPanel .spec-zoom {display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:4px; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.12)}
     #viewSpecPanel .spec-zoom span {text-align:center; font-size:11px; font-weight:700}
-    #routeCard {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(300px,calc(100vw - 140px)); max-height:75vh; overflow-x:hidden; overflow-y:auto; padding:8px 12px 12px; border-radius:16px; background:#F1F3F4; color:#202124; box-shadow:0 8px 28px rgba(0,0,0,.35); pointer-events:auto; user-select:none; box-sizing:border-box; transition:opacity .18s ease, transform .18s ease}
+    #routeCard {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(10px,env(safe-area-inset-left))); width:min(300px,calc(100vw - 140px)); max-height:75vh; overflow-x:hidden; overflow-y:auto; padding:8px 12px 12px; border-radius:18px; background:#FFFFFF; color:#202124; box-shadow:0 1px 2px rgba(0,0,0,.14), 0 10px 32px rgba(0,0,0,.30); pointer-events:auto; user-select:none; box-sizing:border-box; transition:opacity .18s ease, transform .18s ease; -webkit-font-smoothing:antialiased}
     html.aa-car #routeCard,body.aa-car #routeCard {top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top)))}
     html.aa-car.view-specs #routeCard,body.aa-car.view-specs #routeCard {left:calc(var(--aa-inset-left) + max(190px,env(safe-area-inset-left) + 178px))}
     body.has-route:not(.navigating) #routeCard {display:block}
@@ -214,30 +233,37 @@
     #routePhoto {-webkit-user-drag:none; user-select:none}
     #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 4px}
     #routeCardHeadSpacer {flex:1}
-    #routeBack,#routeClose {width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:transparent; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center}
-    #routeBack svg,#routeClose svg {width:20px; height:20px; display:block}
-    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:6px; align-items:center}
+    #routeBack,#routeClose {width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center; transition:background .15s ease}
+    #routeBack:active,#routeClose:active {background:#E8EAED; transform:none}
+    #routeBack svg,#routeClose svg {width:18px; height:18px; display:block}
+    #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:center}
     #routePlace.has-photo {grid-template-columns:64px minmax(0,1fr)}
-    #routePhoto {width:64px; height:64px; border-radius:10px; object-fit:cover; background:#DADCE0}
+    #routePhoto {width:64px; height:64px; border-radius:12px; object-fit:cover; background:#E8EAED; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
     #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; cursor:pointer}
-    #routeTitle {margin:0; flex:1; min-width:0; font-size:15px; font-weight:700; letter-spacing:-.3px; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
-    #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#80868B; display:flex}
+    #routeTitle {margin:0; flex:1; min-width:0; font-size:16px; font-weight:700; letter-spacing:-.25px; line-height:1.2; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
+    #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#9AA0A6; display:flex}
     #routeTitleChevron svg {width:22px; height:22px; display:block}
-    #routeRating {margin-top:4px; font-size:14px; font-weight:600; color:#5F6368}
-    #routeRating .star {color:#F9AB00; margin-right:3px}
-    #routeHours {margin-top:3px; font-size:14px; font-weight:650; color:#E8710A; line-height:1.25}
-    #routeHours.soon {color:#E8710A}
-    #routeHours.closed {color:#D93025}
-    #routeHours.open24 {color:#188038}
-    #routeTime {margin-top:6px; font-size:18px; font-weight:750; letter-spacing:-.4px; line-height:1.1; color:#188038}
-    #routeStats {margin-top:2px; font-size:14px; font-weight:550; color:#3C4043; opacity:1}
-    #routeSub {margin-top:3px; font-size:13px; font-weight:600; color:#5F6368}
+    #routeRating {margin-top:3px; display:flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:#5F6368; font-variant-numeric:tabular-nums}
+    #routeRating .rating-num {color:#3C4043; font-weight:700}
+    #routeRating .star {color:#F9AB00; font-size:13px; line-height:1; margin:0 1px 1px 0}
+    #routeRating .rating-count {color:#80868B; font-weight:500}
+    #routeHours {margin-top:3px; font-size:13px; font-weight:600; color:#5F6368; line-height:1.3; display:flex; align-items:center; gap:6px}
+    #routeHours::before {content:""; flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:#188038; box-shadow:0 0 0 2px rgba(24,128,56,.16)}
+    #routeHours .hours-state {font-weight:700; color:#188038}
+    #routeHours.soon::before {background:#E8710A; box-shadow:0 0 0 2px rgba(232,113,10,.16)}
+    #routeHours.soon .hours-state {color:#E8710A}
+    #routeHours.closed::before {background:#D93025; box-shadow:0 0 0 2px rgba(217,48,37,.16)}
+    #routeHours.closed .hours-state {color:#D93025}
+    #routeTime {margin-top:7px; padding-top:7px; border-top:1px solid rgba(0,0,0,.08); font-size:20px; font-weight:800; letter-spacing:-.5px; line-height:1.1; color:#188038; font-variant-numeric:tabular-nums}
+    #routeStats {margin-top:2px; font-size:14px; font-weight:550; color:#5F6368; opacity:1; font-variant-numeric:tabular-nums}
+    #routeSub {margin-top:3px; font-size:13px; font-weight:650; color:#5F6368}
     #routeSub:empty {display:none}
     #routeSub.traffic-delay {color:#E8710A}
-    #routeGo {position:relative; overflow:hidden; margin-top:8px; width:100%; min-height:40px; border-radius:20px; background:#12756C; color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
+    #routeGo {position:relative; overflow:hidden; margin-top:8px; width:100%; min-height:40px; border-radius:20px; background:#1A73E8; color:#fff; box-shadow:0 2px 8px rgba(26,115,232,.32); display:flex; align-items:center; justify-content:center; transition:background .15s ease, box-shadow .15s ease}
+    #routeGo:active {background:#1967D2; box-shadow:0 1px 4px rgba(26,115,232,.32)}
     #routeGoProgress {position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(255,255,255,.28); transform:scaleX(var(--go-p, 0)); transform-origin:left center}
     #routeGo.counting #routeGoProgress {opacity:1}
-    #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:16px; font-weight:700}
+    #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:16px; font-weight:700; letter-spacing:.1px}
     #routeGoLabel svg {width:18px; height:18px; display:block}
     #status {display:none}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
@@ -293,18 +319,28 @@
   <div id="map"></div>
   <div id="mapLoader" aria-live="polite">
     <div class="gmaps-pin" aria-hidden="true">
-      <svg viewBox="0 0 96 128" xmlns="http://www.w3.org/2000/svg">
+      <!-- Google Maps pin: official 2020 geometry (five flat colour facets with a hollow centre). -->
+      <svg viewBox="-2 -2 96.3 136.3" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <clipPath id="gmapsDrop">
-            <path d="M48 6c18.8 0 34 15.5 34 36.2C82 67.4 48 122 48 122S14 67.4 14 42.2C14 21.5 29.2 6 48 6z"/>
-          </clipPath>
+          <linearGradient id="gmapsSheen" x1="0" y1="0" x2="0.35" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".22"/>
+            <stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="1" stop-color="#000" stop-opacity=".10"/>
+          </linearGradient>
         </defs>
-        <g clip-path="url(#gmapsDrop)" shape-rendering="geometricPrecision">
-          <path fill="#EA4335" stroke="#EA4335" stroke-width="1.2" d="M48 6C31.4 6 17.6 17.6 15 33.2L48 42.2V6z"/>
-          <path fill="#FBBC05" stroke="#FBBC05" stroke-width="1.2" d="M15 33.2C14.3 36 14 39.1 14 42.2 14 58.6 26.2 82.2 48 122V42.2L15 33.2z"/>
-          <path fill="#34A853" stroke="#34A853" stroke-width="1.2" d="M48 42.2V122c21.8-39.8 34-63.4 34-79.8 0-3.1-.3-6.2-1-9L48 42.2z"/>
-          <path fill="#4285F4" stroke="#4285F4" stroke-width="1.2" d="M48 6v36.2l33 9C78.4 17.6 64.6 6 48 6z"/>
-          <circle cx="48" cy="42.2" r="15.2" fill="#fff"/>
+        <g shape-rendering="geometricPrecision">
+          <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+          <path fill="#EA4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+          <path fill="#4285F4" d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3"/>
+          <path fill="#FBBC04" d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3"/>
+          <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
+          <g fill="url(#gmapsSheen)">
+            <path d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+            <path d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+            <path d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3"/>
+            <path d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3"/>
+            <path d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
+          </g>
         </g>
       </svg>
     </div>
@@ -324,7 +360,13 @@
       <div id="searchHost"></div>
       <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
       <button id="mapsBrowseBtn" type="button" aria-label="Maps">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+        <svg viewBox="-4 -4 100.3 140.3" aria-hidden="true">
+          <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+          <path fill="#EA4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+          <path fill="#4285F4" d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3"/>
+          <path fill="#FBBC04" d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3"/>
+          <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
+        </svg>
       </button>
     </div>
     <div id="searchResults" hidden></div>
@@ -475,7 +517,7 @@
     <button id="routeGo" type="button">
       <span id="routeGoProgress" aria-hidden="true"></span>
       <span id="routeGoLabel">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3l8 8h-5v11H9V11H4z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.5L4.6 20.2l.8.8L12 18l6.6 3 .8-.8z"/></svg>
         Start
       </span>
     </button>
@@ -505,11 +547,16 @@
   <div id="speedLimitBadge" aria-live="polite"></div>
   <div id="navBottomCluster">
     <div id="navEtaBar" hidden>
-      <button type="button" id="navExit" aria-label="Stop navigation">&times;</button>
+      <button type="button" id="navExit" aria-label="Stop navigation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+      </button>
       <div id="navEtaCopy">
         <span id="navEtaRemain"></span>
-        <span id="navEtaSep" hidden aria-hidden="true">·</span>
-        <span id="navEtaClock"></span>
+        <span id="navEtaMeta">
+          <span id="navEtaDist"></span>
+          <span id="navEtaSep" hidden aria-hidden="true">·</span>
+          <span id="navEtaClock"></span>
+        </span>
       </div>
     </div>
   </div>
@@ -929,6 +976,7 @@
   const EXPLORE_OVERVIEW_MS = 900;
   let carInspect = null;
   let startCountdown = null;
+  let startHeldByUser = false;
 
   function setMessage(text){ messageEl.textContent = text; }
 
@@ -1656,6 +1704,31 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
   }
 
+  // Material glyphs (24x24) for the browse catalog and the matching explore pins on the map.
+  const CATALOG_ICON_PATHS = {
+    custom: "M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM10 5.47l4 1.4v11.66l-4-1.4V5.47zm-5 .99l3-1.01v11.7l-3 1.16V6.46zm14 11.08l-3 1.01V6.86l3-1.16v11.84z",
+    gas_station: "M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z",
+    restaurant: "M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z",
+    cafe: "M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM2 21h18v-2H2v2z",
+    supermarket: "M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1.003 1.003 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z",
+    parking: "M13 3H6v18h4v-6h3c3.31 0 6-2.69 6-6s-2.69-6-6-6zm.2 8H10V7h3.2c1.1 0 2 .9 2 2s-.9 2-2 2z",
+    pharmacy: "M21 5h-2.64l1.14-3.14L17.15 1l-1.46 4H3v2l2 6-2 6v2h18v-2l-2-6 2-6V5zm-5 9h-3v3h-2v-3H8v-2h3V9h2v3h3v2z",
+    atm: "M11 17h2v-1h1c.55 0 1-.45 1-1v-3c0-.55-.45-1-1-1h-3v-1h4V8h-2V7h-2v1h-1c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1h3v1H9v2h2v1zm9-13H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4V6h16v12z",
+    hospital: "M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z",
+    lodging: "M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"
+  };
+
+  function catalogIconFor(placeId){
+    const id = String(placeId || "").replace(/^__map:/, "");
+    return CATALOG_ICON_PATHS[id] ? id : "";
+  }
+
+  function catalogIconSvg(id){
+    const d = CATALOG_ICON_PATHS[id];
+    if (!d) return mapsPinSvg();
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + d + '"/></svg>';
+  }
+
   function renderSearchDropdown(items){
     const box = document.getElementById("searchResults");
     if (!box) return;
@@ -1677,9 +1750,10 @@
         ico.className = "search-ico";
         if (item.color) {
           ico.style.color = item.color;
-          ico.style.background = item.color + "24";
+          ico.style.background = item.color + "1F";
+          ico.style.boxShadow = "inset 0 0 0 1px " + item.color + "26";
         }
-        ico.innerHTML = mapsPinSvg();
+        ico.innerHTML = catalogIconSvg(catalogIconFor(item.placeId));
         button.append(ico);
       }
       const copy = document.createElement(isMaps ? "span" : "span");
@@ -1999,12 +2073,13 @@
     const fill = place.color || place.iconBg || "#1A73E8";
     const glyph = place.kind === "parking" ? "parking" : (place.glyph || "pin");
     const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    const pinGlyph = glyph === "parking"
-      ? '<circle cx="18" cy="17" r="7" fill="#fff"/><text x="18" y="21.2" text-anchor="middle" fill="' + fill + '" font-size="11" font-weight="800" font-family="system-ui,Segoe UI,sans-serif">P</text>'
+    const categoryPath = CATALOG_ICON_PATHS[glyph];
+    const pinGlyph = categoryPath
+      ? '<path fill="#fff" transform="translate(10.6 9.6) scale(.62)" d="' + categoryPath + '"/>'
       : glyph === "tick"
         ? '<circle cx="18" cy="17" r="8.2" fill="#fff"/><path fill="none" stroke="' + fill + '" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" d="M11.4 17.5l4.4 4.6 9.6-9.8"/>'
         : '<circle cx="18" cy="17" r="6.2" fill="#fff"/>';
-    const pin = '<g transform="translate(PINX,PINY) scale(.86)"><path fill="' + fill + '" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' + pinGlyph + "</g>";
+    const pin = '<g transform="translate(PINX,PINY) scale(.86)"><path fill="' + fill + '" stroke="#fff" stroke-width="1.6" d="M18 2c8.3 0 15 6.6 15 14.7C33 28.2 18 46 18 46S3 28.2 3 16.7C3 8.6 9.7 2 18 2z"/>' + pinGlyph + "</g>";
     if (!showLabel || !escaped) {
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="42" viewBox="0 0 36 42">' +
         pin.replace("PINX", "2.5").replace("PINY", "1") + "</svg>";
@@ -2133,6 +2208,7 @@
       return Object.assign(snap, {
         id: snap.placeId || ("poi-" + index),
         color: entry.color,
+        glyph: CATALOG_ICON_PATHS[entry.id] ? entry.id : "pin",
         iconHref: "",
         description: snap.address || "",
         snippet: snippetOf(snap.address || "", 110)
@@ -2523,8 +2599,9 @@
   function parkingPinDataUrl(){
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">' +
-      '<circle cx="20" cy="20" r="18" fill="#1A73E8" stroke="#fff" stroke-width="2"/>' +
-      '<text x="20" y="26" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="system-ui,Segoe UI,sans-serif">P</text>' +
+      '<circle cx="20" cy="21" r="17.5" fill="rgba(0,0,0,.22)"/>' +
+      '<circle cx="20" cy="20" r="17.5" fill="#1A73E8" stroke="#fff" stroke-width="2.4"/>' +
+      '<path fill="#fff" transform="translate(9.2 9.2) scale(.9)" d="' + CATALOG_ICON_PATHS.parking + '"/>' +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
@@ -3164,6 +3241,7 @@
   }
 
   function setSelectedParking(lot, dest, opts){
+    if (opts && opts.frame) holdStartCountdown();
     const target = dest || activeDestination;
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
@@ -3197,7 +3275,6 @@
       if (id !== routeGen || isNavigating()) return;
       adoptRoute(route, path, intervals, dest, false, null);
       drawParkingWalk(lot, dest);
-      maybeStartRouteCountdown();
     } catch (err) {
       console.warn("Parking reroute failed", err);
     }
@@ -3222,7 +3299,20 @@
     overlay.classList.remove("open");
   }
 
+  // Row glyphs for the parking chooser: kerb-side street bays, a multi-storey building, or a surface lot.
+  function parkingKindSvg(kind){
+    const k = String(kind || "").toLowerCase();
+    if (k === "street") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.2 20L7.6 4h2.2L6.4 20zm13.4 0L14.2 4h2.2L19.8 20zM11.1 4h1.8v3.4h-1.8zm0 6.2h1.8v3.6h-1.8zm0 6.4h1.8V20h-1.8z"/></svg>';
+    }
+    if (k === "building") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 3H6v18h4v-6h3c3.31 0 6-2.69 6-6s-2.69-6-6-6zm.2 8H10V7h3.2c1.1 0 2 .9 2 2s-.9 2-2 2z"/></svg>';
+  }
+
   function openParkingOptions(){
+    holdStartCountdown();
     const overlay = document.getElementById("parkDialog");
     const list = document.getElementById("parkDialogList");
     if (!overlay || !list) return;
@@ -3238,18 +3328,41 @@
         const btn = document.createElement("button");
         btn.type = "button";
         if (parkingNear.selected && parkingNear.selected.id === lot.id) btn.className = "selected";
+        const ico = document.createElement("span");
+        ico.className = "park-ico";
+        ico.innerHTML = parkingKindSvg(lot.parkKind || (lot.parking && lot.parking.type));
+        btn.append(ico);
+        const copy = document.createElement("span");
+        copy.className = "park-copy";
         const title = document.createElement("span");
+        title.className = "park-name";
         title.textContent = lot.name;
-        btn.append(title);
-        if (lot.parking && lot.parking.line) {
+        copy.append(title);
+        const hasWalk = Number.isFinite(lot.walkM);
+        const line = (lot.parking && lot.parking.line) ? String(lot.parking.line) : "";
+        // The walk distance gets its own column, so drop it from the detail line.
+        const meta = hasWalk ? line.replace(/^[^·]*\bwalk\b\s*(·\s*)?/, "") : line;
+        if (meta) {
           const sub = document.createElement("span");
           sub.className = "sub";
-          sub.textContent = lot.parking.line;
-          btn.append(sub);
+          sub.textContent = meta;
+          copy.append(sub);
         }
+        btn.append(copy);
+        if (hasWalk) {
+          const walk = document.createElement("span");
+          walk.className = "park-walk";
+          walk.innerHTML = "<b>" + escapeHtml(formatDistance(lot.walkM)) + "</b><span>walk</span>";
+          btn.append(walk);
+        }
+        const check = document.createElement("span");
+        check.className = "park-check";
+        check.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.2l3 3 6-6.4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        btn.append(check);
         btn.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
+          holdStartCountdown();
           setSelectedParking(lot, activeDestination, { frame: true });
           closeParkingDialog();
         });
@@ -4129,6 +4242,7 @@
 
     try {
       const noCard = !!(opts && opts.noCard);
+      if (!noCard) armStartCountdown();
       setSuppressRouteCard(noCard);
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
@@ -5132,21 +5246,19 @@
     const remainMs = total > 0 && durationMs > 0 ? remainM / total * durationMs : remainM / Math.max(speedKalman.speed, 8) * 1000;
     const eta = new Date(Date.now() + remainMs);
     const remainEl = document.getElementById("navEtaRemain");
+    const etaDistEl = document.getElementById("navEtaDist");
     const clockEl = document.getElementById("navEtaClock");
     const etaBar = document.getElementById("navEtaBar");
     if (etaBar) {
       etaBar.hidden = false;
       etaBar.classList.add("visible");
     }
-    if (remainEl) {
-      remainEl.textContent = isSplitView()
-        ? formatDuration(remainMs)
-        : `${formatDuration(remainMs)} · ${formatDistance(remainM)}`;
-    }
+    if (remainEl) remainEl.textContent = formatDuration(remainMs);
+    if (etaDistEl) etaDistEl.textContent = formatDistance(remainM);
     if (clockEl) clockEl.textContent = formatTime(eta);
     const sepEl = document.getElementById("navEtaSep");
     if (sepEl) {
-      const showSep = isSplitView() && !!(remainEl && remainEl.textContent) && !!(clockEl && clockEl.textContent);
+      const showSep = !!(etaDistEl && etaDistEl.textContent) && !!(clockEl && clockEl.textContent);
       sepEl.hidden = !showSep;
       sepEl.classList.toggle("visible", showSep);
     }
@@ -5604,13 +5716,33 @@
     syncCarLod();
   }
 
+  function escapeHtml(text){
+    return String(text == null ? "" : text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // "Open · Closes at 17:00" style status: a bold state word followed by the detail in grey.
+  function hoursStatusHtml(hours){
+    const text = String((hours && hours.text) || "");
+    const kind = String((hours && hours.kind) || "");
+    let state = "", detail = text;
+    if (kind === "open24") { state = "Open 24 hours"; detail = ""; }
+    else if (kind === "open") { state = "Open"; }
+    else if (kind === "soon") { state = "Closing soon"; }
+    else if (kind === "closed") {
+      if (/^Opens/i.test(text)) state = "Closed";
+      else { state = text; detail = ""; }
+    }
+    if (!state) return escapeHtml(text);
+    return `<span class="hours-state">${escapeHtml(state)}</span>` + (detail ? `<span class="hours-detail">· ${escapeHtml(detail)}</span>` : "");
+  }
+
   function fillRouteCardExtras(dest){
     const rating = dest && dest.rating;
     if (routeRatingEl) {
       if (rating) {
         const count = dest.userRatingCount;
-        const countText = count ? ` (${count.toLocaleString("en-NZ")})` : "";
-        routeRatingEl.innerHTML = `<span class="star">★</span> ${rating.toFixed(1)}${countText}`;
+        const countText = count ? `<span class="rating-count">(${count.toLocaleString("en-NZ")})</span>` : "";
+        routeRatingEl.innerHTML = `<span class="rating-num">${rating.toFixed(1)}</span><span class="star">★</span>${countText}`;
         routeRatingEl.hidden = false;
       } else {
         routeRatingEl.textContent = "";
@@ -5620,7 +5752,7 @@
     const hours = dest && dest.hours;
     if (routeHoursEl) {
       if (hours && hours.text) {
-        routeHoursEl.textContent = hours.text;
+        routeHoursEl.innerHTML = hoursStatusHtml(hours);
         routeHoursEl.className = hours.kind || "";
         routeHoursEl.hidden = false;
       } else {
@@ -5670,6 +5802,7 @@
     if (!activeRoutePath || activeRoutePath.length < 2) return;
     if (explore.mode) exitExploreMode();
     const fromPreview = !!destPreview;
+    armStartCountdown();
     cancelStartCountdown();
     stopDestPreview();
     stopCarInspect();
@@ -5708,6 +5841,7 @@
     stopDemo();
     removeRouteLines();
     flyover = null;
+    armStartCountdown();
     cancelStartCountdown();
     stopDestPreview();
     stopCarInspect();
@@ -6979,7 +7113,7 @@
   }
 
   function startStartCountdown(){
-    if (!routeGoEl || explore.mode) return;
+    if (!routeGoEl || explore.mode || startHeldByUser) return;
     if (isNavigating()) return;
     startCountdown = {
       startMs: performance.now() + START_COUNTDOWN_IGNORE_MS,
@@ -6991,7 +7125,7 @@
   }
 
   function maybeStartRouteCountdown(){
-    if (explore.mode || isNavigating()) return;
+    if (startHeldByUser || explore.mode || isNavigating()) return;
     if (document.body.classList.contains("suppress-route-card")) return;
     if (!document.body.classList.contains("has-route")) return;
     if (!activeRoutePath || activeRoutePath.length < 2) return;
@@ -7005,8 +7139,21 @@
     if (routeGoEl) routeGoEl.classList.remove("counting");
   }
 
+  // User is inspecting the card / parking / map: keep Start idle until they tap it.
+  function holdStartCountdown(){
+    startHeldByUser = true;
+    cancelStartCountdown();
+  }
+
+  function armStartCountdown(){
+    startHeldByUser = false;
+  }
+
   function tickStartCountdown(now){
-    if (!startCountdown) return;
+    if (!startCountdown || startHeldByUser) {
+      if (startHeldByUser && startCountdown) cancelStartCountdown();
+      return;
+    }
     if (now < startCountdown.startMs) {
       setGoProgress(0);
       if (routeGoEl) routeGoEl.classList.add("counting");
@@ -7459,7 +7606,7 @@
     following = !following;
     autoRefollowArmed = false; // an explicit toggle is not a pan: no timed re-attach
     if (following) {
-      cancelStartCountdown();
+      holdStartCountdown();
       stopDestPreview();
     } else flyover = null;
     document.getElementById("followBtn").textContent = `Following: ${following ? "ON" : "OFF"}`;
@@ -8661,7 +8808,7 @@
 
   function markUserPanned(fromTouch){
     flyover = null;
-    cancelStartCountdown();
+    holdStartCountdown();
     stopDestPreview();
     stopCarInspect();
     if (fromTouch) {
@@ -9213,7 +9360,7 @@
   }
   function releaseMapFromRoutePreview(){
     if (!document.body.classList.contains("has-route") || document.body.classList.contains("navigating")) return;
-    cancelStartCountdown();
+    holdStartCountdown();
     stopDestPreview();
     stowRouteCard();
     if (following) {
@@ -9224,8 +9371,15 @@
     }
     updateRecenterButton();
   }
+  function isPreviewUiTarget(target){
+    return !!(target && target.closest && target.closest("#routeCard, #parkDialog, #descDialog"));
+  }
+
   window.addEventListener("pointerdown", event => {
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
+    if (isPreviewUiTarget(event.target) && !(event.target.closest && event.target.closest("#routeGo, #routeBack, #routeClose"))) {
+      holdStartCountdown();
+    }
     if (isChromeUiTarget(event.target)) {
       mapDragStart = null;
       return;
@@ -9234,7 +9388,7 @@
       mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
       return;
     }
-    if (startCountdown) cancelStartCountdown();
+    holdStartCountdown();
     closeAaSearchBar();
     if (flyover && isNavigating()) {
       skipNavFlyover();
@@ -9514,8 +9668,12 @@
       thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 28);
     }
     if (eta) { eta.hidden = false; eta.classList.add("visible"); }
-    if (remainEl) remainEl.textContent = "14 min · 3.9 km";
+    if (remainEl) remainEl.textContent = "14 min";
+    const etaDistEl = document.getElementById("navEtaDist");
+    if (etaDistEl) etaDistEl.textContent = "3.9 km";
     if (clockEl) clockEl.textContent = "5:31 pm";
+    const sepEl = document.getElementById("navEtaSep");
+    if (sepEl) { sepEl.hidden = false; sepEl.classList.add("visible"); }
     const speed = document.getElementById("speedLimitBadge");
     if (speed) {
       speed.textContent = "50";
