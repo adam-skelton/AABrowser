@@ -5511,36 +5511,33 @@
     if (!turnCue.ctx) {
       try { turnCue.ctx = new AC(); } catch (err) { return null; }
     }
-    if (turnCue.ctx.state === "suspended") {
-      try { turnCue.ctx.resume(); } catch (err) {}
+    const ctx = turnCue.ctx;
+    if (ctx.state === "suspended" || ctx.state === "interrupted") {
+      try {
+        const pending = ctx.resume();
+        if (pending && typeof pending.catch === "function") pending.catch(() => {});
+      } catch (err) {}
     }
-    try { if (turnCue.ctx.destination.channelCount > 1) turnCue.ctx.destination.channelCount = 2; } catch (err) {}
-    return turnCue.ctx;
+    return ctx;
   }
 
   function connectCueToSpeakers(ctx, node, side){
-    const stereo = (ctx.destination.channelCount || 2) > 1;
-    if (!stereo || side === "both") {
-      node.connect(ctx.destination);
-      return;
-    }
-    const merger = ctx.createChannelMerger(2);
-    const mute = ctx.createGain();
-    mute.gain.value = 0;
-    node.connect(mute);
-    if (side === "left") {
-      node.connect(merger, 0, 0);
-      mute.connect(merger, 0, 1);
-    } else {
-      mute.connect(merger, 0, 0);
-      node.connect(merger, 0, 1);
-    }
-    merger.connect(ctx.destination);
+    // A channel merger rejects this gain node (it is not mono) and the cue throws
+    // before it starts. That silenced every left/right turn. Pan instead, and if
+    // that is unavailable play the chime on both speakers rather than dropping it.
+    try {
+      if (side !== "both" && typeof ctx.createStereoPanner === "function") {
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = side === "left" ? -1 : 1;
+        node.connect(panner);
+        panner.connect(ctx.destination);
+        return;
+      }
+    } catch (err) {}
+    try { node.connect(ctx.destination); } catch (err) {}
   }
 
-  function playTurnCue(side){
-    const ctx = resumeNavAudio();
-    if (!ctx) return;
+  function startTurnCueGraph(ctx, side){
     const t0 = ctx.currentTime + 0.02;
     const notes = [370, 494];
     for (let i = 0; i < notes.length; i++) {
@@ -5573,6 +5570,39 @@
       osc.stop(start + dur + 0.02);
       over.stop(start + dur + 0.02);
     }
+  }
+
+  function playTurnCue(side){
+    const which = side === "left" || side === "right" ? side : "both";
+    try {
+      if (window.Car && typeof Car.playNavChime === "function") {
+        Car.playNavChime(which);
+        return;
+      }
+    } catch (err) {
+      console.warn("Native turn cue failed", err);
+    }
+    const ctx = resumeNavAudio();
+    if (!ctx) return;
+    const run = () => {
+      try { startTurnCueGraph(ctx, side || "both"); } catch (err) { console.warn("Turn cue failed", err); }
+    };
+    if (ctx.state === "running") {
+      run();
+      return;
+    }
+    let done = false;
+    const once = () => {
+      if (done || ctx.state !== "running") return;
+      done = true;
+      try { ctx.removeEventListener("statechange", once); } catch (err) {}
+      run();
+    };
+    try {
+      const pending = ctx.resume();
+      if (pending && typeof pending.then === "function") pending.then(once).catch(() => {});
+    } catch (err) {}
+    ctx.addEventListener("statechange", once);
   }
 
   function signedTurnDeg(fromBearing, toBearing){

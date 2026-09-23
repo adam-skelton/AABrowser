@@ -68,7 +68,8 @@ class CarWebViewHost(
         },
         notifyBootPainted = { dismissBootOverlay() },
         resolveCarApiLevel = ::resolvedCarApiLevel,
-        traceStore = TraceStore(carContext)
+        traceStore = TraceStore(carContext),
+        appContext = carContext
     )
     // Accelerometer feed for the page's speed filter; runs while location runs.
     private val motionFeed = MotionFeed(carContext) { js -> onMain { webView?.evaluateJavascript(js, null) } }

@@ -1,5 +1,6 @@
 package com.kododake.aabrowser.car
 
+import android.content.Context
 import android.webkit.JavascriptInterface
 
 class CarJsBridge(
@@ -12,7 +13,8 @@ class CarJsBridge(
     private val notifyMapReady: () -> Unit = {},
     private val notifyBootPainted: () -> Unit = {},
     private val resolveCarApiLevel: () -> Int,
-    private val traceStore: TraceStore? = null
+    private val traceStore: TraceStore? = null,
+    private val appContext: Context? = null
 ) {
     @JavascriptInterface
     fun onInputFocused(value: String?) {
@@ -84,6 +86,12 @@ class CarJsBridge(
     fun saveTrace(id: String?, traceJson: String?, metaJson: String?): Boolean {
         if (id.isNullOrBlank() || traceJson.isNullOrEmpty()) return false
         return traceStore?.save(id, traceJson, metaJson ?: "{}") ?: false
+    }
+
+    @JavascriptInterface
+    fun playNavChime(side: String?) {
+        val context = appContext ?: return
+        NavChime.play(context, side)
     }
 
     @JavascriptInterface

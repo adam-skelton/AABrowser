@@ -232,7 +232,8 @@ class MainActivity : AppCompatActivity() {
                     notifyMapReady = { dismissMapBootOverlay() },
                     notifyBootPainted = { dismissMapBootOverlay() },
                     resolveCarApiLevel = { 0 },
-                    traceStore = TraceStore(applicationContext)
+                    traceStore = TraceStore(applicationContext),
+                    appContext = applicationContext
                 ),
                 CarWebViewHost.BRIDGE_NAME
             )
