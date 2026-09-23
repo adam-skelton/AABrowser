@@ -4669,7 +4669,7 @@
     if (!step || !Number.isFinite(step.m) || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return null;
     const at = pointAtMetres(activeRoutePath, routeCum, step.m);
     if (!at || !at.point) return null;
-    return { point: at.point, m: step.m, type: maneuverTypeFromNav(step.maneuver) };
+    return { point: at.point, m: step.m, type: maneuverTypeFromNav(hudManeuver(step)) };
   }
 
   function navManeuverItems(startM){
@@ -4678,7 +4678,7 @@
     for (const step of navSteps) {
       const m = Number(step && step.m);
       if (!Number.isFinite(m) || m < startM) continue;
-      const type = maneuverTypeFromNav(step.maneuver);
+      const type = maneuverTypeFromNav(hudManeuver(step));
       if (!type || type === "dest") continue;
       const at = pointAtMetres(activeRoutePath, routeCum, m);
       if (!at || !at.point) continue;
@@ -4883,15 +4883,47 @@
     return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="${d}"/>${heads}</svg>`;
   }
 
-  function geometryManeuverAt(metres){
+  // Net bend of the drawn route nearest this step. A fixed look-back of
+  // 90 m spans the previous junction on a short block and can report the
+  // opposite direction from the corner the driver is looking at.
+  function pathTurnNear(metres){
     const path = activeRoutePath, cum = routeCum;
-    if (!path || path.length < 2 || !cum || cum.length !== path.length) return "";
+    if (!path || path.length < 3 || !cum || cum.length !== path.length) return null;
     const total = cum[cum.length - 1];
     const m = Number(metres);
-    if (!Number.isFinite(m)) return "";
-    const before = pointAtMetres(path, cum, clamp(m - 90, 0, total)).bearing;
-    const after = pointAtMetres(path, cum, clamp(m + 70, 0, total)).bearing;
-    const turn = ((after - before + 540) % 360) - 180;
+    if (!Number.isFinite(m)) return null;
+    const lo = clamp(m - 40, 0, total);
+    const hi = clamp(m + 80, 0, total);
+    const verts = [];
+    for (let i = 1; i < path.length - 1; i++) {
+      if (cum[i] < lo || cum[i] > hi) continue;
+      const turn = ((bearingDegrees(path[i], path[i + 1]) - bearingDegrees(path[i - 1], path[i]) + 540) % 360) - 180;
+      if (Math.abs(turn) < 7) continue;
+      verts.push({ m: cum[i], turn });
+    }
+    if (!verts.length) return null;
+    const clusters = [];
+    let cur = [verts[0]];
+    for (let i = 1; i < verts.length; i++) {
+      if (verts[i].m - cur[cur.length - 1].m > 36) {
+        clusters.push(cur);
+        cur = [];
+      }
+      cur.push(verts[i]);
+    }
+    clusters.push(cur);
+    let best = null;
+    for (const c of clusters) {
+      const sum = c.reduce((s, v) => s + v.turn, 0);
+      const at = c[Math.floor(c.length / 2)].m;
+      const dist = Math.abs(at - m);
+      if (!best || dist < best.dist) best = { turn: sum, m: at, dist };
+    }
+    return best;
+  }
+
+  function maneuverFromSignedTurn(turn){
+    if (!Number.isFinite(turn)) return "";
     if (turn > 125) return "UTURN_RIGHT";
     if (turn < -125) return "UTURN_LEFT";
     if (turn > 48) return "TURN_RIGHT";
@@ -4899,6 +4931,24 @@
     if (turn < -48) return "TURN_LEFT";
     if (turn < -22) return "TURN_SLIGHT_LEFT";
     return "";
+  }
+
+  function geometryManeuverAt(metres){
+    const near = pathTurnNear(metres);
+    return near ? maneuverFromSignedTurn(near.turn) : "";
+  }
+
+  function turnSide(maneuver){
+    const fam = maneuverFamily(maneuver);
+    const m = String(maneuver || "").toUpperCase();
+    if (fam === "uturn") {
+      if (m.includes("RIGHT")) return "right";
+      if (m.includes("LEFT")) return "left";
+      return "uturn";
+    }
+    if (fam === "left") return "left";
+    if (fam === "right") return "right";
+    return fam;
   }
 
   function roundaboutExitNumber(text){
@@ -4912,13 +4962,12 @@
     return 0;
   }
 
-  function inferManeuver(maneuver, instructions, metres){
+  function maneuverFromWords(maneuver, instructions){
     const m = String(maneuver || "").toUpperCase();
     if (m.includes("UTURN") || m.includes("REVERSE")) {
-      if (m.includes("RIGHT")) return "UTURN_RIGHT";
-      if (m.includes("LEFT")) return "UTURN_LEFT";
-      const geoTurn = geometryManeuverAt(metres);
-      return geoTurn === "UTURN_RIGHT" || geoTurn === "UTURN_LEFT" ? geoTurn : "UTURN_LEFT";
+      if (m.includes("RIGHT") && !m.includes("LEFT")) return "UTURN_RIGHT";
+      if (m.includes("LEFT") && !m.includes("RIGHT")) return "UTURN_LEFT";
+      return "UTURN";
     }
     if (m.includes("DESTINATION") || m.includes("ARRIVE")) return maneuver || "DESTINATION";
     if (m.includes("RIGHT") && !m.includes("LEFT")) return m.includes("SLIGHT") ? "TURN_SLIGHT_RIGHT" : "TURN_RIGHT";
@@ -4926,10 +4975,9 @@
     const text = stripNavHtml(instructions);
     const t = text.toLowerCase();
     if (/\b(u-?turn|make a u)\b/.test(t)) {
-      if (/\bright\b/.test(t)) return "UTURN_RIGHT";
-      if (/\bleft\b/.test(t)) return "UTURN_LEFT";
-      const geoTurn = geometryManeuverAt(metres);
-      return geoTurn === "UTURN_RIGHT" || geoTurn === "UTURN_LEFT" ? geoTurn : "UTURN_LEFT";
+      if (/\bright\b/.test(t) && !/\bleft\b/.test(t)) return "UTURN_RIGHT";
+      if (/\bleft\b/.test(t) && !/\bright\b/.test(t)) return "UTURN_LEFT";
+      return "UTURN";
     }
     if (/\b(slight(?:ly)?|sharp)?\s*(?:turn|keep|bear|fork|ramp|merge|exit)\s+(?:to the\s+)?right\b/.test(t) || /\bright\s+(?:turn|lane|fork|ramp)\b/.test(t)) {
       return /slight/.test(t) ? "TURN_SLIGHT_RIGHT" : "TURN_RIGHT";
@@ -4939,15 +4987,30 @@
     }
     const exitN = roundaboutExitNumber(text);
     const roundabout = exitN > 0 || /roundabout/i.test(text) || m.includes("ROUNDABOUT");
-    const geo = geometryManeuverAt(metres);
     if (roundabout) {
-      const geoFam = maneuverFamily(geo);
-      if (geoFam === "left" || geoFam === "right" || geoFam === "uturn") return geo;
       if (exitN <= 1) return "TURN_LEFT";
+      if (exitN === 2) return "STRAIGHT";
       return "TURN_RIGHT";
     }
-    if (geo && maneuverFamily(m) === "straight") return geo;
     return maneuver || "STRAIGHT";
+  }
+
+  // Words from Google win only while they agree with the blue path.
+  // A clear bend the other way replaces the label, including "Turn left"
+  // pinned on a corner that actually turns right.
+  function inferManeuver(maneuver, instructions, metres){
+    const labeled = maneuverFromWords(maneuver, instructions);
+    if (maneuverFamily(labeled) === "dest") return labeled;
+    const near = pathTurnNear(metres);
+    const geo = near ? maneuverFromSignedTurn(near.turn) : "";
+    if (!geo) return labeled || "STRAIGHT";
+    const sideL = turnSide(labeled);
+    const sideG = turnSide(geo);
+    const opposite = sideG !== sideL && sideL !== "straight" && sideL !== "dest" && Math.abs(near.turn) >= 35;
+    if (opposite) return geo;
+    const fam = maneuverFamily(labeled);
+    if (fam === "straight" || fam === "roundabout") return geo;
+    return labeled;
   }
 
   function hudManeuver(step){
