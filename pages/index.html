@@ -120,7 +120,7 @@
     #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); align-items:flex-start; gap:10px; pointer-events:none}
     body.navigating #navHud {display:flex}
     body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
-    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + 124px)}
+    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)))}
     html.aa-split #navHud,body.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     html.aa-car.aa-split #navHud,body.aa-car.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-start; gap:6px; min-height:0; padding:10px 12px 11px; margin-top:12px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
@@ -165,11 +165,11 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 14px 0 6px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:8px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 22px 0 14px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:10px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
-    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
+    #navExit {width:60px; height:60px; min-height:60px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
-    #navExit svg {width:20px; height:20px; display:block}
+    #navExit svg {width:30px; height:30px; display:block}
     #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; text-align:center}
     #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:22px; font-weight:800; letter-spacing:-.4px; line-height:1.05; color:#81C995; font-variant-numeric:tabular-nums}
     #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; overflow:hidden; font-size:14px; font-weight:600; line-height:1.2; color:rgba(255,255,255,.74); font-variant-numeric:tabular-nums}
@@ -236,8 +236,10 @@
     #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 4px}
     #routeCardHeadSpacer {flex:1}
     #routeBack,#routeClose {width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center; transition:background .15s ease}
+    #routeClose {width:52px; height:52px; min-height:52px}
     #routeBack:active,#routeClose:active {background:#E8EAED; transform:none}
     #routeBack svg,#routeClose svg {width:18px; height:18px; display:block}
+    #routeClose svg {width:26px; height:26px}
     #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:center}
     #routePlace.has-photo {grid-template-columns:64px minmax(0,1fr)}
     #routePhoto {width:64px; height:64px; border-radius:12px; object-fit:cover; background:#E8EAED; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
@@ -566,7 +568,7 @@
   <div id="navBottomCluster">
     <div id="navEtaBar" hidden>
       <button type="button" id="navExit" aria-label="Stop navigation">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 6.2l11.6 11.6M17.8 6.2L6.2 17.8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
       </button>
       <div id="navEtaCopy">
         <span id="navEtaRemain"></span>
@@ -699,7 +701,7 @@
   //    Map3DElement.center.altitude is absolute and defaults to sea level.
   // ---------------------------------------------------------------------------
   const FOLLOW = {
-    CAR_SCREEN_Y: 0.72,     // where the car sits on screen while heading-up (0 = top, 1 = bottom)
+    CAR_SCREEN_Y: 0.60,     // heading-up: car sits above the ETA pill (0 = top, 1 = bottom)
     FREE_CAR_SCREEN_Y: 0.84, // free follow: car lower in frame, more road/horizon ahead
     POS_TAU: 0.25,          // camera position ease time-constant (s)
     BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
@@ -1361,6 +1363,7 @@
       }
     }
     applyWheelPose(lastCarPoint, lastCarHeading);
+    if (explore.mode) syncExploreYou();
     if (userArrow) applyArrowPose(lastCarPoint, lastCarHeading);
     if (userMarker) {
       try { userMarker.position = { lat: lastCarPoint.lat, lng: lastCarPoint.lng }; } catch (err) {}
@@ -1858,6 +1861,13 @@
     { id: "lodging", title: "Hotels", subtitle: "Places to stay", type: "lodging", color: "#5F6368" }
   ];
   const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null, labelBucket: null, mapId: "" };
+  let exploreYouMarker = null;
+  const YOU_HERE_ICON = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">' +
+    '<circle cx="20" cy="20" r="16" fill="#1A73E8" fill-opacity=".22"/>' +
+    '<circle cx="20" cy="20" r="8" fill="#1A73E8" stroke="#fff" stroke-width="3"/>' +
+    "</svg>"
+  );
 
   function customMapConfigured(){
     const id = String(CUSTOM_MAP_ID || "").trim();
@@ -3411,15 +3421,83 @@
       explore.places = [];
       explore.title = "";
       explore.mapId = "";
+      explore.youFitted = false;
       explore.labelBucket = null;
       exploreFly = null;
       clearExploreMarkers();
+      clearExploreYou();
+    }
+  }
+
+  function exploreYouPoint(){
+    if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)) {
+      return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
+    }
+    if (puck.fix && Number.isFinite(puck.lat) && Number.isFinite(puck.lng)) {
+      return { lat: puck.lat, lng: puck.lng };
+    }
+    return null;
+  }
+
+  function clearExploreYou(){
+    if (!exploreYouMarker) return;
+    try { exploreYouMarker.remove(); } catch (err) {}
+    exploreYouMarker = null;
+  }
+
+  function syncExploreYou(){
+    if (!explore.mode || !map3d || !Marker3DElement) {
+      clearExploreYou();
+      return;
+    }
+    const pos = exploreYouPoint();
+    if (!pos) return;
+    const created = !exploreYouMarker;
+    if (!exploreYouMarker) {
+      try {
+        exploreYouMarker = new Marker3DElement({
+          position: pos,
+          altitudeMode: "RELATIVE_TO_GROUND",
+          sizePreserved: true,
+          drawsWhenOccluded: true
+        });
+        const img = document.createElement("img");
+        img.src = YOU_HERE_ICON;
+        img.width = 40;
+        img.height = 40;
+        img.alt = "Current location";
+        const template = document.createElement("template");
+        template.content.append(img);
+        exploreYouMarker.append(template);
+        map3d.append(exploreYouMarker);
+      } catch (err) {
+        exploreYouMarker = null;
+        return;
+      }
+    } else {
+      try { exploreYouMarker.position = pos; } catch (err) {}
+      if (!exploreYouMarker.parentElement) map3d.append(exploreYouMarker);
+    }
+    if (created && !explore.youFitted) {
+      explore.youFitted = true;
+      const ov = computeExploreOverview(explore.places);
+      if (ov && map3d && !exploreFly && !explore.selected) {
+        explore.overview = ov;
+        map3d.center = ov.center;
+        map3d.range = ov.range;
+      }
     }
   }
 
   function computeExploreOverview(places){
-    const pts = places || explore.places;
-    if (!pts || !pts.length) return null;
+    const pts = (places || explore.places || []).slice();
+    const you = exploreYouPoint();
+    if (you && pts.length) {
+      let nearest = Infinity;
+      pts.forEach(p => { nearest = Math.min(nearest, distanceMetres(you, p)); });
+      if (nearest < 12000) pts.push(you);
+    }
+    if (!pts.length) return null;
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
     pts.forEach(p => {
       minLat = Math.min(minLat, p.lat);
@@ -3794,6 +3872,7 @@
     explore.selected = null;
     drawExplorePlaces(places);
     fitExploreCamera(places);
+    syncExploreYou();
     applyExploreLabelMode(true);
     setMapLabels(true);
     setMessage(title + " · " + places.length + " places");
@@ -5137,18 +5216,16 @@
     if (infoLevel > 0) showManeuverMarkers();
   }
 
-  function synthLanes(maneuver){
-    const family = maneuverFamily(maneuver);
-    const n = 4;
-    const lanes = [];
-    for (let i = 0; i < n; i++) {
-      let dir = "through";
-      if (family === "left" && i === 0) dir = "left";
-      else if (family === "right" && i === n - 1) dir = "right";
-      else if (family === "left" && i === 1 && String(maneuver).includes("SLIGHT")) dir = "slight_left";
-      else if (family === "right" && i === n - 2) dir = "slight_right";
-      lanes.push({ dirs: [dir], rec: false });
+  function trustedLaneGuidance(googleLanes, osm, maneuver){
+    if (googleLanes && googleLanes.length >= 2 && googleLanes.length <= 6) return googleLanes;
+    const parsed = osm && osm.turnLanes ? parseTurnLanes(osm.turnLanes) : null;
+    if (!parsed || parsed.length < 2) return null;
+    let lanes = parsed;
+    const forward = osm.lanesForward || 0;
+    if (osm.turnLaneSource !== "forward" && forward >= 1 && lanes.length > forward) {
+      lanes = lanes.slice(0, forward);
     }
+    if (lanes.length < 2 || lanes.length > 6) return null;
     return markRecommendedLanes(lanes, maneuver);
   }
 
@@ -5157,7 +5234,7 @@
     let best = null, bestD = 28;
     const latTol = 0.0012, lngTol = 0.0016;
     for (const way of speedLimit.ways) {
-      if (!way.turnLanes && !(way.lanes > 1)) continue;
+      if (!way.turnLanes) continue;
       const pts = way.pts;
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -5212,8 +5289,8 @@
     if (sepEl) { sepEl.hidden = true; sepEl.classList.remove("visible"); }
     if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
     if (wrap) wrap.classList.remove("clock");
-    document.body.classList.remove("has-lanes", "nav-flyover");
-    document.documentElement.classList.remove("has-lanes", "nav-flyover");
+    document.body.classList.remove("has-lanes", "nav-flyover", "nav-arrived");
+    document.documentElement.classList.remove("has-lanes", "nav-flyover", "nav-arrived");
     navHudKey = "";
     navPassHold = { m: null, until: 0 };
   }
@@ -5258,7 +5335,10 @@
       etaBar.hidden = false;
       etaBar.classList.add("visible");
     }
-    if (remainEl) remainEl.textContent = formatDuration(remainMs);
+    const arrived = !flyover && remainM <= 40;
+    document.body.classList.toggle("nav-arrived", arrived);
+    document.documentElement.classList.toggle("nav-arrived", arrived);
+    if (remainEl) remainEl.textContent = arrived ? "Arrived" : formatDuration(remainMs);
     if (etaDistEl) etaDistEl.textContent = formatDistance(remainM);
     if (clockEl) clockEl.textContent = formatTime(eta);
     const sepEl = document.getElementById("navEtaSep");
@@ -5304,7 +5384,21 @@
     const clockNum = document.getElementById("navClockNum");
     const clockRing = document.getElementById("navClockRing");
     const wrap = document.getElementById("navIconWrap");
-    if (banner && current) {
+    if (banner && arrived) {
+      banner.hidden = false;
+      banner.classList.add("visible");
+      const place = (activeDestination && activeDestination.name) || "Destination";
+      if (distEl && distEl.textContent !== "You've arrived") distEl.textContent = "You've arrived";
+      if (text && text.textContent !== place) text.textContent = place;
+      if (icon && icon.dataset.maneuver !== "arrived") {
+        icon.dataset.maneuver = "arrived";
+        icon.innerHTML = '<svg viewBox="0 0 48 48" width="66" height="66" aria-hidden="true"><circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="3.2"/><path fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M15.2 24.6l6 6.2 12.2-13"/></svg>';
+      }
+      if (thenEl) { thenEl.hidden = true; thenEl.classList.remove("visible"); }
+      if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
+      if (wrap) wrap.classList.remove("clock");
+      renderLaneBar(null);
+    } else if (banner && current) {
       banner.hidden = false;
       banner.classList.add("visible");
       const turn = hudManeuver(current);
@@ -5361,12 +5455,7 @@
           ? (current.lanes.some(l => l.rec) ? current.lanes : markRecommendedLanes(current.lanes, turn))
           : null;
         const osm = googleLanes ? null : matchTurnLanes(turnPt, puck.heading);
-        let osmLanes = osm && osm.turnLanes ? parseTurnLanes(osm.turnLanes) : null;
-        if (!osmLanes && osm && osm.lanes > 1) {
-          osmLanes = Array.from({ length: osm.lanes }, () => ({ dirs: ["through"], rec: false }));
-        }
-        const lanes = googleLanes || (osmLanes ? markRecommendedLanes(osmLanes, turn) : synthLanes(turn));
-        renderLaneBar(lanes);
+        renderLaneBar(trustedLaneGuidance(googleLanes, osm, turn));
       } else {
         renderLaneBar(null);
       }
@@ -6351,8 +6440,10 @@
     for (const el of elements || []) {
       const tags = el.tags || {};
       const kmh = wayMaxspeed(tags);
-      const turnLanes = tags["turn:lanes"] || tags["turn:lanes:forward"] || "";
+      const turnForward = tags["turn:lanes:forward"] || "";
+      const turnLanes = turnForward || tags["turn:lanes"] || "";
       const laneCount = parseInt(tags.lanes, 10);
+      const lanesForward = parseInt(tags["lanes:forward"], 10);
       const highway = tags.highway || "";
       const name = tags.name || "";
       if (!Array.isArray(el.geometry) || el.geometry.length < 2) continue;
@@ -6360,7 +6451,9 @@
       ways.push({
         kmh: kmh || 0,
         turnLanes,
+        turnLaneSource: turnForward ? "forward" : (turnLanes ? "way" : ""),
         lanes: Number.isFinite(laneCount) && laneCount > 0 ? laneCount : 0,
+        lanesForward: Number.isFinite(lanesForward) && lanesForward > 0 ? lanesForward : 0,
         highway,
         name,
         pts: el.geometry.map(g => ({ lat: g.lat, lng: g.lon }))
@@ -7018,17 +7111,21 @@
     if (!car || !Number.isFinite(car.lat)) return false;
     const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
     const h = Math.max(1, viewSafe.height || window.innerHeight || 1);
-    const slop = Math.max(64, Math.min(w, h) * 0.1);
+    const slop = Math.max(150, Math.min(w, h) * 0.2);
     const x = Number(event.clientX);
     const y = Number(event.clientY);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     if (carInspect) {
-      return Math.hypot(x - w * 0.5, y - h * 0.5) < slop * 1.35;
+      return Math.hypot(x - w * 0.5, y - h * 0.5) < slop * 1.5;
     }
     if (!following) return false;
     const cx = carScreenX() * w;
-    const cy = carScreenY() * h;
-    return Math.hypot(x - cx, y - cy) < slop;
+    const cy = carScreenY() * h - slop * 0.42;
+    const rx = slop;
+    const ry = slop * 1.45;
+    const dx = (x - cx) / rx;
+    const dy = (y - cy) / ry;
+    return dx * dx + dy * dy < 1;
   }
 
   function destPreviewScreenX(){
@@ -7489,12 +7586,16 @@
     }
     if (!fly) {
       const dx = carScreenX() - 0.5;
-      if (Math.abs(dx) > 0.015) {
+      if (Math.abs(dx) > 0.02) {
+        // Shift by the width at the car, not at the look-ahead point. Using the
+        // full camera range parked the chase camera beside the car in split view.
         const w = Math.max(1, viewSafe.width || window.innerWidth);
         const h = Math.max(1, viewSafe.height || window.innerHeight);
         const hFovRad = 2 * Math.atan(Math.tan(toRad(cam.fov) / 2) * (w / h));
-        const halfW = Math.max(cam.range, 40) * Math.tan(hFovRad / 2);
-        const shift = clamp(dx * 2 * halfW * 0.5, -0.16 * cam.range, 0.16 * cam.range);
+        const groundToAim = Math.max(cam.range, 40) * Math.cos(toRad(clamp(cam.tilt, 5, 85)));
+        const distToCar = Math.max(16, groundToAim - Math.max(0, lookM));
+        const halfWAtCar = distToCar * Math.tan(hFovRad / 2);
+        const shift = clamp(dx * 2 * halfWAtCar, -0.32 * distToCar, 0.32 * distToCar);
         aim = lookAhead(aim, cam.heading - 90, shift);
       }
     }
@@ -9390,7 +9491,7 @@
       return;
     }
     if (carInspect) {
-      mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
+      mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: false };
       return;
     }
     holdStartCountdown();
@@ -9401,13 +9502,14 @@
       return;
     }
     releaseMapFromRoutePreview();
-    mapDragStart = { x: event.clientX, y: event.clientY, panned: false };
+    mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event) };
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
     if (!mapDragStart) return;
     const dx = event.clientX - mapDragStart.x;
     const dy = event.clientY - mapDragStart.y;
-    if (dx * dx + dy * dy < 64) return;
+    const slop = mapDragStart.car ? 36 : 16;
+    if (dx * dx + dy * dy < slop * slop) return;
     if (carInspect) {
       mapDragStart.panned = true;
       chromeLocked = false;
@@ -9435,7 +9537,7 @@
       scheduleRestoreRouteCard();
       return;
     }
-    if (tapHitsCar(event)) {
+    if (!carInspect && (start.car || tapHitsCar(event))) {
       startCarInspect();
       return;
     }
@@ -9577,7 +9679,7 @@
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
   const MAP_REVEAL_MIN_MS = 900;
-  const MAP_REVEAL_MAX_MS = 3000;
+  const MAP_REVEAL_MAX_MS = 2000;
   function revealMap(){
     if (mapRevealDone) return;
     mapRevealDone = true;
