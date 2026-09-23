@@ -1425,6 +1425,7 @@
       });
       userCar.addEventListener("gmp-click", event => {
         try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
+        if (!gestureWasTap()) return;
         startCarInspect();
       });
       map3d.append(userCar);
@@ -1548,6 +1549,7 @@
         });
         el.addEventListener("gmp-click", event => {
           try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
+          if (!gestureWasTap()) return;
           startCarInspect();
         });
         el.addEventListener("gmp-error", () => {
@@ -3211,7 +3213,10 @@
       marker.append(template);
       const onPick = event => {
         try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-        setSelectedParking(lot, dest || activeDestination, { frame: true });
+        window.setTimeout(() => {
+          if (!gestureWasTap()) return;
+          setSelectedParking(lot, dest || activeDestination, { frame: true });
+        }, 50);
       };
       marker.addEventListener("gmp-click", onPick);
       marker.addEventListener("click", onPick);
@@ -3664,7 +3669,10 @@
     marker.append(template);
     const onPick = event => {
       try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-      selectExplorePlace(place);
+      window.setTimeout(() => {
+        if (!gestureWasTap()) return;
+        selectExplorePlace(place);
+      }, 50);
     };
     marker.addEventListener("gmp-click", onPick);
     marker.addEventListener("click", onPick);
@@ -9480,6 +9488,71 @@
   }
 
   let mapDragStart = null;
+  const mapPointer = { x: 0, y: 0, moved: false, pointers: 0, pinchUntil: 0, cam: null };
+  const MAP_TAP_SLOP = 24;
+
+  function snapshotGestureCam(){
+    if (!map3d) return null;
+    const c = readMapCenter();
+    return {
+      range: Number(map3d.range) || 0,
+      heading: Number(map3d.heading) || 0,
+      tilt: Number(map3d.tilt) || 0,
+      lat: c && Number(c.lat),
+      lng: c && Number(c.lng)
+    };
+  }
+
+  function cameraMovedSince(cam){
+    if (!cam || !map3d) return false;
+    const range = Number(map3d.range) || 0;
+    if (cam.range > 40 && range > 0 && Math.abs(range - cam.range) / cam.range > 0.035) return true;
+    const heading = Number(map3d.heading) || 0;
+    const dh = Math.abs(((heading - cam.heading + 540) % 360) - 180);
+    if (dh > 2) return true;
+    const tilt = Number(map3d.tilt) || 0;
+    if (Math.abs(tilt - cam.tilt) > 1.5) return true;
+    if (Number.isFinite(cam.lat) && Number.isFinite(cam.lng)) {
+      const c = readMapCenter();
+      if (c && Number.isFinite(c.lat) && distanceMetres(c, cam) > Math.max(30, cam.range * 0.012)) return true;
+    }
+    return false;
+  }
+
+  function gestureWasTap(){
+    if (mapPointer.moved || mapPointer.pointers > 1) return false;
+    if (performance.now() < mapPointer.pinchUntil) return false;
+    if (cameraMovedSince(mapPointer.cam)) return false;
+    return true;
+  }
+
+  function noteMapPointerDown(event){
+    if (event && event.isPrimary === false) {
+      noteMapPinch();
+      return;
+    }
+    if (performance.now() < mapPointer.pinchUntil) {
+      noteMapPinch();
+      return;
+    }
+    mapPointer.x = event.clientX;
+    mapPointer.y = event.clientY;
+    mapPointer.moved = false;
+    mapPointer.pointers = 1;
+    mapPointer.cam = snapshotGestureCam();
+  }
+
+  function noteMapPointerMove(event){
+    const dx = event.clientX - mapPointer.x;
+    const dy = event.clientY - mapPointer.y;
+    if (dx * dx + dy * dy >= MAP_TAP_SLOP * MAP_TAP_SLOP) mapPointer.moved = true;
+  }
+
+  function noteMapPinch(){
+    mapPointer.moved = true;
+    mapPointer.pointers = 2;
+    mapPointer.pinchUntil = performance.now() + 700;
+  }
   let routeCardRestoreTimer = 0;
   const ROUTE_CARD_RESTORE_MS = 600;
   function stowRouteCard(){
@@ -9532,6 +9605,7 @@
       return;
     }
     if (carInspect) {
+      noteMapPointerDown(event);
       mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: false };
       return;
     }
@@ -9543,10 +9617,12 @@
       return;
     }
     releaseMapFromRoutePreview();
+    noteMapPointerDown(event);
     mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event) };
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
     if (!mapDragStart) return;
+    noteMapPointerMove(event);
     const dx = event.clientX - mapDragStart.x;
     const dy = event.clientY - mapDragStart.y;
     const slop = mapDragStart.car ? 36 : 16;
@@ -9616,14 +9692,32 @@
       dist: Math.hypot(dx, dy) || 1,
       angle: Math.atan2(dy, dx),
       midX: (a.clientX + b.clientX) / 2,
-      midY: (a.clientY + b.clientY) / 2
+      midY: (a.clientY + b.clientY) / 2,
+      mode: "undecided",
+      accAngle: 0,
+      accLog: 0,
+      accMidY: 0
     };
+  }
+  function classifyTwoFinger(state, dAngle, dDist, dMidY){
+    state.accAngle += dAngle;
+    state.accLog += Math.log(dDist || 1);
+    state.accMidY += dMidY;
+    const twist = Math.abs(state.accAngle);
+    const zoom = Math.abs(state.accLog);
+    if (state.mode === "undecided") {
+      if (zoom > 0.04 && twist < 14) state.mode = "zoom";
+      else if (twist > 14 && zoom < 0.03) state.mode = "rotate";
+      else if (Math.abs(state.accMidY) > 18 && zoom < 0.03 && twist < 8) state.mode = "tilt";
+    }
+    return state.mode;
   }
   function applyTwoFingerCamera(event){
     if (!map3d || event.touches.length !== 2 || isChromeUiTarget(event.target)) {
       if (event.touches.length < 2) camGesture = null;
       return false;
     }
+    noteMapPinch();
     const next = twoTouchState(event.touches[0], event.touches[1]);
     if (!camGesture) {
       camGesture = next;
@@ -9634,38 +9728,43 @@
     if (dAngle < -180) dAngle += 360;
     const dDist = next.dist / camGesture.dist;
     const dMidY = next.midY - camGesture.midY;
+    const mode = classifyTwoFinger(camGesture, dAngle, dDist, dMidY);
+    camGesture.dist = next.dist;
+    camGesture.angle = next.angle;
+    camGesture.midX = next.midX;
+    camGesture.midY = next.midY;
     chromeLocked = false;
     hideChrome();
+    const zooming = (mode === "undecided" || mode === "zoom") && Math.abs(dDist - 1) > 0.008;
     if (carInspect) {
-      if (Math.abs(dAngle) > 0.35) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
-      if (Math.abs(dDist - 1) > 0.012) {
+      if (mode === "rotate" && Math.abs(dAngle) > 0.6) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
+      if (zooming) {
         const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
         carInspect.userRange = clamp(cur / dDist, 8, 90);
       }
-      if (Math.abs(dMidY) > 1.5 && Math.abs(dAngle) < 8) {
+      if (mode === "tilt" && Math.abs(dMidY) > 1.5) {
         carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) - dMidY * 0.18, 20, 85);
       }
       carInspect.lastInteractMs = performance.now();
-      camGesture = next;
       return true;
     }
     markUserPanned(true);
-    if (Math.abs(dAngle) > 0.35) {
+    if (mode === "rotate" && Math.abs(dAngle) > 0.6) {
       map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
     }
-    if (Math.abs(dMidY) > 1.5 && Math.abs(dAngle) < 8) {
+    if (mode === "tilt" && Math.abs(dMidY) > 1.5) {
       map3d.tilt = clamp((Number(map3d.tilt) || 0) - dMidY * 0.18, 0, 90);
     }
-    if (Math.abs(dDist - 1) > 0.012) {
+    if (zooming) {
       const range = Number(map3d.range) || 260;
       map3d.range = clamp(range / dDist, 40, 20000);
       syncCarLod();
     }
-    camGesture = next;
     refreshViewSpecs();
     return true;
   }
   window.addEventListener("touchstart", event => {
+    if (event.touches.length >= 2) noteMapPinch();
     if (event.touches.length === 2 && !isChromeUiTarget(event.target)) {
       camGesture = twoTouchState(event.touches[0], event.touches[1]);
     }
