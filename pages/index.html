@@ -33,6 +33,10 @@
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
+    #zoomMod {display:flex; align-items:center; gap:2px; padding:0 4px; border-radius:12px; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
+    #zoomMod button {min-height:40px; width:40px; padding:0; border-radius:10px; background:transparent; box-shadow:none; font-size:22px; line-height:1}
+    #zoomMod span {min-width:8.6em; text-align:center; font-size:14px; font-weight:750; font-variant-numeric:tabular-nums; letter-spacing:-.2px}
+    html.aa-car #zoomMod,body.aa-car #zoomMod {background:#2E3134; color:#fff}
     #searchRow,#buttonRow,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
     body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
     #searchResults {display:none; pointer-events:auto; justify-self:stretch; max-width:min(640px,100%); max-height:min(62vh,480px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
@@ -391,6 +395,11 @@
     </div>
     <div id="searchResults" hidden></div>
     <div id="buttonRow">
+      <div id="zoomMod">
+        <button type="button" id="zoomModOut" aria-label="Zoom out">−</button>
+        <span id="zoomModLabel">Nav 2 · Free 4</span>
+        <button type="button" id="zoomModIn" aria-label="Zoom in">+</button>
+      </div>
       <button id="gpsBtn" type="button">Start GPS</button>
       <button id="followBtn" type="button">Following: ON</button>
       <button id="labelsBtn" type="button">Labels: OFF</button>
@@ -768,6 +777,9 @@
   const ZOOM_PLUS_STEP = Math.log(ZOOM_PLUS_FACTOR) / Math.log(2);
   const FOLLOW_ZOOM_IN_CLICKS_NAV = 2;   // nav follow (e.g. 50 km/h) a step closer than the band table
   const FOLLOW_ZOOM_IN_CLICKS_FREE = 4;  // free follow: same extra step, still tighter than nav
+  let sessionZoomClicks = 0;             // debug +/- on top of both; lasts this page load only
+  const SESSION_ZOOM_MIN = -6;
+  const SESSION_ZOOM_MAX = 6;
   let zoomBandIdx = 0;
 
   // Car mode: a pan detaches the camera; it re-attaches this long after the LAST touch (Vela: 6 s).
@@ -6969,8 +6981,26 @@
     while (idx < ZOOM_BANDS.length - 1 && kmh >= ZOOM_BANDS[idx][0] + ZOOM_BAND_HYST_KMH) idx++;
     while (idx > 0 && kmh < ZOOM_BANDS[idx - 1][0] - ZOOM_BAND_HYST_KMH) idx--;
     zoomBandIdx = idx;
-    const clicks = isNavigating() ? FOLLOW_ZOOM_IN_CLICKS_NAV : FOLLOW_ZOOM_IN_CLICKS_FREE;
+    const clicks = (isNavigating() ? FOLLOW_ZOOM_IN_CLICKS_NAV : FOLLOW_ZOOM_IN_CLICKS_FREE) + sessionZoomClicks;
     return ZOOM_BANDS[idx][1] + clicks * ZOOM_PLUS_STEP;
+  }
+
+  function refreshZoomModLabel(){
+    const el = document.getElementById("zoomModLabel");
+    if (!el) return;
+    const nav = FOLLOW_ZOOM_IN_CLICKS_NAV + sessionZoomClicks;
+    const free = FOLLOW_ZOOM_IN_CLICKS_FREE + sessionZoomClicks;
+    const text = "Nav " + nav + " · Free " + free;
+    if (el.textContent !== text) el.textContent = text;
+  }
+
+  function nudgeSessionZoom(dir){
+    sessionZoomClicks = clamp(sessionZoomClicks + dir, SESSION_ZOOM_MIN, SESSION_ZOOM_MAX);
+    if (cam && cam.userRange != null) {
+      cam.userRange = null;
+      updateRecenterButton();
+    }
+    refreshZoomModLabel();
   }
 
   // Range multiplier for an (eased) zoom level relative to the tightest band.
@@ -9206,6 +9236,17 @@
   document.getElementById("carModelOverlay").addEventListener("click", event => {
     if (event.target === event.currentTarget) closeCarModelViewer();
   });
+  document.getElementById("zoomModIn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    nudgeSessionZoom(1);
+  });
+  document.getElementById("zoomModOut").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    nudgeSessionZoom(-1);
+  });
+  refreshZoomModLabel();
   document.getElementById("specZoomIn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
