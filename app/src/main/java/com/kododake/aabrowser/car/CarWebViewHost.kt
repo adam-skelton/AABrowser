@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.location.Location
@@ -99,6 +100,7 @@ class CarWebViewHost(
     private var pendingJs: String? = null
     private var bootOverlay: View? = null
     private var bootOverlayDismissed = false
+    private var presentationRoot: View? = null
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -363,6 +365,8 @@ class CarWebViewHost(
         }
 
         val container = carPresentation.layoutInflater.inflate(R.layout.presentation_browser, null) as ViewGroup
+        presentationRoot = container
+        applyBootBackdrop()
         val hosted = webView ?: createWebView(carContext).also { webView = it }
         (hosted.parent as? ViewGroup)?.removeView(hosted)
         container.addView(
@@ -440,7 +444,6 @@ class CarWebViewHost(
 
     private fun createWebView(context: Context): WebView {
         return WebView(context).apply {
-            setBackgroundColor(Color.rgb(0x11, 0x11, 0x11))
             isFocusable = true
             isFocusableInTouchMode = true
             setNestedScrollingEnabled(true)
@@ -448,11 +451,13 @@ class CarWebViewHost(
             configureWebView(
                 webView = this,
                 callbacks = BrowserCallbacks(
-                    onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) }
+                    onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) },
+                    onPageStarted = { publishSafeArea() },
+                    onPageFinished = { publishSafeArea() }
                 ),
                 useDesktopMode = true
             )
-            setBackgroundColor(Color.rgb(0x11, 0x11, 0x11))
+            setBackgroundColor(Color.TRANSPARENT)
             setLayerType(View.LAYER_TYPE_NONE, null)
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = false
@@ -582,6 +587,7 @@ class CarWebViewHost(
         }
         runCatching { presentation?.dismiss() }
         presentation = null
+        presentationRoot = null
         runCatching { virtualDisplay?.release() }
         virtualDisplay = null
         if (destroyWebView && hosted != null) {
@@ -655,6 +661,30 @@ class CarWebViewHost(
         event.recycle()
     }
 
+    private fun applyBootBackdrop() {
+        val root = presentationRoot ?: return
+        val w = surfaceWidth.coerceAtLeast(1)
+        val h = surfaceHeight.coerceAtLeast(1)
+        val vis = visibleArea
+        val area = if (vis != null && vis.width() >= 48 && vis.height() >= 48) vis else Rect(0, 0, w, h)
+        val wf = w.toFloat()
+        val hf = h.toFloat()
+        val cx = (area.left + area.width() / 2f) / wf
+        val cy = (area.top + area.height() * 0.40f) / hf
+        root.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            gradientRadius = maxOf(wf, hf) * 0.78f
+            setGradientCenter(cx.coerceIn(0.05f, 0.95f), cy.coerceIn(0.05f, 0.95f))
+            colors = intArrayOf(
+                0xFF3A5578.toInt(),
+                0xFF24364F.toInt(),
+                0xFF152033.toInt(),
+                0xFF0C121C.toInt()
+            )
+        }
+    }
+
     private fun publishSafeArea() {
         val w = surfaceWidth.coerceAtLeast(1)
         val h = surfaceHeight.coerceAtLeast(1)
@@ -665,6 +695,7 @@ class CarWebViewHost(
         val bottomPx = (h - area.bottom).coerceIn(0, h)
         val topPx = 0
         bootOverlay?.setPadding(leftPx, topPx, rightPx, bottomPx)
+        applyBootBackdrop()
         val left = leftPx.toFloat() / w
         val top = topPx.toFloat() / h
         val right = rightPx.toFloat() / w

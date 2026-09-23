@@ -41,7 +41,9 @@ data class BrowserCallbacks(
     val onEnterFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit = { _, _ -> },
     val onExitFullscreen: () -> Unit = {},
     val onPermissionRequest: (PermissionRequest) -> Unit = { it.deny() },
-    val onGeolocationPermission: (origin: String?, grant: (Boolean) -> Unit) -> Unit = { _, grant -> grant(false) }
+    val onGeolocationPermission: (origin: String?, grant: (Boolean) -> Unit) -> Unit = { _, grant -> grant(false) },
+    val onPageStarted: () -> Unit = {},
+    val onPageFinished: (String?) -> Unit = {}
 )
 
 fun configureWebView(
@@ -123,6 +125,7 @@ fun configureWebView(
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                callbacks.onPageStarted()
                 val stringUrl = url ?: return
                 val uri = Uri.parse(stringUrl)
                 val scheme = uri.scheme?.lowercase()
@@ -140,6 +143,7 @@ fun configureWebView(
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
                 view.evaluateJavascript(SpeechRecognitionBridge.POLYFILL_JS, null)
+                callbacks.onPageFinished(url)
                 url?.let(callbacks.onUrlChange)
             }
 

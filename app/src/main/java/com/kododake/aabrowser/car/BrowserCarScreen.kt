@@ -3,6 +3,7 @@ package com.kododake.aabrowser.car
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
@@ -57,10 +58,12 @@ class BrowserCarScreen(
 
     // Rasterise the multi-colour pin so Android Auto cannot template-tint a vector.
     private fun searchPinIcon(): CarIcon {
-        val drawable = AppCompatResources.getDrawable(carContext, R.drawable.gmaps_pin)
+        val drawable = AppCompatResources.getDrawable(carContext, R.drawable.gmaps_pin)?.mutate()
         if (drawable == null) {
             return CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.gmaps_pin)).build()
         }
+        DrawableCompat.setTintList(drawable, null)
+        drawable.clearColorFilter()
         val srcW = drawable.intrinsicWidth.coerceAtLeast(1)
         val srcH = drawable.intrinsicHeight.coerceAtLeast(1)
         val maxPx = (48 * carContext.resources.displayMetrics.density).toInt().coerceAtLeast(48)
