@@ -9099,8 +9099,11 @@
   };
   window.__aaNudgeCamera = function(dHeading, dTilt){
     if (!map3d) return;
-    const dh = Number(dHeading) || 0;
-    const dt = Number(dTilt) || 0;
+    let dh = Number(dHeading) || 0;
+    let dt = Number(dTilt) || 0;
+    // A pinch release is one huge step, about a quarter turn. A real twist arrives as small steps.
+    if (Math.abs(dh) > 28) dh = 0;
+    if (Math.abs(dt) > 22) dt = 0;
     if (!dh && !dt) return;
     if (carInspect) {
       carInspect.yaw = (Number(carInspect.yaw) || 0) + dh;
@@ -9882,6 +9885,8 @@
   }
 
   window.addEventListener("pointerdown", event => {
+    gesturePointers.add(event.pointerId);
+    if (pinchReachesMap(event)) event.stopPropagation();
     if (!event.target.closest || !event.target.closest("#viewPicker")) closeViewSelectMenu();
     if (isPreviewUiTarget(event.target) && !(event.target.closest && event.target.closest("#routeGo, #routeBack, #routeClose"))) {
       holdStartCountdown();
@@ -9907,6 +9912,7 @@
     mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event) };
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
+    if (pinchReachesMap(event)) event.stopPropagation();
     if (!mapDragStart) return;
     noteMapPointerMove(event);
     const dx = event.clientX - mapDragStart.x;
@@ -9933,6 +9939,10 @@
     stowRouteCard();
   }, { capture:true, passive:true });
   window.addEventListener("pointerup", event => {
+    const wasPinch = gesturePointers.size >= 2;
+    if (wasPinch && event.isPrimary === false) event.stopPropagation();
+    gesturePointers.delete(event.pointerId);
+    if (wasPinch && gesturePointers.size < 2) finishZoomPinch();
     const start = mapDragStart;
     mapDragStart = null;
     if (!start) return;
@@ -9951,7 +9961,9 @@
     onNavMapTap();
     scheduleRestoreRouteCard();
   }, { capture:true, passive:true });
-  window.addEventListener("pointercancel", () => {
+  window.addEventListener("pointercancel", event => {
+    gesturePointers.delete(event.pointerId);
+    if (gesturePointers.size < 2) finishZoomPinch();
     if (mapDragStart && mapDragStart.panned) scheduleRestoreRouteCard();
     else if (document.body.classList.contains("route-card-stowed")) scheduleRestoreRouteCard();
     mapDragStart = null;
@@ -9982,7 +9994,9 @@
       mode: "undecided",
       accAngle: 0,
       accLog: 0,
-      accMidY: 0
+      accMidY: 0,
+      zoomHeading: null,
+      startHeading: map3d ? (Number(map3d.heading) || 0) : 0
     };
   }
   function classifyTwoFinger(state, dAngle, dDist, dMidY){
@@ -10015,15 +10029,21 @@
     const dDist = next.dist / camGesture.dist;
     const dMidY = next.midY - camGesture.midY;
     const mode = classifyTwoFinger(camGesture, dAngle, dDist, dMidY);
+    if (mode === "zoom" && !Number.isFinite(camGesture.zoomHeading)) {
+      camGesture.zoomHeading = Number(map3d.heading) || 0;
+    }
     camGesture.dist = next.dist;
     camGesture.angle = next.angle;
     camGesture.midX = next.midX;
     camGesture.midY = next.midY;
     chromeLocked = false;
     hideChrome();
-    const zooming = (mode === "undecided" || mode === "zoom") && Math.abs(dDist - 1) > 0.008;
+    // Fingers lifting collapses the span and swings its angle by about 90°. That frame is not a gesture.
+    const spanOk = dDist > 0.72 && dDist < 1.4;
+    const angleOk = Math.abs(dAngle) <= 28;
+    const zooming = (mode === "undecided" || mode === "zoom") && spanOk && Math.abs(dDist - 1) > 0.008;
     if (carInspect) {
-      if (mode === "rotate" && Math.abs(dAngle) > 0.6) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
+      if (mode === "rotate" && angleOk && Math.abs(dAngle) > 0.6) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
       if (zooming) {
         const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
         carInspect.userRange = clamp(cur / dDist, 8, 90);
@@ -10035,7 +10055,7 @@
       return true;
     }
     markUserPanned(true);
-    if (mode === "rotate" && Math.abs(dAngle) > 0.6) {
+    if (mode === "rotate" && angleOk && Math.abs(dAngle) > 0.6) {
       map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
     }
     if (mode === "tilt" && Math.abs(dMidY) > 1.5) {
@@ -10049,19 +10069,51 @@
     refreshViewSpecs();
     return true;
   }
+  let headingHold = 0;
+  function holdZoomHeading(heading){
+    const token = ++headingHold;
+    const until = performance.now() + 360;
+    const tick = () => {
+      if (token !== headingHold || !map3d || performance.now() > until) return;
+      const h = Number(map3d.heading) || 0;
+      const dh = Math.abs(((h - heading + 540) % 360) - 180);
+      if (dh > 28) map3d.heading = heading;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  function finishZoomPinch(){
+    if (!camGesture) return;
+    const gesture = camGesture;
+    camGesture = null;
+    if (gesture.mode === "rotate") return;
+    const heading = Number.isFinite(gesture.zoomHeading) ? gesture.zoomHeading : gesture.startHeading;
+    if (Number.isFinite(heading)) holdZoomHeading(heading);
+  }
+  const gesturePointers = new Set();
+  function pinchReachesMap(event){
+    return gesturePointers.size >= 2 && !(event && isChromeUiTarget(event.target));
+  }
   window.addEventListener("touchstart", event => {
-    if (event.touches.length >= 2) noteMapPinch();
+    if (event.touches.length >= 2) {
+      headingHold++;
+      noteMapPinch();
+      if (!isChromeUiTarget(event.target)) event.stopPropagation();
+    }
     if (event.touches.length === 2 && !isChromeUiTarget(event.target)) {
       camGesture = twoTouchState(event.touches[0], event.touches[1]);
     }
   }, { capture:true, passive:true });
   window.addEventListener("touchmove", event => {
-    if (applyTwoFingerCamera(event)) event.preventDefault();
+    if (applyTwoFingerCamera(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }, { capture:true, passive:false });
   window.addEventListener("touchend", event => {
-    if (event.touches.length < 2) camGesture = null;
+    if (event.touches.length < 2) finishZoomPinch();
   }, { capture:true, passive:true });
-  window.addEventListener("touchcancel", () => { camGesture = null; }, { capture:true, passive:true });
+  window.addEventListener("touchcancel", () => { finishZoomPinch(); }, { capture:true, passive:true });
 
   window.addEventListener("click", event => {
     if (tapHitsCar(event) || carInspect) return;
