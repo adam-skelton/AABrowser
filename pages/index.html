@@ -137,6 +137,8 @@
     .nav-lane.rec {opacity:1}
     .nav-lane svg {width:30px; height:52px; display:block; fill:#fff; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
     .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
+    .nav-lane svg path.lane-dim {fill:rgba(255,255,255,.38); stroke:rgba(255,255,255,.38)}
+    .nav-lane svg path.lane-dim[fill="none"] {fill:none; stroke:rgba(255,255,255,.38)}
     #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(480px, calc(100% - 160px)); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
     html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(520px, calc(100% - 116px))}
     #navBanner.visible {display:grid !important; gap:8px}
@@ -171,7 +173,7 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:min(420px, 100%); min-height:76px; padding:0 48px 0 28px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:16px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:min(390px, 100%); min-height:76px; padding:0 38px 0 20px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:16px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:60px; height:60px; min-height:60px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
@@ -626,7 +628,7 @@
   const CUSTOM_MAP_NAME = "__CUSTOM_MAP_NAME__";
   // Cloud-based 3D Hybrid style: roads + locality labels, POIs/transit/landmarks off.
   const GOOGLE_MAPS_MAP_ID = "a6855643070a44926567285b";
-  // Debug gear (top-left on Android Auto). 0 = hidden, triple-tap that corner to open.
+  // Debug gear (top-left on Android Auto). 0 = hidden, triple-tap anywhere in that corner to open.
   // Set to 1 to show the cog again.
   var SHOW_DEBUG_COG = 0;
 
@@ -4964,11 +4966,13 @@
     return "through";
   }
 
-  function laneArrowHead(x, y, ux, uy){
-    const len = 7.2, w = 4.6;
+  function laneArrowHead(x, y, ux, uy, scale, dim){
+    const s = scale || 1;
+    const len = 7.2 * s, w = 4.6 * s;
     const px = -uy, py = ux;
     const tx = x + ux * len, ty = y + uy * len;
-    return `<path fill="currentColor" d="M${tx.toFixed(1)} ${ty.toFixed(1)}L${(x - px * w).toFixed(1)} ${(y - py * w).toFixed(1)}L${(x + px * w).toFixed(1)} ${(y + py * w).toFixed(1)}Z"/>`;
+    const cls = dim ? ' class="lane-dim"' : "";
+    return `<path${cls} fill="currentColor" d="M${tx.toFixed(1)} ${ty.toFixed(1)}L${(x - px * w).toFixed(1)} ${(y - py * w).toFixed(1)}L${(x + px * w).toFixed(1)} ${(y + py * w).toFixed(1)}Z"/>`;
   }
 
   function laneColumnSvg(dirs){
@@ -4976,7 +4980,7 @@
     const keys = [...new Set((dirs && dirs.length ? dirs : ["through"]).map(laneDirKey))];
     keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
     const set = new Set(keys.slice(0, 2));
-    const sw = 'fill="none" stroke="currentColor" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"';
+    const sw = 'fill="none" stroke="currentColor" stroke-width="' + ((set.size && !set.has("through") && (set.has("left") || set.has("right"))) ? "4.2" : "3.3") + '" stroke-linecap="round" stroke-linejoin="round"';
     const through = set.has("through");
     const left = set.has("left") || set.has("slight_left");
     const right = set.has("right") || set.has("slight_right");
@@ -4987,25 +4991,43 @@
       return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="M22 48V20a8 8 0 0 0-16 0v8"/>${laneArrowHead(6, 26, 0, 1)}</svg>`;
     }
 
-    let d = "M16 46V28";
+    // Turn arrows use the same head and a shaft as long as the straight arrow,
+    // so a left/right lane reads at the same size as a through lane.
+    // A lane that also goes straight greys that top, so the turn is the way to go.
+    const turnOff = through && (left || right);
+    const hardFork = 24;
+    const slightFork = 34;
+    const splits = [];
+    if (left) splits.push((slightL && !set.has("left")) ? slightFork : hardFork);
+    if (right) splits.push((slightR && !set.has("right")) ? slightFork : hardFork);
+    const splitY = splits.length ? Math.min.apply(null, splits) : 14;
+    let d = through ? `M16 46V${splitY}` : "M16 46V16";
     let heads = "";
-    if (through) {
-      d += "V14";
+    let dim = "";
+    if (through && turnOff) {
+      dim = `<path class="lane-dim" ${sw} d="M16 ${splitY}V14"/>` + laneArrowHead(16, 12.5, 0, -1, 1, true);
+    } else if (through) {
       heads += laneArrowHead(16, 12.5, 0, -1);
     }
-    if (left) {
-      d += slightL ? "M16 28L8 16" : "M16 28H7.5";
-      heads += slightL ? laneArrowHead(8, 16, -0.64, -0.77) : laneArrowHead(7.2, 28, -1, 0);
+    if (left && !through) {
+      d = slightL ? "M16 46 Q16 26 11 12" : "M18 46 V12 H14";
+      heads += slightL ? laneArrowHead(11, 12, -0.34, -0.94) : laneArrowHead(14, 12, -1, 0, 1.35);
+    } else if (left) {
+      d += slightL ? "M16 34 Q16 28 12 24" : "M16 24 H12";
+      heads += slightL ? laneArrowHead(12, 24, -0.71, -0.71) : laneArrowHead(12, 24, -1, 0);
     }
-    if (right) {
-      d += slightR ? "M16 28L24 16" : "M16 28h8.5";
-      heads += slightR ? laneArrowHead(24, 16, 0.64, -0.77) : laneArrowHead(24.8, 28, 1, 0);
+    if (right && !through && !left) {
+      d = slightR ? "M16 46 Q16 26 21 12" : "M14 46 V12 H18";
+      heads += slightR ? laneArrowHead(21, 12, 0.34, -0.94) : laneArrowHead(18, 12, 1, 0, 1.35);
+    } else if (right) {
+      d += slightR ? "M16 34 Q16 28 20 24" : "M16 24 H20";
+      heads += slightR ? laneArrowHead(20, 24, 0.71, -0.71) : laneArrowHead(20, 24, 1, 0);
     }
     if (!through && !left && !right) {
       d = "M16 46V14";
       heads = laneArrowHead(16, 12.5, 0, -1);
     }
-    return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="${d}"/>${heads}</svg>`;
+    return `<svg viewBox="0 0 32 52" aria-hidden="true"><path ${sw} d="${d}"/>${dim}${heads}</svg>`;
   }
 
   // Net bend of the drawn route nearest this step. A fixed look-back of
@@ -9552,20 +9574,53 @@
   }
   let debugCogTaps = 0;
   let debugCogTapMs = 0;
-  document.getElementById("carDebugBtn").addEventListener("click", event => {
-    event.preventDefault();
-    event.stopPropagation();
+  let debugCornerDown = null;
+  function debugCornerZone(x, y){
+    const w = Math.max(1, window.innerWidth || 1);
+    const h = Math.max(1, window.innerHeight || 1);
+    const cs = getComputedStyle(document.documentElement);
+    const left = parseFloat(cs.getPropertyValue("--aa-inset-left")) || 0;
+    const top = parseFloat(cs.getPropertyValue("--aa-inset-top")) || 0;
+    const right = parseFloat(cs.getPropertyValue("--aa-inset-right")) || 0;
+    const bottom = parseFloat(cs.getPropertyValue("--aa-inset-bottom")) || 0;
+    const visW = Math.max(1, w - left - right);
+    const visH = Math.max(1, h - top - bottom);
+    const zoneW = Math.min(420, Math.max(240, visW * 0.42));
+    const zoneH = Math.min(320, Math.max(200, visH * 0.46));
+    return x >= left && x <= left + zoneW && y >= top && y <= top + zoneH;
+  }
+  function noteDebugCornerTap(){
     if (SHOW_DEBUG_COG) {
       window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
       return;
     }
     const now = performance.now();
-    if (now - debugCogTapMs > 1500) debugCogTaps = 0;
+    if (now - debugCogTapMs > 1800) debugCogTaps = 0;
     debugCogTapMs = now;
     debugCogTaps += 1;
     if (debugCogTaps < 3) return;
     debugCogTaps = 0;
     window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
+  }
+  window.addEventListener("pointerdown", event => {
+    if (event.isPrimary === false) return;
+    debugCornerDown = { x: event.clientX, y: event.clientY, t: performance.now() };
+  }, true);
+  window.addEventListener("pointerup", event => {
+    const down = debugCornerDown;
+    debugCornerDown = null;
+    if (!down || event.isPrimary === false) return;
+    if (performance.now() - down.t > 700) return;
+    const x = event.clientX, y = event.clientY;
+    if (Math.hypot(x - down.x, y - down.y) > 24) return;
+    if (!debugCornerZone(x, y) && !debugCornerZone(down.x, down.y)) return;
+    const target = event.target;
+    if (target && target.closest && target.closest("button, a, input, select, textarea") && !target.closest("#carDebugBtn")) return;
+    noteDebugCornerTap();
+  }, true);
+  document.getElementById("carDebugBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
   });
   document.getElementById("routeClose").addEventListener("click", event => {
     event.preventDefault();
