@@ -684,10 +684,6 @@ class CarWebViewHost(
     ) {
         val event = MotionEvent.obtain(downTime, eventTime, action, x, y, 0)
         event.source = InputDevice.SOURCE_TOUCHSCREEN
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val displayId = virtualDisplay?.display?.displayId ?: android.view.Display.INVALID_DISPLAY
-            if (displayId != android.view.Display.INVALID_DISPLAY) event.displayId = displayId
-        }
         view.dispatchTouchEvent(event)
         event.recycle()
     }
