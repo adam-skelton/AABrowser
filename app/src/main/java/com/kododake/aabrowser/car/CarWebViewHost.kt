@@ -100,7 +100,7 @@ class CarWebViewHost(
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
-    private var bootOverlay: View? = null
+    private var bootOverlay: ViewGroup? = null
     private var bootOverlayDismissed = false
     private var presentationRoot: View? = null
 
@@ -378,7 +378,7 @@ class CarWebViewHost(
                 R.layout.view_map_boot_overlay,
                 container,
                 false
-            )
+            ) as ViewGroup
             container.addView(
                 overlay,
                 FrameLayout.LayoutParams(
@@ -451,7 +451,7 @@ class CarWebViewHost(
                     onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) },
                     onPageStarted = { publishSafeArea() },
                     onPageFinished = { publishSafeArea() },
-                    onError = { _, _ -> dismissBootOverlay(showSearch = false) }
+                    onError = { _, _ -> dismissBootOverlay() }
                 ),
                 useDesktopMode = true
             )
@@ -496,9 +496,8 @@ class CarWebViewHost(
         mainHandler.postDelayed(wakeRendererRunnable, 400L)
     }
 
-    private fun dismissBootOverlay(showSearch: Boolean = true) {
+    private fun dismissBootOverlay() {
         bootOverlayDismissed = true
-        searchPin?.visibility = if (showSearch) View.VISIBLE else View.GONE
         val overlay = bootOverlay ?: return
         bootOverlay = null
         overlay.animate().cancel()
