@@ -173,6 +173,12 @@ class CarWebViewHost(
         }
     }
 
+    fun toggleDebugOverlay() {
+        onMain {
+            setDebugOverlay(!debugOverlayVisible)
+        }
+    }
+
     fun setDebugOverlay(visible: Boolean) {
         onMain {
             debugOverlayVisible = visible
@@ -605,6 +611,16 @@ class CarWebViewHost(
         val downTime = SystemClock.uptimeMillis()
         dispatchTouch(view, MotionEvent.ACTION_DOWN, x, y, downTime, downTime)
         dispatchTouch(view, MotionEvent.ACTION_UP, x, y, downTime, downTime + CLICK_DURATION_MS)
+        // The desktop head unit injects this click onto a virtual display. That
+        // touch often never becomes a DOM pointer event, so the page's triple-tap
+        // never runs. Count the corner tap in the page directly.
+        val density = (surfaceDpi / 160f).takeIf { it > 0f } ?: 1f
+        val cssX = x / density
+        val cssY = y / density
+        view.evaluateJavascript(
+            "window.__aaDebugCornerTap && window.__aaDebugCornerTap($cssX,$cssY);",
+            null
+        )
         mainHandler.postDelayed({
             view.evaluateJavascript(CHECK_FOCUS_JS) { result ->
                 val value = parseFocusValue(result, requireFocused = true) ?: return@evaluateJavascript
@@ -668,6 +684,10 @@ class CarWebViewHost(
     ) {
         val event = MotionEvent.obtain(downTime, eventTime, action, x, y, 0)
         event.source = InputDevice.SOURCE_TOUCHSCREEN
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val displayId = virtualDisplay?.display?.displayId ?: android.view.Display.INVALID_DISPLAY
+            if (displayId != android.view.Display.INVALID_DISPLAY) event.displayId = displayId
+        }
         view.dispatchTouchEvent(event)
         event.recycle()
     }
@@ -676,12 +696,21 @@ class CarWebViewHost(
         val root = presentationRoot ?: return
         val w = surfaceWidth.coerceAtLeast(1)
         val h = surfaceHeight.coerceAtLeast(1)
-        val vis = visibleArea
-        val area = if (vis != null && vis.width() >= 48 && vis.height() >= 48) vis else Rect(0, 0, w, h)
         val wf = w.toFloat()
         val hf = h.toFloat()
-        val cx = (area.left + area.width() / 2f) / wf
-        val cy = (area.top + area.height() * 0.40f) / hf
+        val density = root.resources.displayMetrics.density
+        val pinW = 72f * density
+        val pinH = 96f * density
+        val belowPin = 20f * density
+        val overlay = bootOverlay
+        val padL = overlay?.paddingLeft?.toFloat() ?: 0f
+        val padT = overlay?.paddingTop?.toFloat() ?: 0f
+        val padR = overlay?.paddingRight?.toFloat() ?: 0f
+        val padB = overlay?.paddingBottom?.toFloat() ?: 0f
+        val boxW = padL + pinW + padR
+        val boxH = padT + pinH + belowPin + padB
+        val cx = ((w - boxW) / 2f + padL + pinW / 2f) / wf
+        val cy = ((h - boxH) / 2f + padT + pinH / 2f) / hf
         root.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             gradientType = GradientDrawable.RADIAL_GRADIENT

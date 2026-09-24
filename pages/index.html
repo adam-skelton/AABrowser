@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Immersive Navigation</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 34%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 34%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); background-origin:content-box; background-clip:border-box; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); background-origin:content-box; background-clip:border-box; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
     html.native-boot #mapLoader .gmaps-pin, html.native-boot #mapLoader .gmaps-shadow {visibility:hidden}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     #mapLoader.map-failed .gmaps-pin,#mapLoader.map-failed .gmaps-shadow,#mapLoader.map-failed .gmaps-pin::after {animation:none}
@@ -176,7 +176,7 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:min(390px, 100%); min-height:76px; padding:0 38px 0 20px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:16px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 16px 0 10px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:12px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:60px; height:60px; min-height:60px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
@@ -246,11 +246,9 @@
     #routePhoto {-webkit-user-drag:none; user-select:none}
     #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 4px}
     #routeCardHeadSpacer {flex:1}
-    #routeBack,#routeClose {width:36px; height:36px; min-height:36px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center; transition:background .15s ease}
-    #routeClose {width:52px; height:52px; min-height:52px}
+    #routeBack,#routeClose {width:52px; height:52px; min-height:52px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center; transition:background .15s ease}
     #routeBack:active,#routeClose:active {background:#E8EAED; transform:none}
-    #routeBack svg,#routeClose svg {width:18px; height:18px; display:block}
-    #routeClose svg {width:26px; height:26px}
+    #routeBack svg,#routeClose svg {width:26px; height:26px; display:block}
     #routePlace {display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:center}
     #routePlace.has-photo {grid-template-columns:64px minmax(0,1fr)}
     #routePhoto {width:64px; height:64px; border-radius:12px; object-fit:cover; background:#E8EAED; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
@@ -922,12 +920,12 @@
   const CAR_INSPECT = {
     SWOOP_MS: 900,
     RANGE: 24,
-    TILT: 36,
+    TILT: 52,
     FOV: 32,
     LOOK_AT_M: 0.85,
     SPIN_MS: 12000,
     PAUSE_MS: 1500,
-    IDLE_MS: 10000
+    IDLE_MS: 20000
   };
   const START_COUNTDOWN_MS = 10000;
   const START_COUNTDOWN_IGNORE_MS = 450;
@@ -1369,22 +1367,39 @@
   }
 
   let carPoseWritten = null;
+  let roadAltStamp = 0;
+  // One eased road height for the whole vehicle. Each wheel used to sample the
+  // ground under its own hub, so a bump lifted that wheel off the body.
+  function roadAltitudeForPose(point, heading){
+    const now = performance.now();
+    if (roadAltStamp && now - roadAltStamp < 8 && Number.isFinite(carAlt)) return carAlt;
+    const dt = roadAltStamp ? clamp((now - roadAltStamp) / 1000, 0, 0.05) : 0.05;
+    roadAltStamp = now;
+    const g = carGroundAltitude(point, heading, dt);
+    return Number.isFinite(g) ? g : null;
+  }
   function applyCarPose(point, heading){
     lastCarPoint = { lat: point.lat, lng: point.lng };
-    if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
     if (Number.isFinite(heading)) lastCarHeading = heading;
+    const hdg = Number.isFinite(lastCarHeading) ? lastCarHeading : 0;
+    const road = roadAltitudeForPose(lastCarPoint, hdg);
+    if (Number.isFinite(road)) lastCarPoint.altitude = road;
+    else if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
+    const pinned = Number.isFinite(lastCarPoint.altitude);
     if (userCar) {
       // Skip the native writes when nothing moved enough to see (the follow ticker
       // and the camera-change events both land here every frame).
       const w = carPoseWritten;
-      const same = w && w.car === userCar &&
+      const alt = pinned ? lastCarPoint.altitude : 0;
+      const same = w && w.car === userCar && w.pinned === pinned &&
         Math.abs(w.lat - lastCarPoint.lat) < 1e-8 && Math.abs(w.lng - lastCarPoint.lng) < 1e-8 &&
         Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02 &&
-        Math.abs((w.alt || 0) - (Number(lastCarPoint.altitude) || 0)) < 0.05;
+        Math.abs((w.alt || 0) - alt) < 0.05;
       if (!same) {
+        try { userCar.altitudeMode = pinned ? "ABSOLUTE" : MODEL_ALTITUDE_MODE; } catch (err) {}
         try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
         try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
-        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt: Number(lastCarPoint.altitude) || 0 };
+        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt, pinned };
       }
     }
     applyWheelPose(lastCarPoint, lastCarHeading);
@@ -1532,7 +1547,10 @@
   function hubMapPoint(point, heading, hub, scale){
     const along = lookAhead(point, heading, hub.z * scale);
     const pos = lookAhead(along, heading + 90, hub.x * scale);
-    pos.altitude = hub.y * scale;
+    const base = Number(point.altitude);
+    // Same road height as the body, plus the hub offset. A per-wheel ground
+    // sample is what throws a wheel above the car on a bump.
+    pos.altitude = (Number.isFinite(base) ? base : 0) + hub.y * scale;
     return pos;
   }
 
@@ -1569,9 +1587,11 @@
     const scale = currentShownCarScale();
     const hidden = scale <= 0.01;
     const w = wheelPoseWritten;
-    const alt = Number(point.altitude) || 0;
+    const pinned = Number.isFinite(point.altitude);
+    const alt = pinned ? point.altitude : 0;
+    const mode = pinned ? "ABSOLUTE" : "RELATIVE_TO_GROUND";
     const spinDelta = w ? Math.abs(((wheelSpinDeg - (w.spin || 0) + 540) % 360) - 180) : 360;
-    const samePos = w &&
+    const samePos = w && w.pinned === pinned &&
       Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01 &&
@@ -1586,6 +1606,7 @@
         } else {
           const moved = !samePos || !w || w.hidden;
           if (moved) {
+            el.altitudeMode = mode;
             el.position = hubMapPoint(point, h, hub, scale);
             el.scale = wheelScaleForHub(scale);
           }
@@ -1593,7 +1614,7 @@
         }
         } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt, spin: wheelSpinDeg };
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt, pinned, spin: wheelSpinDeg };
   }
 
   function attachUserWheels(position, heading){
@@ -1614,7 +1635,7 @@
           position: hubMapPoint(position, h, hub, placeScale),
           orientation: wheelOrientation(h, hub),
           scale: hidden ? 0.001 : wheelScaleForHub(scale),
-          altitudeMode: "RELATIVE_TO_GROUND"
+          altitudeMode: Number.isFinite(position && position.altitude) ? "ABSOLUTE" : "RELATIVE_TO_GROUND"
         });
         el.addEventListener("gmp-click", event => {
           try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
@@ -4745,7 +4766,9 @@
     if (!path || path.length < 3 || !cum || cum.length !== path.length) return raw;
     for (let i = 1; i < path.length - 1; i++) {
       const turn = ((bearingDegrees(path[i], path[i + 1]) - bearingDegrees(path[i - 1], path[i]) + 540) % 360) - 180;
-      if (Math.abs(turn) < 20) continue;
+      // Keep the smaller bends. A corner drawn as several 15° steps was
+      // dropped entirely, so that turn never appeared.
+      if (Math.abs(turn) < 8) continue;
       raw.push({ i, m: cum[i], turn, point: path[i] });
     }
     const items = [];
@@ -4762,12 +4785,17 @@
       const net = ((bearingDegrees(path[last.i], path[outIdx]) - inBrg + 540) % 360) - 180;
       const chord = distanceMetres(path[first.i], path[last.i]);
       const straightThrough = cluster.length >= 3 && span > 12 && span < 180 && Math.abs(net) <= 32 && absSum >= 55 && span > Math.max(12, chord * 1.12);
+      const sameWay = cluster.every(c => c.turn * cluster[0].turn > 0);
       if (straightThrough) {
         items.push({ point: first.point, m: first.m, type: "straight", i: first.i, i0: first.i, i1: last.i });
-      } else if (cluster.length >= 3 || (cluster.length >= 2 && span < 70 && Math.abs(sumTurn) > 90)) {
+      } else if (!sameWay && absSum >= 55 && (cluster.length >= 3 || (cluster.length >= 2 && span < 70 && Math.abs(sumTurn) > 90))) {
         items.push({ point: mid.point, m: mid.m, type: "roundabout", i: mid.i, i0: first.i, i1: last.i });
+      } else if (sameWay && cluster.length >= 2 && Math.abs(net) >= 28) {
+        const peak = cluster.reduce((a, c) => Math.abs(c.turn) > Math.abs(a.turn) ? c : a);
+        items.push({ point: peak.point, m: peak.m, type: maneuverTypeFromTurn(net), i: peak.i, i0: first.i, i1: last.i });
       } else {
         for (const c of cluster) {
+          if (Math.abs(c.turn) < 20) continue;
           items.push({ point: c.point, m: c.m, type: maneuverTypeFromTurn(c.turn), i: c.i, i0: c.i, i1: c.i });
         }
       }
@@ -4804,7 +4832,9 @@
           if (items[t].type === "roundabout" || items[t].type === "straight") roundGroup = true;
         }
         const bulged = along > Math.max(12, chord * (roundGroup ? 1.12 : 1.45));
-        if (k > n && along > 15 && Math.abs(net) <= 32 && bulged && (k - n >= 2 || roundGroup || along > chord * 1.45)) best = k;
+        // Two ordinary corners that return to the same heading are a jog, not one straight.
+        // A circle split across several points still collapses when the path bulges.
+        if (k > n && along > 15 && Math.abs(net) <= 32 && bulged && (roundGroup || (k - n >= 2 && along > chord * 1.45))) best = k;
       }
       if (best > n) {
         out.push({ point: items[n].point, m: items[n].m, type: "straight", i: items[n].i, i0: items[n].i0, i1: items[best].i1 });
@@ -4863,7 +4893,7 @@
       const m = Number(step && step.m);
       if (!Number.isFinite(m) || m < startM) continue;
       const type = maneuverTypeFromNav(hudManeuver(step));
-      if (!type || type === "dest") continue;
+      if (!type || type === "dest" || !navStepShows(step)) continue;
       const at = pointAtMetres(activeRoutePath, routeCum, m);
       if (!at || !at.point) continue;
       items.push({ point: at.point, m, type });
@@ -5188,20 +5218,34 @@
   // Heading change from just before the roundabout to just after it.
   // The bends inside the circle are ignored, so a 2nd exit that leaves
   // on the same road reads as straight.
-  function roundaboutExitHeading(metres){
-    const path = activeRoutePath, cum = routeCum;
-    if (!path || path.length < 2 || !cum || cum.length !== path.length || !Number.isFinite(metres)) return null;
-    const total = cum[cum.length - 1] || 0;
-    const origin = clamp(metres - 20, 0, total);
-    const approach = pointAtMetres(path, cum, origin).bearing;
-    let best = null;
-    for (const ahead of [45, 80, 120]) {
+  function roundaboutExitHeading(metres, path, cum){
+    const usePath = path || activeRoutePath;
+    const useCum = cum || routeCum;
+    if (!usePath || usePath.length < 2 || !useCum || useCum.length !== usePath.length || !Number.isFinite(metres)) return null;
+    const total = useCum[useCum.length - 1] || 0;
+    const origin = clamp(metres - 25, 0, total);
+    const approach = pointAtMetres(usePath, useCum, origin).bearing;
+    const samples = [];
+    for (let ahead = 20; ahead <= 200; ahead += 12) {
       const at = clamp(metres + ahead, 0, total);
-      if (at <= origin + 25) continue;
-      const delta = ((pointAtMetres(path, cum, at).bearing - approach + 540) % 360) - 180;
-      if (best == null || Math.abs(delta) < Math.abs(best)) best = delta;
+      const next = clamp(at + 28, 0, total);
+      if (next <= at + 10) break;
+      const here = pointAtMetres(usePath, useCum, at).bearing;
+      const after = pointAtMetres(usePath, useCum, next).bearing;
+      samples.push({
+        net: ((here - approach + 540) % 360) - 180,
+        wobble: Math.abs(((after - here + 540) % 360) - 180)
+      });
     }
-    return best;
+    if (!samples.length) return null;
+    let peak = 0;
+    for (let i = 1; i < samples.length; i++) {
+      if (Math.abs(samples[i].net) > Math.abs(samples[peak].net)) peak = i;
+    }
+    for (let i = peak; i < samples.length; i++) {
+      if (samples[i].wobble <= 12) return samples[i].net;
+    }
+    return samples[samples.length - 1].net;
   }
 
   function roundaboutGoesStraight(maneuver, instructions, metres){
@@ -5282,6 +5326,25 @@
   function hudManeuver(step){
     if (!step) return "STRAIGHT";
     return inferManeuver(step.maneuver, step.instructions, step.m);
+  }
+
+  // A plain "continue" is not a turn. It was sitting in front of the next
+  // corner, so the card and the chime showed straight and the turn never came up.
+  function navStepShows(step){
+    if (!step) return false;
+    const fam = maneuverFamily(hudManeuver(step));
+    if (fam === "dest") return true;
+    if (fam !== "straight") return true;
+    return isRoundaboutMention(step.maneuver, step.instructions);
+  }
+
+  function nextShownSteps(steps){
+    const list = steps || [];
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      if (navStepShows(list[i])) out.push(list[i]);
+    }
+    return out.length ? out : list.slice(-1);
   }
 
   function isBannerStreetPart(s){
@@ -5721,7 +5784,7 @@
       return;
     }
 
-    const ahead = upcomingNavSteps(progressM, { hold: !infoSkipMode });
+    const ahead = nextShownSteps(upcomingNavSteps(progressM, { hold: !infoSkipMode }));
     let current = ahead[0];
     let next = ahead[1];
     if (infoSkipMode && infoLevel > 0) {
@@ -6142,7 +6205,7 @@
       progressM = nearestAlongRoute(currentGpsPoint, activeRoutePath, routeCum);
     }
     const speed = speedKalman.speed;
-    const ahead = upcomingNavSteps(progressM, { hold: false });
+    const ahead = nextShownSteps(upcomingNavSteps(progressM, { hold: false }));
     const current = ahead[0];
     if (!current) return;
     const decoys = decoysForStep(current);
@@ -7218,14 +7281,13 @@
     const merged = [];
     const pushM = m => {
       if (!(m > startM + 35)) return;
-      if (merged.some(g => Math.abs(g - m) < 45)) return;
+      if (merged.some(g => Math.abs(g - m) < 28)) return;
       merged.push(m);
     };
     routeManeuvers().forEach(t => pushM(t.m));
     (navSteps || []).forEach(s => {
-      const fam = maneuverFamily(s.maneuver);
-      if (fam === "dest") return;
-      if (fam === "straight" && !isRoundaboutMention(s.maneuver, s.instructions)) return;
+      if (!navStepShows(s)) return;
+      if (maneuverFamily(hudManeuver(s)) === "dest") return;
       pushM(s.m);
     });
     merged.sort((a, b) => a - b);
@@ -7269,6 +7331,7 @@
     const startM = clamp(Number.isFinite(puck.progressM) ? puck.progressM : 0, 0, total);
     const targets = [];
     upcomingNavSteps(startM).forEach(step => {
+      if (!navStepShows(step)) return;
       const m = Math.min(Number(step.m) || 0, total);
       if (!(m > startM + 8)) return;
       if (targets.length && m - targets[targets.length - 1] < 35) {
@@ -9728,12 +9791,16 @@
     const zoneH = Math.min(320, Math.max(200, visH * 0.46));
     return x >= left && x <= left + zoneW && y >= top && y <= top + zoneH;
   }
+  let lastDebugTapMs = 0;
   function noteDebugCornerTap(){
+    const now = performance.now();
+    // A head-unit click can arrive both as a pointer and as a direct tap.
+    if (now - lastDebugTapMs < 90) return;
+    lastDebugTapMs = now;
     if (SHOW_DEBUG_COG) {
       window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
       return;
     }
-    const now = performance.now();
     if (now - debugCogTapMs > 1800) debugCogTaps = 0;
     debugCogTapMs = now;
     debugCogTaps += 1;
@@ -9741,6 +9808,10 @@
     debugCogTaps = 0;
     window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
   }
+  window.__aaDebugCornerTap = function(x, y){
+    if (!debugCornerZone(Number(x), Number(y))) return;
+    noteDebugCornerTap();
+  };
   window.addEventListener("pointerdown", event => {
     if (event.isPrimary === false) return;
     debugCornerDown = { x: event.clientX, y: event.clientY, t: performance.now() };
@@ -9760,6 +9831,7 @@
   document.getElementById("carDebugBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
+    noteDebugCornerTap();
   });
   document.getElementById("routeClose").addEventListener("click", event => {
     event.preventDefault();

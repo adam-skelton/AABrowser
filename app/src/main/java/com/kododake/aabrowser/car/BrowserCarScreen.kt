@@ -37,6 +37,7 @@ class BrowserCarScreen(
             .setActionStrip(
                 ActionStrip.Builder()
                     .addAction(searchAction())
+                    .addAction(debugAction())
                     .build()
             )
             .setMapActionStrip(
@@ -45,6 +46,18 @@ class BrowserCarScreen(
                     .build()
             )
             .setPanModeListener { _ -> }
+            .build()
+    }
+
+    private fun debugAction(): Action {
+        return Action.Builder()
+            .setIcon(
+                CarIcon.Builder(
+                    IconCompat.createWithResource(carContext, R.drawable.car_debug_24)
+                ).build()
+            )
+            .setTitle(carContext.getString(R.string.car_action_debug))
+            .setOnClickListener { webHost.toggleDebugOverlay() }
             .build()
     }
 
