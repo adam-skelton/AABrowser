@@ -681,10 +681,10 @@ class CarWebViewHost(
             gradientRadius = maxOf(wf, hf) * 0.78f
             setGradientCenter(cx.coerceIn(0.05f, 0.95f), cy.coerceIn(0.05f, 0.95f))
             colors = intArrayOf(
-                0xFF3A5578.toInt(),
-                0xFF24364F.toInt(),
-                0xFF152033.toInt(),
-                0xFF0C121C.toInt()
+                0xFF8EBCF2.toInt(),
+                0xFF3F74B8.toInt(),
+                0xFF1C3F6E.toInt(),
+                0xFF10192B.toInt()
             )
         }
     }
@@ -698,7 +698,12 @@ class CarWebViewHost(
         val rightPx = (w - area.right).coerceIn(0, w)
         val bottomPx = (h - area.bottom).coerceIn(0, h)
         val topPx = 0
-        bootOverlay?.setPadding(leftPx, topPx, rightPx, bottomPx)
+        val overlay = bootOverlay
+        if (overlay != null) {
+            val bouncePx = (28f * overlay.resources.displayMetrics.density).toInt()
+            overlay.clipToPadding = false
+            overlay.setPadding(leftPx, topPx + bouncePx, rightPx, bottomPx)
+        }
         applyBootBackdrop()
         val left = leftPx.toFloat() / w
         val top = topPx.toFloat() / h

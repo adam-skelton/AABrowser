@@ -4,7 +4,10 @@
     android:layout_height="wrap_content"
     android:background="@android:color/transparent"
     android:clickable="false"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:focusable="false"
+    android:paddingTop="28dp"
     android:gravity="center"
     android:orientation="vertical">
 
