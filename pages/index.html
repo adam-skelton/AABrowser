@@ -4877,7 +4877,20 @@
   let cueDecor = [];
   const turnCue = { played: new Set(), ignoreOsm: false, test: null, ctx: null };
   const NAV_CLOCK_S = 10;
+  // Seconds of travel to pull the countdown target back from the junction node.
+  // The node sits in the middle of the intersection; this lands the count on arrival.
+  const NAV_CLOCK_LEAD_S = 2.4;
   const NAV_LANE_AHEAD_M = 220;
+
+  // Time until the turn from current speed and distance. The maneuver point is the
+  // junction node, which is still ahead when the car reaches the intersection, so the
+  // count uses a point a short, speed-scaled distance before that node.
+  function turnArrivalSeconds(distM, speedMps){
+    const speed = Math.max(Number(speedMps) || 0, 0.35);
+    const dist = Math.max(0, Number(distM) || 0);
+    const leadM = Math.min(speed * NAV_CLOCK_LEAD_S, 70);
+    return Math.max(0, dist - leadM) / speed;
+  }
   const NAV_TURN_HOLD_MS = 1100;
   const CLOCK_RING = 2 * Math.PI * 22;
   let navPassHold = { m: null, until: 0 };
@@ -5656,12 +5669,12 @@
         const label = formatTurnDistance(dist);
         if (distEl.textContent !== label) distEl.textContent = label;
       }
-      const speed = speedKalman.speed;
-      const etaS = dist / Math.max(speed, 0.35);
-      const showClock = !infoSkipMode && speed > 0.8 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
+      const speed = Math.max(speedKalman.speed, 0);
+      const etaS = turnArrivalSeconds(dist, speed);
+      const showClock = !infoSkipMode && speed > 0.8 && etaS >= 0.5 && etaS <= NAV_CLOCK_S + 0.4 && dist < 140;
       if (clock && wrap && clockNum) {
         if (showClock) {
-          const secs = Math.max(1, Math.ceil(etaS));
+          const secs = Math.max(1, Math.round(etaS));
           clock.hidden = false;
           clock.classList.add("visible");
           wrap.classList.add("clock");
