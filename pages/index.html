@@ -161,7 +161,10 @@
     #navPrimaryDist {font-size:26px; font-weight:800; letter-spacing:-.4px; line-height:1.05; font-variant-numeric:tabular-nums}
     #navClock {display:none}
     #navClock.visible {display:flex !important}
-    #navIconWrap.clock #navIcon {opacity:0}
+    #navIconWrap.clock {width:auto; display:flex; align-items:center; gap:0}
+    #navIconWrap.clock #navIcon {position:relative; inset:auto; width:52px; height:52px; opacity:1; flex:0 0 auto}
+    #navIconWrap.clock #navIcon svg {width:50px; height:50px}
+    #navIconWrap.clock #navClock {position:relative; inset:auto; width:74px; height:74px; flex:0 0 auto}
     #navClock svg {width:74px; height:74px; display:block}
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
     #navPrimary {height:auto; overflow:visible}
@@ -4635,7 +4638,17 @@
   // re-splitting). Refreshed every few metres of progress, not every frame.
   function updateTraversedRoute(){
     if (!isNavigating() || !puck.engaged || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
+    const total = routeCum[routeCum.length - 1];
     const m = puck.progressM;
+    // Arrival keeps the blue route on the map. The grey trail would otherwise cover it.
+    if (total - m <= 40) {
+      if (routeDoneLine) {
+        try { routeDoneLine.remove(); } catch (err) {}
+        routeDoneLine = null;
+      }
+      routeDoneUpdatedM = -Infinity;
+      return;
+    }
     if (Math.abs(m - routeDoneUpdatedM) < ROUTE_DONE_STEP_M) return;
     routeDoneUpdatedM = m;
     let i = 1;
@@ -4742,12 +4755,20 @@
       const first = cluster[0], last = cluster[cluster.length - 1];
       const span = last.m - first.m;
       const sumTurn = cluster.reduce((s, c) => s + c.turn, 0);
+      const absSum = cluster.reduce((s, c) => s + Math.abs(c.turn), 0);
       const mid = cluster[Math.floor(cluster.length / 2)];
-      if (cluster.length >= 3 || (cluster.length >= 2 && span < 70 && Math.abs(sumTurn) > 90)) {
-        items.push({ point: mid.point, m: mid.m, type: "roundabout" });
+      const inBrg = bearingDegrees(path[Math.max(0, first.i - 1)], path[first.i]);
+      const outIdx = Math.min(path.length - 1, last.i + 1);
+      const net = ((bearingDegrees(path[last.i], path[outIdx]) - inBrg + 540) % 360) - 180;
+      const chord = distanceMetres(path[first.i], path[last.i]);
+      const straightThrough = cluster.length >= 3 && span > 12 && span < 180 && Math.abs(net) <= 32 && absSum >= 55 && span > Math.max(12, chord * 1.12);
+      if (straightThrough) {
+        items.push({ point: first.point, m: first.m, type: "straight", i: first.i, i0: first.i, i1: last.i });
+      } else if (cluster.length >= 3 || (cluster.length >= 2 && span < 70 && Math.abs(sumTurn) > 90)) {
+        items.push({ point: mid.point, m: mid.m, type: "roundabout", i: mid.i, i0: first.i, i1: last.i });
       } else {
         for (const c of cluster) {
-          items.push({ point: c.point, m: c.m, type: maneuverTypeFromTurn(c.turn) });
+          items.push({ point: c.point, m: c.m, type: maneuverTypeFromTurn(c.turn), i: c.i, i0: c.i, i1: c.i });
         }
       }
       cluster = [];
@@ -4757,7 +4778,43 @@
       cluster.push(t);
     }
     flush();
-    return items;
+    return collapseStraightRoundabouts(path, cum, items);
+  }
+
+  // A roundabout you leave on the same heading is one "straight" point.
+  // Entry and exit can sit far enough apart to be tagged as two turns.
+  function collapseStraightRoundabouts(path, cum, items){
+    if (!path || !items || items.length < 2) return items || [];
+    const out = [];
+    let n = 0;
+    while (n < items.length) {
+      let best = n;
+      const i0 = items[n].i0;
+      for (let k = n + 1; k < items.length && Number.isFinite(i0) && Number.isFinite(items[k].i1); k++) {
+        const span = items[k].m - items[n].m;
+        if (span > 180) break;
+        if (items[k].m - items[k - 1].m > 145) break;
+        const i1 = items[k].i1;
+        const along = cum && cum[i1] != null && cum[i0] != null ? cum[i1] - cum[i0] : span;
+        const chord = distanceMetres(path[i0], path[i1]);
+        const outIdx = Math.min(path.length - 1, i1 + 1);
+        const net = ((bearingDegrees(path[i1], path[outIdx]) - bearingDegrees(path[Math.max(0, i0 - 1)], path[i0]) + 540) % 360) - 180;
+        let roundGroup = false;
+        for (let t = n; t <= k; t++) {
+          if (items[t].type === "roundabout" || items[t].type === "straight") roundGroup = true;
+        }
+        const bulged = along > Math.max(12, chord * (roundGroup ? 1.12 : 1.45));
+        if (k > n && along > 15 && Math.abs(net) <= 32 && bulged && (k - n >= 2 || roundGroup || along > chord * 1.45)) best = k;
+      }
+      if (best > n) {
+        out.push({ point: items[n].point, m: items[n].m, type: "straight", i: items[n].i, i0: items[n].i0, i1: items[best].i1 });
+        n = best + 1;
+      } else {
+        out.push(items[n]);
+        n++;
+      }
+    }
+    return out;
   }
 
   function clearManeuverMarkers(){
@@ -5122,6 +5179,44 @@
     return 0;
   }
 
+  function isRoundaboutMention(maneuver, instructions){
+    const m = String(maneuver || "").toUpperCase();
+    const text = stripNavHtml(instructions);
+    return roundaboutExitNumber(text) > 0 || /roundabout/i.test(text) || m.includes("ROUNDABOUT");
+  }
+
+  // Heading change from just before the roundabout to just after it.
+  // The bends inside the circle are ignored, so a 2nd exit that leaves
+  // on the same road reads as straight.
+  function roundaboutExitHeading(metres){
+    const path = activeRoutePath, cum = routeCum;
+    if (!path || path.length < 2 || !cum || cum.length !== path.length || !Number.isFinite(metres)) return null;
+    const total = cum[cum.length - 1] || 0;
+    const origin = clamp(metres - 20, 0, total);
+    const approach = pointAtMetres(path, cum, origin).bearing;
+    let best = null;
+    for (const ahead of [45, 80, 120]) {
+      const at = clamp(metres + ahead, 0, total);
+      if (at <= origin + 25) continue;
+      const delta = ((pointAtMetres(path, cum, at).bearing - approach + 540) % 360) - 180;
+      if (best == null || Math.abs(delta) < Math.abs(best)) best = delta;
+    }
+    return best;
+  }
+
+  function roundaboutGoesStraight(maneuver, instructions, metres){
+    if (!isRoundaboutMention(maneuver, instructions)) return false;
+    const m = String(maneuver || "").toUpperCase();
+    const text = stripNavHtml(instructions);
+    const exitN = roundaboutExitNumber(text);
+    const namedStraight = m.includes("STRAIGHT") || /\bstraight\b/i.test(text) || exitN === 2;
+    const namedTurn = (exitN === 1 || exitN >= 3 || m.includes("LEFT") || m.includes("RIGHT")) && !m.includes("STRAIGHT");
+    const net = roundaboutExitHeading(metres);
+    if (net != null && Math.abs(net) <= 34 && (namedStraight || !namedTurn)) return true;
+    if (net != null && Math.abs(net) >= 40) return false;
+    return namedStraight;
+  }
+
   function maneuverFromWords(maneuver, instructions){
     const m = String(maneuver || "").toUpperCase();
     if (m.includes("UTURN") || m.includes("REVERSE")) {
@@ -5148,9 +5243,12 @@
     const exitN = roundaboutExitNumber(text);
     const roundabout = exitN > 0 || /roundabout/i.test(text) || m.includes("ROUNDABOUT");
     if (roundabout) {
-      if (exitN <= 1) return "TURN_LEFT";
-      if (exitN === 2) return "STRAIGHT";
-      return "TURN_RIGHT";
+      if (m.includes("STRAIGHT") || /\bstraight\b/.test(t) || exitN === 2) return "STRAIGHT";
+      if (exitN === 1) return "TURN_LEFT";
+      if (exitN >= 3) return "TURN_RIGHT";
+      if (m.includes("LEFT")) return m.includes("SLIGHT") ? "TURN_SLIGHT_LEFT" : "TURN_LEFT";
+      if (m.includes("RIGHT")) return m.includes("SLIGHT") ? "TURN_SLIGHT_RIGHT" : "TURN_RIGHT";
+      return "ROUNDABOUT";
     }
     return maneuver || "STRAIGHT";
   }
@@ -5159,6 +5257,14 @@
   // A clear bend the other way replaces the label, including "Turn left"
   // pinned on a corner that actually turns right.
   function inferManeuver(maneuver, instructions, metres){
+    if (isRoundaboutMention(maneuver, instructions)) {
+      if (roundaboutGoesStraight(maneuver, instructions, metres)) return "STRAIGHT";
+      const net = roundaboutExitHeading(metres);
+      const turned = net != null ? maneuverFromSignedTurn(net) : "";
+      if (turned) return turned;
+      const spoken = maneuverFromWords(maneuver, instructions);
+      return maneuverFamily(spoken) === "roundabout" ? "STRAIGHT" : (spoken || "STRAIGHT");
+    }
     const labeled = maneuverFromWords(maneuver, instructions);
     if (maneuverFamily(labeled) === "dest") return labeled;
     const near = pathTurnNear(metres);
@@ -5559,6 +5665,19 @@
     document.documentElement.classList.add("has-lanes");
   }
 
+  function metresToNavTarget(fallbackM){
+    const dest = activeDestination;
+    const here = Number.isFinite(puck.lat) && Number.isFinite(puck.lng)
+      ? { lat: puck.lat, lng: puck.lng }
+      : (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)
+        ? { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng }
+        : null);
+    if (dest && here && Number.isFinite(dest.lat) && Number.isFinite(dest.lng)) {
+      return Math.max(0, distanceMetres(here, dest));
+    }
+    return Math.max(0, Number(fallbackM) || 0);
+  }
+
   function updateNavHud(){
     if (!isNavigating() || !activeRoutePath.length) {
       hideNavHud();
@@ -5579,10 +5698,11 @@
       etaBar.classList.add("visible");
     }
     const arrived = !flyover && remainM <= 40;
+    const targetM = metresToNavTarget(remainM);
     document.body.classList.toggle("nav-arrived", arrived);
     document.documentElement.classList.toggle("nav-arrived", arrived);
     if (remainEl) remainEl.textContent = arrived ? "Arrived" : formatDuration(remainMs);
-    if (etaDistEl) etaDistEl.textContent = formatDistance(remainM);
+    if (etaDistEl) etaDistEl.textContent = formatDistance(arrived ? targetM : remainM);
     if (clockEl) clockEl.textContent = formatTime(eta);
     const sepEl = document.getElementById("navEtaSep");
     if (sepEl) {
@@ -5653,7 +5773,8 @@
         icon.innerHTML = maneuverIconSvg(turn, 66);
       }
       const nextTurn = next ? hudManeuver(next) : "";
-      if (next && thenEl && thenIcon && maneuverFamily(nextTurn) !== "straight") {
+      const nextIsStraightRound = !!(next && maneuverFamily(nextTurn) === "straight" && isRoundaboutMention(next.maneuver, next.instructions));
+      if (next && thenEl && thenIcon && (maneuverFamily(nextTurn) !== "straight" || nextIsStraightRound)) {
         thenEl.hidden = false;
         thenEl.classList.add("visible");
         if (thenIcon.dataset.maneuver !== nextTurn) {
@@ -7103,7 +7224,9 @@
     routeManeuvers().forEach(t => pushM(t.m));
     (navSteps || []).forEach(s => {
       const fam = maneuverFamily(s.maneuver);
-      if (fam !== "dest" && fam !== "straight") pushM(s.m);
+      if (fam === "dest") return;
+      if (fam === "straight" && !isRoundaboutMention(s.maneuver, s.instructions)) return;
+      pushM(s.m);
     });
     merged.sort((a, b) => a - b);
     return merged;
