@@ -1,16 +1,20 @@
 package com.kododake.aabrowser.car
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
-import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.Row
 import androidx.car.app.model.SearchTemplate
 import androidx.car.app.model.SearchTemplate.SearchCallback
 import androidx.car.app.model.Template
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -111,7 +115,7 @@ class CarKeyboardScreen(
             if (hit.subtitle.isNotBlank()) {
                 row.addText(hit.subtitle)
             }
-            row.setImage(suggestionIcon(hit.placeId), Row.IMAGE_TYPE_ICON)
+            row.setImage(suggestionIcon(hit.placeId), Row.IMAGE_TYPE_LARGE)
             row.setOnClickListener {
                 webHost.chooseSearchSuggestion(hit.placeId, hit.title)
                 screenManager.pop()
@@ -122,37 +126,50 @@ class CarKeyboardScreen(
     }
 
     /**
-     * Leading glyph for a result row. Browse-catalog entries ("__map:<category>") get their
-     * category icon in the same accent colour the web UI uses; place predictions get a pin.
+     * Leading glyph for a result row. The host tints [Row.IMAGE_TYPE_ICON] white and
+     * ignores custom [androidx.car.app.model.CarColor]s, so the colour is painted into
+     * a bitmap and sent as a large image, which the host leaves alone.
      */
     private fun suggestionIcon(placeId: String): CarIcon {
         val category = placeId.removePrefix("__map:").takeIf { placeId.startsWith("__map:") }
         val (res, color) = when (category) {
-            "custom" -> R.drawable.ic_cat_map to 0xFF0F9D58
-            "gas_station" -> R.drawable.ic_cat_fuel to 0xFFF9AB00
-            "restaurant" -> R.drawable.ic_cat_restaurant to 0xFFEA4335
-            "cafe" -> R.drawable.ic_cat_cafe to 0xFFA142F4
-            "supermarket" -> R.drawable.ic_cat_supermarket to 0xFF34A853
-            "parking" -> R.drawable.ic_cat_parking to 0xFF1A73E8
-            "pharmacy" -> R.drawable.ic_cat_pharmacy to 0xFF129EAF
-            "atm" -> R.drawable.ic_cat_atm to 0xFF188038
-            "hospital" -> R.drawable.ic_cat_hospital to 0xFFD93025
-            "lodging" -> R.drawable.ic_cat_hotel to 0xFF5F6368
-            else -> R.drawable.ic_cat_place to 0L
+            "custom" -> R.drawable.ic_cat_map to 0xFF0F9D58.toInt()
+            "gas_station" -> R.drawable.ic_cat_fuel to 0xFFF9AB00.toInt()
+            "restaurant" -> R.drawable.ic_cat_restaurant to 0xFFEA4335.toInt()
+            "cafe" -> R.drawable.ic_cat_cafe to 0xFFA142F4.toInt()
+            "supermarket" -> R.drawable.ic_cat_supermarket to 0xFF34A853.toInt()
+            "parking" -> R.drawable.ic_cat_parking to 0xFF1A73E8.toInt()
+            "pharmacy" -> R.drawable.ic_cat_pharmacy to 0xFF129EAF.toInt()
+            "atm" -> R.drawable.ic_cat_atm to 0xFF188038.toInt()
+            "hospital" -> R.drawable.ic_cat_hospital to 0xFFD93025.toInt()
+            "lodging" -> R.drawable.ic_cat_hotel to 0xFF5F6368.toInt()
+            else -> R.drawable.ic_cat_place to 0xFF1A73E8.toInt()
         }
-        val builder = CarIcon.Builder(IconCompat.createWithResource(carContext, res))
-        if (color != 0L) {
-            // Slightly lighter variant keeps the tint legible on the host's dark surfaces.
-            builder.setTint(CarColor.createCustom(color.toInt(), lighten(color.toInt())))
-        }
-        return builder.build()
+        iconCache[res]?.let { return it }
+        val icon = coloredChipIcon(res, color)
+        iconCache[res] = icon
+        return icon
     }
 
-    private fun lighten(color: Int): Int {
-        val r = ((color shr 16) and 0xFF)
-        val g = ((color shr 8) and 0xFF)
-        val b = (color and 0xFF)
-        fun up(c: Int) = (c + (255 - c) * 0.35f).toInt().coerceIn(0, 255)
-        return (0xFF shl 24) or (up(r) shl 16) or (up(g) shl 8) or up(b)
+    private fun coloredChipIcon(res: Int, color: Int): CarIcon {
+        val density = carContext.resources.displayMetrics.density
+        val size = (48 * density).toInt().coerceIn(48, 128)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+        val radius = size * 0.22f
+        canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, paint)
+        val drawable = AppCompatResources.getDrawable(carContext, res)?.mutate()
+        if (drawable != null) {
+            DrawableCompat.setTint(drawable, 0xFFFFFFFF.toInt())
+            val inset = (size * 0.22f).toInt()
+            drawable.setBounds(inset, inset, size - inset, size - inset)
+            drawable.draw(canvas)
+        }
+        return CarIcon.Builder(IconCompat.createWithBitmap(bitmap)).build()
+    }
+
+    private companion object {
+        val iconCache = HashMap<Int, CarIcon>()
     }
 }
