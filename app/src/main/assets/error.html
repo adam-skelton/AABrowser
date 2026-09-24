@@ -3,71 +3,69 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Unable to reach site</title>
+  <title>No connection</title>
   <style>
-    body { font-family: Roboto, Arial, sans-serif; background:#f7f7f7; color:#222; margin:0; padding:24px; }
-    .card { max-width:720px; margin:36px auto; background:#fff; border-radius:8px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.08);} 
-    h1 { margin:0 0 8px 0; font-size:20px; }
-    p { margin:8px 0; }
-    ul { margin:8px 0 16px 20px; }
-    .actions { display:flex; gap:8px; }
-    button { background:#1f6feb; color:#fff; border:none; padding:10px 14px; border-radius:6px; cursor:pointer; }
-    button.secondary { background:#e0e0e0; color:#111; }
-    .small { font-size:13px; color:#666; }
+    html, body {height:100%; margin:0}
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #e8eaed;
+      background: #0c121c;
+      background-image: radial-gradient(ellipse 85% 60% at 50% 36%, #3a5578 0%, #24364f 38%, #152033 68%, #0c121c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .card {
+      width: min(440px, 100%);
+      text-align: center;
+    }
+    .pin { width: 56px; height: 76px; margin: 0 auto 18px; display: block; }
+    h1 { margin: 0 0 8px; font-size: 26px; font-weight: 750; letter-spacing: -.3px; }
+    p { margin: 0; font-size: 16px; line-height: 1.4; color: rgba(232,234,237,.78); }
+    button {
+      margin-top: 22px;
+      min-height: 48px;
+      padding: 0 22px;
+      border: 0;
+      border-radius: 24px;
+      background: #1a73e8;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .detail { margin-top: 16px; font-size: 12px; color: rgba(232,234,237,.45); word-break: break-word; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Can't reach this site</h1>
-    <p>We couldn't load the page you requested. Possible reasons include:</p>
-    <ul>
-      <li>Your device is offline (no network connection).</li>
-      <li>There is a DNS problem or the domain name cannot be resolved.</li>
-      <li>The server is down or temporarily unreachable.</li>
-      <li>A firewall, VPN, or network policy is blocking access.</li>
-      <li>The site requires a secure connection (TLS) that failed.</li>
-      <li>The hostname is blocked on this device or network.</li>
-    </ul>
-    <div class="actions">
-      <button id="retry">Retry</button>
-      <button id="openExternal" class="secondary">Open externally</button>
-    </div>
-    <p class="small">If the problem persists, try switching networks or checking your DNS settings.</p>
+    <svg class="pin" viewBox="0 0 96 136" aria-hidden="true">
+      <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+      <path fill="#EA4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+      <path fill="#4285F4" d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3"/>
+      <path fill="#FBBC04" d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3"/>
+      <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
+    </svg>
+    <h1>No connection</h1>
+    <p id="lead">This page needs a network connection. Check the signal, then try again.</p>
+    <button id="retry" type="button">Try again</button>
+    <p class="detail" id="detail" hidden></p>
   </div>
-
   <script>
-    function getParam(name) {
-      const params = new URLSearchParams(location.search);
-      return params.get(name) || '';
+    var failed = "__FAILED_URL__";
+    var code = "__ERROR_CODE__";
+    var message = "__ERROR_MESSAGE__";
+    if (code && code !== "__ERROR_CODE__") {
+      var detail = document.getElementById("detail");
+      detail.hidden = false;
+      detail.textContent = (message && message.indexOf("__ERROR") !== 0 ? message : "Couldn't reach the map") + (code ? " (" + code + ")" : "");
     }
-
-    const failed = decodeURIComponent(getParam('failedUrl') || '')
-    const httpStatus = getParam('httpStatus') || ''
-    const code = getParam('code') || httpStatus || ''
-    const message = decodeURIComponent(getParam('message') || '')
-
-    if (code || message) {
-      const info = document.createElement('p')
-      info.className = 'small'
-      info.textContent = (code ? ('Error code: ' + code + (message ? ' — ' : '')) : '') + (message || '')
-      document.querySelector('.card').appendChild(info)
-    }
-
-    document.getElementById('retry').addEventListener('click', function() {
-      if (failed) {
-        location.href = failed
-      } else {
-        location.reload()
-      }
-    })
-
-    document.getElementById('openExternal').addEventListener('click', function() {
-      if (typeof Android !== 'undefined' && Android.openExternal) {
-        try { Android.openExternal(failed || '') } catch (e) { window.open(failed || '', '_blank') }
-      } else {
-        window.open(failed || '', '_blank')
-      }
-    })
+    document.getElementById("retry").addEventListener("click", function () {
+      if (failed && failed.indexOf("__FAILED") !== 0) location.href = failed;
+      else location.reload();
+    });
   </script>
 </body>
 </html>

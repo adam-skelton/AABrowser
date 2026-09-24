@@ -200,6 +200,9 @@ class MainActivity : AppCompatActivity() {
             onExitFullscreen = {
                 runOnUiThread { exitFullscreen(true) }
             },
+            onError = { _, _ ->
+                runOnUiThread { dismissMapBootOverlay() }
+            },
             onGeolocationPermission = { _, grant ->
                 runOnUiThread {
                     if (hasLocationPermission()) {
@@ -245,6 +248,7 @@ class MainActivity : AppCompatActivity() {
         val overlay = binding.mapBootOverlay.root
         if (overlay.visibility != View.VISIBLE) return
         overlay.animate().cancel()
+        MapBootOverlay.stopBounce(overlay)
         overlay.visibility = View.GONE
     }
 

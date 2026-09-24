@@ -454,7 +454,8 @@ class CarWebViewHost(
                 callbacks = BrowserCallbacks(
                     onUrlChange = { evaluateJavascript(FOCUS_HOOK_JS, null) },
                     onPageStarted = { publishSafeArea() },
-                    onPageFinished = { publishSafeArea() }
+                    onPageFinished = { publishSafeArea() },
+                    onError = { _, _ -> dismissBootOverlay(showSearch = false) }
                 ),
                 useDesktopMode = true
             )
@@ -499,11 +500,13 @@ class CarWebViewHost(
         mainHandler.postDelayed(wakeRendererRunnable, 400L)
     }
 
-    private fun dismissBootOverlay() {
+    private fun dismissBootOverlay(showSearch: Boolean = true) {
         bootOverlayDismissed = true
+        searchPin?.visibility = if (showSearch) View.VISIBLE else View.GONE
         val overlay = bootOverlay ?: return
         bootOverlay = null
         overlay.animate().cancel()
+        MapBootOverlay.stopBounce(overlay)
         overlay.visibility = View.GONE
         (overlay.parent as? ViewGroup)?.removeView(overlay)
     }

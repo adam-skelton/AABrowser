@@ -99,6 +99,32 @@ fun configureWebView(
 
         //setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
+        var showingLocalError = false
+        fun showLocalErrorPage(view: WebView, failedUrl: String, code: Int, message: String) {
+            if (showingLocalError) return
+            if (failedUrl.startsWith("https://local.aabrowser/")) return
+            showingLocalError = true
+            callbacks.onError(code, message)
+            view.stopLoading()
+            val html = try {
+                localErrorDocument(view, failedUrl, code, message)
+            } catch (_: Exception) {
+                fallbackErrorDocument()
+            }
+            view.post {
+                try {
+                    view.loadDataWithBaseURL(
+                        "https://local.aabrowser/error/",
+                        html,
+                        "text/html",
+                        "utf-8",
+                        failedUrl.ifBlank { null }
+                    )
+                } catch (_: Exception) {
+                }
+            }
+        }
+
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
@@ -127,6 +153,7 @@ fun configureWebView(
                 super.onPageStarted(view, url, favicon)
                 callbacks.onPageStarted()
                 val stringUrl = url ?: return
+                if (!stringUrl.startsWith("https://local.aabrowser/")) showingLocalError = false
                 val uri = Uri.parse(stringUrl)
                 val scheme = uri.scheme?.lowercase()
 
@@ -153,27 +180,12 @@ fun configureWebView(
                 error: WebResourceError
             ) {
                 if (!request.isForMainFrame) return
-                val code = error.errorCode
-                val shouldShowErrorPage = when (code) {
-                    WebViewClient.ERROR_HOST_LOOKUP,
-                    WebViewClient.ERROR_CONNECT,
-                    WebViewClient.ERROR_TIMEOUT,
-                    WebViewClient.ERROR_PROXY_AUTHENTICATION -> true
-                    else -> false
-                }
-
-                if (shouldShowErrorPage) {
-                    val failed = request.url?.toString().orEmpty()
-                    val message = error.description?.toString().orEmpty()
-                    val assetUrl = "file:///android_asset/error.html?failedUrl=${Uri.encode(failed)}&code=$code&message=${Uri.encode(message)}"
-                    try {
-                        view.loadUrl(assetUrl)
-                    } catch (_: Exception) {
-                        callbacks.onError(code, error.description?.toString())
-                    }
-                    return
-                }
-                callbacks.onError(code, error.description?.toString())
+                showLocalErrorPage(
+                    view,
+                    request.url?.toString().orEmpty(),
+                    error.errorCode,
+                    error.description?.toString().orEmpty()
+                )
             }
 
             override fun onReceivedHttpError(
@@ -181,35 +193,22 @@ fun configureWebView(
                 request: WebResourceRequest,
                 errorResponse: WebResourceResponse
             ) {
-                if (request.isForMainFrame) {
-                    val code = errorResponse.statusCode
-                    if (code in 400..599 && code != 429) {
-                        val failed = request.url?.toString().orEmpty()
-                        val message = errorResponse.reasonPhrase.orEmpty()
-                        val assetUrl = "file:///android_asset/error.html?failedUrl=${Uri.encode(failed)}&code=$code&message=${Uri.encode(message)}"
-                        try {
-                            view.loadUrl(assetUrl)
-                        } catch (_: Exception) {
-                            callbacks.onError(code, message)
-                        }
-                        return
-                    }
+                if (!request.isForMainFrame) return
+                val code = errorResponse.statusCode
+                if (code in 400..599 && code != 429) {
+                    showLocalErrorPage(
+                        view,
+                        request.url?.toString().orEmpty(),
+                        code,
+                        errorResponse.reasonPhrase.orEmpty()
+                    )
                 }
             }
 
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 val primary = try { error.primaryError } catch (_: Exception) { -1 }
-                val url = error.url ?: ""
-                val message = "SSL error: $primary"
-                val assetUrl = "file:///android_asset/error.html?failedUrl=${Uri.encode(url)}&sslError=$primary&message=${Uri.encode(message)}"
-                try {
-                    view.loadUrl(assetUrl)
-                    handler.cancel()
-                    return
-                } catch (_: Exception) {}
-
                 handler.cancel()
-                callbacks.onError(primary, message)
+                showLocalErrorPage(view, error.url ?: "", primary, "SSL error: $primary")
             }
         }
 
@@ -368,3 +367,27 @@ private const val MOBILE_CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWe
 private const val WINDOWS_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36"
 private const val SAFARI_MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 private const val SAFARI_IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+private var errorPageTemplate: String? = null
+
+private fun localErrorDocument(view: WebView, failedUrl: String, code: Int, message: String): String {
+    val template = errorPageTemplate ?: view.context.assets.open("error.html").bufferedReader().use { it.readText() }
+        .also { errorPageTemplate = it }
+    return template
+        .replace("__FAILED_URL__", jsEscape(failedUrl))
+        .replace("__ERROR_CODE__", jsEscape(code.toString()))
+        .replace("__ERROR_MESSAGE__", jsEscape(message.ifBlank { "No connection" }))
+}
+
+private fun fallbackErrorDocument(): String {
+    return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>No connection</title></head><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0c121c;color:#e8eaed;font-family:system-ui,sans-serif;text-align:center;padding:24px"><div><h1 style="font-weight:750">No connection</h1><p>This page needs a network connection. Check the signal, then try again.</p></div></body></html>"""
+}
+
+private fun jsEscape(value: String): String {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("</", "<\\/")
+}
