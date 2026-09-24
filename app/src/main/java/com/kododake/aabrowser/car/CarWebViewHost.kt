@@ -27,14 +27,11 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebView
 import android.widget.FrameLayout
-import android.widget.ImageView
-import androidx.appcompat.content.res.AppCompatResources
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import com.kododake.aabrowser.R
 import com.kododake.aabrowser.web.BrowserCallbacks
 import com.kododake.aabrowser.web.configureWebView
@@ -105,7 +102,6 @@ class CarWebViewHost(
     private var bootOverlay: View? = null
     private var bootOverlayDismissed = false
     private var presentationRoot: View? = null
-    private var searchPin: ImageView? = null
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -381,7 +377,6 @@ class CarWebViewHost(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
-        ensureSearchPin(container)
         if (!bootOverlayDismissed) {
             val overlay = carPresentation.layoutInflater.inflate(
                 R.layout.view_map_boot_overlay,
@@ -506,75 +501,11 @@ class CarWebViewHost(
 
     private fun dismissBootOverlay() {
         bootOverlayDismissed = true
-        searchPin?.visibility = View.VISIBLE
         val overlay = bootOverlay ?: return
         bootOverlay = null
         overlay.animate().cancel()
         overlay.visibility = View.GONE
         (overlay.parent as? ViewGroup)?.removeView(overlay)
-    }
-
-    // Drawn on the map surface. The host tints every action-strip icon white, so the
-    // coloured Maps pin cannot live there.
-    private fun ensureSearchPin(container: ViewGroup) {
-        searchPin?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        val density = container.resources.displayMetrics.density
-        val image = ImageView(container.context)
-        val drawable = AppCompatResources.getDrawable(container.context, R.drawable.gmaps_pin)?.mutate()
-        if (drawable != null) {
-            DrawableCompat.setTintList(drawable, null)
-            drawable.clearColorFilter()
-            image.setImageDrawable(drawable)
-        } else {
-            image.setImageResource(R.drawable.gmaps_pin)
-        }
-        image.imageTintList = null
-        image.scaleType = ImageView.ScaleType.FIT_CENTER
-        val pad = (8 * density).toInt()
-        image.setPadding(pad, pad, pad, pad)
-        image.background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 14f * density
-            setColor(Color.WHITE)
-        }
-        image.contentDescription = "Search"
-        image.isClickable = false
-        image.elevation = 8f * density
-        image.visibility = if (bootOverlayDismissed) View.VISIBLE else View.GONE
-        container.addView(
-            image,
-            FrameLayout.LayoutParams(
-                (56 * density).toInt(),
-                (68 * density).toInt(),
-                Gravity.TOP or Gravity.END
-            )
-        )
-        searchPin = image
-        val vis = visibleArea
-        val area = if (vis != null && vis.width() >= 48 && vis.height() >= 48) {
-            vis
-        } else {
-            Rect(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
-        }
-        positionSearchPin(area, surfaceWidth.coerceAtLeast(1))
-    }
-
-    private fun positionSearchPin(area: Rect, surfaceW: Int) {
-        val button = searchPin ?: return
-        val margin = (12 * button.resources.displayMetrics.density).toInt()
-        val lp = button.layoutParams as? FrameLayout.LayoutParams ?: return
-        lp.gravity = Gravity.TOP or Gravity.END
-        lp.topMargin = area.top + margin
-        lp.marginEnd = (surfaceW - area.right).coerceAtLeast(0) + margin
-        button.layoutParams = lp
-    }
-
-    private fun hitSearchPin(x: Float, y: Float): Boolean {
-        val button = searchPin ?: return false
-        if (button.visibility != View.VISIBLE || button.width <= 0) return false
-        val slop = 8f * button.resources.displayMetrics.density
-        return x >= button.left - slop && x <= button.right + slop &&
-            y >= button.top - slop && y <= button.bottom + slop
     }
 
     private fun wakeRenderer() {
@@ -667,15 +598,9 @@ class CarWebViewHost(
             bootOverlayDismissed = false
         }
         bootOverlay = null
-        searchPin = null
     }
 
     private fun dispatchClick(x: Float, y: Float) {
-        if (hitSearchPin(x, y)) {
-            endDrag()
-            requestSearch()
-            return
-        }
         val view = webView ?: return
         endDrag()
         view.requestFocus()
@@ -771,7 +696,6 @@ class CarWebViewHost(
         val bottomPx = (h - area.bottom).coerceIn(0, h)
         val topPx = 0
         bootOverlay?.setPadding(leftPx, topPx, rightPx, bottomPx)
-        positionSearchPin(area, w)
         applyBootBackdrop()
         val left = leftPx.toFloat() / w
         val top = topPx.toFloat() / h
