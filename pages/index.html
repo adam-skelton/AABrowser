@@ -1456,19 +1456,72 @@
     return lastCarScale > 0.01 ? lastCarScale : carScaleForCamera();
   }
 
+  function rxDeg(a){
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[1, 0, 0], [0, c, -s], [0, s, c]];
+  }
+  function ryDeg(a){
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[c, 0, s], [0, 1, 0], [-s, 0, c]];
+  }
+  function rzDeg(a){
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
+  }
+  function mulMat(a, b){
+    const out = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        out[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+      }
+    }
+    return out;
+  }
+
+  // Maps applies roll, then tilt, then heading. The upright glTF pose
+  // (tilt 270, roll 90) locks those together, so the axle spin is composed
+  // in model space and turned back into an orientation.
+  function mapsAxleSpinOrientation(heading, tilt, roll, spinDeg){
+    const rad = Math.PI / 180;
+    const M = mulMat(
+      mulMat(rzDeg(heading * rad), mulMat(rxDeg(-tilt * rad), ryDeg(roll * rad))),
+      rxDeg(spinDeg * rad)
+    );
+    const sb = Math.max(-1, Math.min(1, M[2][1]));
+    const cbAbs = Math.hypot(M[0][1], M[1][1]);
+    let h;
+    let b;
+    let r;
+    if (cbAbs < 1e-6) {
+      b = sb > 0 ? Math.PI / 2 : -Math.PI / 2;
+      const sum = sb > 0 ? Math.atan2(M[1][0], M[0][0]) : Math.atan2(-M[1][0], M[0][0]);
+      h = 0;
+      r = sum;
+    } else {
+      h = Math.atan2(-M[0][1], M[1][1]);
+      const ch = Math.cos(h);
+      const cb = Math.abs(ch) > 1e-6 ? M[1][1] / ch : M[0][1] / -Math.sin(h);
+      b = Math.atan2(sb, cb);
+      r = Math.atan2(-M[2][0], M[2][2]);
+    }
+    const wrap = (deg) => ((deg % 360) + 360) % 360;
+    const toDeg = 180 / Math.PI;
+    return { heading: wrap(h * toDeg), tilt: wrap(-b * toDeg), roll: wrap(r * toDeg) };
+  }
+
   function wheelOrientation(heading, hub){
     const rest = carOrientation(heading);
     const flip = !!(hub && hub.x > 0);
     // The extracted mesh is a right wheel with the alloy on +X, but Maps' rest
     // pose points that face inboard on the right side. Yaw those 180° so the
     // alloy faces outboard. Don't use negative scale — that greys the backs.
-    // Don't add spin to roll/tilt/heading: this rest pose is at a gimbal lock
-    // (tilt 270), so extra Euler components tumble the tyre instead of rolling it.
-    return {
-      heading: rest.heading + (flip ? 180 : 0),
-      tilt: rest.tilt,
-      roll: rest.roll
-    };
+    // That yaw also reverses the axle, so the right side rolls the other way.
+    const base = normaliseHeading(rest.heading + (flip ? 180 : 0));
+    const spin = flip ? -wheelSpinDeg : wheelSpinDeg;
+    if (Math.abs(((spin % 360) + 360) % 360) < 0.05 || Math.abs(((spin % 360) + 360) % 360) > 359.95) {
+      return { heading: base, tilt: rest.tilt, roll: rest.roll };
+    }
+    return mapsAxleSpinOrientation(base, rest.tilt, rest.roll, spin);
   }
 
   function hubMapPoint(point, heading, hub, scale){
@@ -1512,12 +1565,13 @@
     const hidden = scale <= 0.01;
     const w = wheelPoseWritten;
     const alt = Number(point.altitude) || 0;
+    const spinDelta = w ? Math.abs(((wheelSpinDeg - (w.spin || 0) + 540) % 360) - 180) : 360;
     const samePos = w &&
       Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01 &&
       Math.abs((w.alt || 0) - alt) < 0.02;
-    if (samePos && w.hidden === hidden) return;
+    if (samePos && w.hidden === hidden && spinDelta < 0.4) return;
     spec.wheels.hubs.forEach((hub, i) => {
       const el = userWheels[i];
       if (!el) return;
@@ -1525,15 +1579,16 @@
         if (hidden) {
           el.scale = 0.001;
         } else {
-          if (!samePos || !w || w.hidden) {
+          const moved = !samePos || !w || w.hidden;
+          if (moved) {
             el.position = hubMapPoint(point, h, hub, scale);
             el.scale = wheelScaleForHub(scale);
-            el.orientation = wheelOrientation(h, hub);
           }
+          if (moved || spinDelta >= 0.4) el.orientation = wheelOrientation(h, hub);
         }
         } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt };
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt, spin: wheelSpinDeg };
   }
 
   function attachUserWheels(position, heading){
