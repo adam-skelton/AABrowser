@@ -3233,6 +3233,19 @@
     }
     if (id !== parkingNear.walkId) return;
     clearParkingWalk();
+    // A refine often hands back a walk that starts at the road or the car.
+    // The dotted line has to leave the parking pin, so discard that path and
+    // look up the walk from the lot.
+    if (path && path.length >= 2 && from && distanceMetres(from, path[0]) > 18) path = null;
+    if (!path) {
+      try {
+        path = await fetchWalkPath(from, to);
+      } catch (err) {
+        console.warn("Walk path failed", err);
+      }
+      if (id !== parkingNear.walkId) return;
+      clearParkingWalk();
+    }
     const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : [from, to];
     if (to && drawn.length && distanceMetres(drawn[drawn.length - 1], to) > 6) {
       drawn.push({ lat: to.lat, lng: to.lng });
@@ -3626,7 +3639,7 @@
       try {
         freeZoomDot = new Marker3DElement({
           position: pos,
-          altitudeMode: "CLAMP_TO_GROUND",
+          altitudeMode: "RELATIVE_TO_GROUND",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3635,6 +3648,7 @@
         img.width = 40;
         img.height = 40;
         img.alt = "Current location";
+        img.style.cssText = "display:block;transform:translateY(50%)";
         const template = document.createElement("template");
         template.content.append(img);
         freeZoomDot.append(template);
@@ -3644,7 +3658,7 @@
         return;
       }
     }
-    try { freeZoomDot.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
+    try { freeZoomDot.altitudeMode = "RELATIVE_TO_GROUND"; } catch (err) {}
     try { freeZoomDot.position = pos; } catch (err) {}
     if (!freeZoomDot.parentElement) map3d.append(freeZoomDot);
   }
@@ -3667,7 +3681,7 @@
       try {
         exploreYouMarker = new Marker3DElement({
           position: pos,
-          altitudeMode: "CLAMP_TO_GROUND",
+          altitudeMode: "RELATIVE_TO_GROUND",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3676,6 +3690,7 @@
         img.width = 40;
         img.height = 40;
         img.alt = "Current location";
+        img.style.cssText = "display:block;transform:translateY(50%)";
         const template = document.createElement("template");
         template.content.append(img);
         exploreYouMarker.append(template);
@@ -3685,7 +3700,7 @@
         return;
       }
     } else {
-      try { exploreYouMarker.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
+      try { exploreYouMarker.altitudeMode = "RELATIVE_TO_GROUND"; } catch (err) {}
       try { exploreYouMarker.position = pos; } catch (err) {}
       if (!exploreYouMarker.parentElement) map3d.append(exploreYouMarker);
     }
@@ -6359,7 +6374,22 @@
     return `<span class="hours-state">${escapeHtml(state)}</span>` + (detail ? `<span class="hours-detail">· ${escapeHtml(detail)}</span>` : "");
   }
 
+  let shownCardExtras = null;
+
   function fillRouteCardExtras(dest){
+    const key = dest && Number.isFinite(dest.lat) && Number.isFinite(dest.lng)
+      ? dest.lat.toFixed(4) + "," + dest.lng.toFixed(4)
+      : "";
+    if (!key) shownCardExtras = null;
+    else if (shownCardExtras && shownCardExtras.key === key) {
+      if (!dest.rating && shownCardExtras.rating) dest.rating = shownCardExtras.rating;
+      if (!dest.userRatingCount && shownCardExtras.userRatingCount) dest.userRatingCount = shownCardExtras.userRatingCount;
+      if (!(dest.hours && dest.hours.text) && shownCardExtras.hours) dest.hours = shownCardExtras.hours;
+      if (!dest.photoUrl && shownCardExtras.photoUrl) {
+        dest.photoUrl = shownCardExtras.photoUrl;
+        dest.photoAttr = dest.photoAttr || shownCardExtras.photoAttr;
+      }
+    }
     const rating = dest && dest.rating;
     if (routeRatingEl) {
       if (rating) {
@@ -6402,6 +6432,16 @@
     }
     showExploreSnippet(dest);
     updateParkingRow();
+    if (key && dest && (dest.rating || dest.photoUrl || (dest.hours && dest.hours.text))) {
+      shownCardExtras = {
+        key,
+        rating: dest.rating || 0,
+        userRatingCount: dest.userRatingCount || 0,
+        hours: dest.hours || null,
+        photoUrl: dest.photoUrl || "",
+        photoAttr: dest.photoAttr || ""
+      };
+    }
   }
 
   function clearRouteCardExtras(){
