@@ -661,10 +661,19 @@ function bakeSpinFrames(wheelFile, imageFile, outDir) {
       const a = (f / frames) * Math.PI * 2 * (mirror ? 1 : 1);
       const c = Math.cos(a);
       const s = Math.sin(a);
-      const positions = wheel.positions.map((p) => {
+      const spun = wheel.positions.map((p) => [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c]);
+      let minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      spun.forEach((p) => {
+        if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1];
+        if (p[2] < minZ) minZ = p[2]; if (p[2] > maxZ) maxZ = p[2];
+      });
+      const midY = (minY + maxY) / 2, midZ = (minZ + maxZ) / 2;
+      const fitY = 0.32007 / Math.max((maxY - minY) / 2, 0.001);
+      const fitZ = 0.32007 / Math.max((maxZ - minZ) / 2, 0.001);
+      const positions = spun.map((p) => {
         let x = p[0];
-        const y = p[1] * c - p[2] * s;
-        const z = p[1] * s + p[2] * c;
+        const y = (p[1] - midY) * fitY;
+        const z = (p[2] - midZ) * fitZ;
         if (mirror) x = -x;
         return [x + hub.x, y + hub.y, z + hub.z];
       });
