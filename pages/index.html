@@ -8593,7 +8593,10 @@
     const totalM = cum[cum.length - 1] || 1;
     demoTimer = setInterval(() => {
       const alongM = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
-      const speed = Number.isFinite(speedOverrideMps) ? speedOverrideMps : demoSpeedMps(alongM, totalM);
+      const speedAt = (along) => (typeof speedOverrideMps === "function")
+        ? speedOverrideMps(along, totalM)
+        : (Number.isFinite(speedOverrideMps) ? speedOverrideMps : demoSpeedMps(along, totalM));
+      const speed = speedAt(alongM);
       let remaining = speed * (DEMO_FIX_MS / 1000);
       while (remaining > 0 && index < path.length - 1) {
         const segLen = Math.max(distanceMetres(path[index], path[index + 1]), 0.05);
@@ -8608,7 +8611,7 @@
         }
       }
       const nowAlong = (index < cum.length ? cum[index] : totalM) + distIntoSeg;
-      const nowSpeed = Number.isFinite(speedOverrideMps) ? speedOverrideMps : demoSpeedMps(nowAlong, totalM);
+      const nowSpeed = speedAt(nowAlong);
       if (index >= path.length - 1) {
         const last = path[path.length - 1];
         demoFix(last, bearingDegrees(path[Math.max(0, path.length - 2)], last), nowSpeed);
@@ -8701,10 +8704,20 @@
     if (btn) btn.textContent = "Stop bump test";
     applyGpsFix(activeRoutePath[0], heading, { speed: 11, accuracy: 4, headingMeasured: true });
     enterNavigation({ flyover: false });
+    let bumpSlowed = false;
     driveAlongPath(activeRoutePath, () => {
       stopDemo();
       setMessage("Bump road test finished.");
-    }, 11);
+    }, (alongM, totalM) => {
+      if (alongM >= totalM * 0.5) {
+        if (!bumpSlowed) {
+          bumpSlowed = true;
+          setMessage("Bump road test: slowed so the wheels are easy to see.");
+        }
+        return 2.5;
+      }
+      return 11;
+    });
     setMessage("Bump road test: driving west. The car should stay on the road through the bumps.");
   }
 

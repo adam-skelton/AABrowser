@@ -658,7 +658,7 @@ function bakeSpinFrames(wheelFile, imageFile, outDir) {
   hubs.forEach((hub, hi) => {
     const mirror = hub.x < 0;
     for (let f = 0; f < frames; f++) {
-      const a = (f / frames) * Math.PI * 2 * (mirror ? -1 : -1);
+      const a = (f / frames) * Math.PI * 2 * (mirror ? 1 : 1);
       const c = Math.cos(a);
       const s = Math.sin(a);
       const positions = wheel.positions.map((p) => {
