@@ -2546,16 +2546,10 @@
         place.named = true;
       }
     });
-    const seenStreet = {};
     const trimmed = [];
     out.forEach(place => {
       if (place.osmAmenity === "parking_entrance" && !place.named) return;
-      if (place.parkKind === "street") {
-        const key = String(place.name || "").toLowerCase();
-        if (seenStreet[key]) return;
-        seenStreet[key] = true;
-      }
-      const dup = trimmed.find(k => k.parkKind === place.parkKind && k.name === place.name && distanceMetres(k, place) < 70);
+      const dup = trimmed.find(k => k.parkKind === place.parkKind && distanceMetres(k, place) < (place.parkKind === "street" ? 55 : 70));
       if (dup) {
         const placeEnt = place.osmAmenity === "parking_entrance";
         const dupEnt = dup.osmAmenity === "parking_entrance";
@@ -3117,9 +3111,10 @@
     const crow = distanceMetres(driveEnd, dest);
     const blocked = current.blocked || current.walkM > Math.max(crow * 1.9, crow + 80) || current.walkM > 160;
     const candidates = [];
-    (parkingNear.options || []).slice(0, 8).forEach(lot => {
+    (parkingNear.options || []).forEach(lot => {
       if (!Number.isFinite(lot.lat) || destIsSamePlace(dest, lot)) return;
       if (distanceMetres(driveEnd, lot) < 28) return;
+      if (lot.parkKind === "building" && !destIsBusyCentre(dest) && !(Number(lot.walkM) < 80)) return;
       candidates.push({ kind: "parking", lot: lot, lat: lot.lat, lng: lot.lng, name: lot.name, placeId: lot.placeId });
     });
     try {
@@ -3320,7 +3315,9 @@
       hideParkingRow();
       return;
     }
-    copy.textContent = lot.parking && lot.parking.line ? lot.parking.line : (lot.snippet || lot.name);
+    const walk = Number.isFinite(lot.walkM) ? formatDistance(lot.walkM) + " walk" : "";
+    const name = lot.name || "Parking area";
+    copy.textContent = walk ? name + " · " + walk : name;
     btn.hidden = false;
     btn.classList.add("visible");
   }
@@ -3335,6 +3332,90 @@
   function destIsSamePlace(dest, lot){
     if (!dest || !lot) return false;
     return distanceMetres(dest, lot) < 35;
+  }
+
+  let parkingDrag = null;
+  let parkingDragSuppressClick = false;
+  function groundPointFromScreen(clientX, clientY){
+    if (!map3d) return null;
+    const rect = map3d.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    if (!(w > 2) || !(h > 2)) return null;
+    const center = readMapCenter();
+    if (!center || !Number.isFinite(center.lat)) return null;
+    const heading = (numOr(map3d.heading, 0) * Math.PI) / 180;
+    const tilt = (numOr(map3d.tilt, 0) * Math.PI) / 180;
+    const range = Math.max(1, numOr(map3d.range, 200));
+    const fov = ((numOr(map3d.fov, 40) * Math.PI) / 180) / 2;
+    const tan = Math.tan(fov);
+    const nx = ((clientX - rect.left) - w / 2) / (h / 2) * tan * (w / h);
+    const ny = (h / 2 - (clientY - rect.top)) / (h / 2) * tan;
+    const sh = Math.sin(heading), ch = Math.cos(heading);
+    const st = Math.sin(tilt), ct = Math.cos(tilt);
+    const De = sh * st, Dn = ch * st, Du = -ct;
+    const Re = ch, Rn = -sh;
+    const Ue = sh * ct, Un = ch * ct, Uu = st;
+    const camE = -De * range, camN = -Dn * range, camU = range * ct;
+    const dx = De + Re * nx + Ue * ny;
+    const dy = Dn + Rn * nx + Un * ny;
+    const dz = Du + Uu * ny;
+    if (!(dz < -1e-4)) return null;
+    const t = -camU / dz;
+    if (!(t > 0)) return null;
+    const east = camE + dx * t;
+    const north = camN + dy * t;
+    return {
+      lat: center.lat + north / 110540,
+      lng: center.lng + east / (111320 * Math.cos((center.lat * Math.PI) / 180))
+    };
+  }
+
+  function onParkingDragMove(event){
+    if (!parkingDrag || event.pointerId !== parkingDrag.pointerId) return;
+    if (Math.hypot(event.clientX - parkingDrag.x, event.clientY - parkingDrag.y) > 8) parkingDrag.moved = true;
+    if (!parkingDrag.moved) return;
+    const p = groundPointFromScreen(event.clientX, event.clientY);
+    const lot = parkingNear.selected;
+    if (!p || !lot) return;
+    lot.lat = p.lat;
+    lot.lng = p.lng;
+    lot.dragged = true;
+    if (activeDestination) lot.walkM = distanceMetres(activeDestination, lot);
+    if (parkingMarker) {
+      try { parkingMarker.position = { lat: p.lat, lng: p.lng, altitude: 0 }; } catch (err) {}
+    }
+    try { event.preventDefault(); } catch (err) {}
+  }
+
+  function onParkingDragEnd(event){
+    if (!parkingDrag || (event && event.pointerId !== parkingDrag.pointerId)) return;
+    const moved = parkingDrag.moved;
+    parkingDrag = null;
+    window.removeEventListener("pointermove", onParkingDragMove);
+    window.removeEventListener("pointerup", onParkingDragEnd);
+    window.removeEventListener("pointercancel", onParkingDragEnd);
+    if (!moved) return;
+    parkingDragSuppressClick = true;
+    window.setTimeout(() => { parkingDragSuppressClick = false; }, 400);
+    const lot = parkingNear.selected;
+    const dest = activeDestination;
+    if (!lot || !dest) return;
+    lot.walkM = distanceMetres(dest, lot);
+    lot.dragged = true;
+    updateParkingRow();
+    if (!destIsSamePlace(dest, lot)) drawParkingWalk(lot, dest);
+    else { parkingNear.walkId += 1; clearParkingWalk(); }
+    if (!isNavigating()) rerouteDriveToParking(lot, dest);
+    else drawParkingApproach(activeRoutePath);
+  }
+
+  function beginParkingDrag(event){
+    if (!parkingNear.selected || !map3d || (event && event.button != null && event.button !== 0)) return;
+    parkingDrag = { pointerId: event.pointerId, moved: false, x: event.clientX, y: event.clientY };
+    try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
+    window.addEventListener("pointermove", onParkingDragMove);
+    window.addEventListener("pointerup", onParkingDragEnd);
+    window.addEventListener("pointercancel", onParkingDragEnd);
   }
 
   function drawParkingMarker(lot, dest){
@@ -3352,12 +3433,14 @@
       img.src = parkingPinDataUrl();
       img.width = 40;
       img.height = 40;
-      img.alt = lot.name || "Parking";
-      img.style.cssText = "width:40px;height:40px";
+      img.alt = lot.name || "Parking area";
+      img.draggable = false;
+      img.style.cssText = "width:40px;height:40px;touch-action:none;cursor:grab";
       const template = document.createElement("template");
       template.content.append(img);
       marker.append(template);
       const onPick = event => {
+        if (parkingDragSuppressClick) { parkingDragSuppressClick = false; return; }
         try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
         window.setTimeout(() => {
           if (!gestureWasTap()) return;
@@ -3366,6 +3449,8 @@
       };
       marker.addEventListener("gmp-click", onPick);
       marker.addEventListener("click", onPick);
+      marker.addEventListener("pointerdown", beginParkingDrag);
+      img.addEventListener("pointerdown", beginParkingDrag);
       map3d.append(marker);
       parkingMarker = marker;
       raiseDestinationMarker();
@@ -3415,7 +3500,7 @@
       releaseParkingApproach();
       return;
     }
-    if (activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28) {
+    if (!lot.dragged && activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28) {
       releaseParkingApproach();
       return;
     }
@@ -3537,6 +3622,90 @@
     overlay.classList.add("open");
   }
 
+  function destIsBusyCentre(dest){
+    if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) return false;
+    return dest.lat < -36.838 && dest.lat > -36.858 && dest.lng > 174.744 && dest.lng < 174.782;
+  }
+
+  function isGenericParkingName(name){
+    return /^(parking|parking building|parking area|street parking|car park|surface parking)$/i.test(String(name || "").trim());
+  }
+
+  function placeParkingTitle(dest){
+    return String((dest && dest.name) || "").replace(/^\d+\.\s*/, "").replace(/\s+parking(\s+area)?$/i, "").trim();
+  }
+
+  function nameParkingLot(lot, dest, usePlace){
+    const place = placeParkingTitle(dest);
+    const kind = lot && lot.parkKind;
+    let name = String((lot && lot.name) || "").replace(/\s+\(street\)$/i, "").trim();
+    if (kind === "street") {
+      if (!name || isGenericParkingName(name)) return usePlace && place ? place + " street parking" : "Street parking";
+      return /street parking/i.test(name) ? name : name + " street parking";
+    }
+    if (name && !isGenericParkingName(name)) {
+      return /parking/i.test(name) ? name : name + " Parking Area";
+    }
+    if (usePlace && place) return place + " Parking Area";
+    return "Parking area";
+  }
+
+  function nameParkingLots(lots, dest){
+    const ordered = (lots || []).slice().sort((a, b) => (a.walkM || 0) - (b.walkM || 0));
+    let gavePlace = false;
+    let gaveStreet = false;
+    ordered.forEach(lot => {
+      const usePlace = lot.parkKind === "street" ? !gaveStreet : !gavePlace;
+      lot.name = nameParkingLot(lot, dest, usePlace);
+      if (usePlace && placeParkingTitle(dest) && lot.name.indexOf(placeParkingTitle(dest)) === 0) {
+        if (lot.parkKind === "street") gaveStreet = true;
+        else gavePlace = true;
+      }
+    });
+  }
+
+  function parkingChoices(lots, dest){
+    const byWalk = (a, b) => (a.walkM || 0) - (b.walkM || 0);
+    const near = (lot, cap) => !dest || !Number.isFinite(dest.lat) || lot.walkM <= cap;
+    const streets = lots.filter(l => l.parkKind === "street" && !l.busyRoad && near(l, 250)).sort(byWalk).slice(0, 4);
+    const surfaces = lots.filter(l => l.parkKind === "lot" && near(l, 400)).sort(byWalk).slice(0, 4);
+    const buildings = lots.filter(l => l.parkKind === "building" && near(l, destIsBusyCentre(dest) ? 700 : 450)).sort(byWalk).slice(0, 6);
+    const out = [];
+    const push = lot => {
+      if (!lot || !Number.isFinite(lot.lat)) return;
+      if (out.some(k => k.parkKind === lot.parkKind && distanceMetres(k, lot) < 40)) return;
+      out.push(lot);
+    };
+    streets.forEach(push);
+    surfaces.forEach(push);
+    buildings.forEach(push);
+    if (!out.length) lots.slice().sort(byWalk).slice(0, 8).forEach(push);
+    return out;
+  }
+
+  function chooseParking(lots, dest){
+    if (!lots || !lots.length) return dest && dest.kind === "parking" ? dest : null;
+    if (dest && dest.kind === "parking") return lots.find(lot => destIsSamePlace(dest, lot)) || dest;
+    const byWalk = (a, b) => (a.walkM || 0) - (b.walkM || 0);
+    const streets = lots.filter(l => l.parkKind === "street" && !l.busyRoad && l.walkM < 220).sort(byWalk);
+    const closeBuilding = lots.filter(l => l.parkKind === "building" && l.walkM < 80).sort(byWalk);
+    const surfaces = lots.filter(l => l.parkKind === "lot" && l.walkM < 220).sort(byWalk);
+    const busy = destIsBusyCentre(dest);
+    if (busy) {
+      const bld = lots.filter(l => l.parkKind === "building" && l.walkM < 400).sort(byWalk);
+      if (bld.length) return bld[0];
+    }
+    if (streets.length) {
+      const street = streets[0];
+      const bld = closeBuilding[0];
+      if (bld && bld.walkM + 35 < street.walkM) return bld;
+      return street;
+    }
+    if (surfaces.length) return surfaces[0];
+    if (closeBuilding.length) return closeBuilding[0];
+    return lots.slice().sort(byWalk)[0];
+  }
+
   async function fetchParkingNear(dest){
     if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) {
       clearParkingOverlay();
@@ -3574,21 +3743,28 @@
         if (dest.kind === "parking") setSelectedParking(dest, dest);
         return;
       }
-      lots.sort((a, b) => (b.score - a.score) || (a.walkM - b.walkM));
-      const closest = lots.reduce((min, lot) => Math.min(min, lot.walkM), Infinity);
-      const cap = closest > 400 ? closest + 90 : Math.max(160, Math.min(380, closest + 130));
-      lots = lots.filter(lot => lot.walkM <= cap).slice(0, 10);
+      try {
+        const extra = googleLots.length ? googleLots : await Promise.race([
+          googleP,
+          new Promise(resolve => setTimeout(() => resolve([]), 800))
+        ]);
+        (extra || []).forEach(g => {
+          if (!g || !Number.isFinite(g.lat)) return;
+          if (lots.some(l => distanceMetres(l, g) < 50)) return;
+          const n = String(g.name || "");
+          if (/building|wilson|multi-storey|multistorey|garage|car park/i.test(n)) g.parkKind = "building";
+          lots.push(g);
+        });
+      } catch (err) {}
+      if (id !== parkingNear.requestId) return;
+      lots = parkingChoices(lots, dest);
+      nameParkingLots(lots, dest);
       if (dest.kind === "parking") {
         const already = lots.some(lot => destIsSamePlace(dest, lot));
         if (!already) lots = [dest].concat(lots);
       }
       parkingNear.options = lots;
-      let pick = lots[0] || (dest.kind === "parking" ? dest : null);
-      const quietStreet = lots.find(lot => lot.parkKind === "street" && !lot.busyRoad && lot.walkM < 160);
-      if (quietStreet && dest.kind !== "parking") pick = quietStreet;
-      if (dest.kind === "parking") {
-        pick = lots.find(lot => destIsSamePlace(dest, lot)) || dest;
-      }
+      const pick = chooseParking(lots, dest);
       setSelectedParking(pick, dest);
     } catch (err) {
       if (id !== parkingNear.requestId) return;
