@@ -2691,6 +2691,37 @@
     parkingWalkLines = [];
   }
 
+  let parkingApproachLines = [];
+  function clearParkingApproach(){
+    (parkingApproachLines || []).forEach(line => { try { line.remove(); } catch (err) {} });
+    parkingApproachLines = [];
+  }
+
+  // The drive route ends on the road. When that leaves a gap to the parking pin,
+  // close it with a straight segment. The exact aisle path is not known.
+  function drawParkingApproach(path){
+    clearParkingApproach();
+    if (!map3d || typeof Polyline3DElement === "undefined" || typeof makeRouteLine !== "function") return;
+    const pts = (path && path.length) ? path : activeRoutePath;
+    if (!pts || !pts.length) return;
+    const end = pts[pts.length - 1];
+    if (!end || !Number.isFinite(end.lat) || !Number.isFinite(end.lng)) return;
+    const lot = parkingNear.selected;
+    const dest = activeDestination;
+    let target = null;
+    if (lot && Number.isFinite(lot.lat) && Number.isFinite(lot.lng) && !(dest && destIsSamePlace(dest, lot))) target = lot;
+    else if (dest && Number.isFinite(dest.lat) && Number.isFinite(dest.lng)) target = dest;
+    if (!target || distanceMetres(end, target) < 8) return;
+    try {
+      const line = makeRouteLine([
+        { lat: end.lat, lng: end.lng },
+        { lat: target.lat, lng: target.lng }
+      ], ROUTE_COLOURS.NORMAL, 21);
+      map3d.append(line);
+      parkingApproachLines.push(line);
+    } catch (err) {}
+  }
+
   function walkNodeKey(lat, lng){
     return lat.toFixed(5) + "," + lng.toFixed(5);
   }
@@ -3203,6 +3234,9 @@
     if (id !== parkingNear.walkId) return;
     clearParkingWalk();
     const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : [from, to];
+    if (to && drawn.length && distanceMetres(drawn[drawn.length - 1], to) > 6) {
+      drawn.push({ lat: to.lat, lng: to.lng });
+    }
     drawDottedWalk(drawn);
   }
 
@@ -3328,6 +3362,7 @@
     const target = dest || activeDestination;
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
+    drawParkingApproach(activeRoutePath);
     if (lot && target && !destIsSamePlace(target, lot)) {
       if (!(opts && opts.skipWalk)) drawParkingWalk(lot, target);
       if (!(opts && opts.skipReroute) && !isNavigating() && activeRoutePath.length >= 2) {
@@ -3371,6 +3406,7 @@
     parkingNear.selected = null;
     clearParkingMarker();
     clearParkingWalk();
+    clearParkingApproach();
     hideParkingRow();
     closeParkingDialog();
   }
@@ -3543,10 +3579,10 @@
 
   function exploreYouPoint(){
     if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat) && Number.isFinite(currentGpsPoint.lng)) {
-      return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
+      return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng, altitude: 0 };
     }
     if (puck.fix && Number.isFinite(puck.lat) && Number.isFinite(puck.lng)) {
-      return { lat: puck.lat, lng: puck.lng };
+      return { lat: puck.lat, lng: puck.lng, altitude: 0 };
     }
     return null;
   }
@@ -3590,7 +3626,7 @@
       try {
         freeZoomDot = new Marker3DElement({
           position: pos,
-          altitudeMode: "RELATIVE_TO_GROUND",
+          altitudeMode: "CLAMP_TO_GROUND",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3608,6 +3644,7 @@
         return;
       }
     }
+    try { freeZoomDot.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
     try { freeZoomDot.position = pos; } catch (err) {}
     if (!freeZoomDot.parentElement) map3d.append(freeZoomDot);
   }
@@ -3630,7 +3667,7 @@
       try {
         exploreYouMarker = new Marker3DElement({
           position: pos,
-          altitudeMode: "RELATIVE_TO_GROUND",
+          altitudeMode: "CLAMP_TO_GROUND",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3648,6 +3685,7 @@
         return;
       }
     } else {
+      try { exploreYouMarker.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
       try { exploreYouMarker.position = pos; } catch (err) {}
       if (!exploreYouMarker.parentElement) map3d.append(exploreYouMarker);
     }
@@ -3907,13 +3945,7 @@
       if (!best) return dest;
       const extra = snapshotPlace(best, dest.name);
       if (!extra) return dest;
-      dest.placeId = extra.placeId || dest.placeId;
-      dest.photoUrl = extra.photoUrl || "";
-      dest.photoAttr = extra.photoAttr || "";
-      dest.rating = extra.rating || dest.rating;
-      dest.userRatingCount = extra.userRatingCount || dest.userRatingCount;
-      dest.hours = extra.hours || dest.hours;
-      dest.address = dest.address || extra.address;
+      applyPlaceDetails(dest, extra);
     } catch (err) {
       console.warn("Place photo lookup failed", err);
     }
@@ -3959,7 +3991,11 @@
         const { Place } = await google.maps.importLibrary("places");
         const googlePlace = new Place({ id: place.placeId });
         const extra = await fetchPlaceDestination(googlePlace, place.name);
-        if (extra) Object.assign(dest, extra, { description: place.description || extra.address, snippet: place.snippet || snippetOf(extra.address, 110), lat: dest.lat, lng: dest.lng, name: dest.name });
+        if (extra) {
+          applyPlaceDetails(dest, extra);
+          if (place.description || extra.address) dest.description = place.description || extra.address;
+          if (place.snippet || extra.address) dest.snippet = place.snippet || snippetOf(extra.address, 110);
+        }
       } catch (err) {}
     }
     await enrichPlaceFromGoogle(dest);
@@ -4162,6 +4198,20 @@
       return { text, kind: "closed" };
     }
     return { text: "Closed", kind: "closed" };
+  }
+
+  function applyPlaceDetails(dest, extra){
+    if (!dest || !extra) return dest;
+    if (extra.placeId) dest.placeId = extra.placeId;
+    if (extra.address && !dest.address) dest.address = extra.address;
+    if (extra.photoUrl) {
+      dest.photoUrl = extra.photoUrl;
+      if (extra.photoAttr) dest.photoAttr = extra.photoAttr;
+    }
+    if (extra.rating) dest.rating = extra.rating;
+    if (extra.userRatingCount) dest.userRatingCount = extra.userRatingCount;
+    if (extra.hours && extra.hours.text) dest.hours = extra.hours;
+    return dest;
   }
 
   function snapshotPlace(place, fallbackName){
@@ -4615,6 +4665,7 @@
       routeLines.push(line);
     }
     routeDoneUpdatedM = -Infinity;
+    drawParkingApproach(path);
   }
 
   // Guaranteed orange / red stretches on the drive-route demo so traffic colours are
@@ -4657,6 +4708,7 @@
     routeLines = [];
     if (routeDoneLine) { try { routeDoneLine.remove(); } catch (err) {} routeDoneLine = null; }
     routeDoneUpdatedM = -Infinity;
+    clearParkingApproach();
   }
 
   // The traversed part greys out behind the car: a grey line from the route start to the
