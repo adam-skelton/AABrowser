@@ -244,7 +244,7 @@
     #routeCard * {pointer-events:none}
     #routeCardHead button,#routeGo,#routeParking,#routeTitleRow,#routeSnippet {pointer-events:auto}
     #routePhoto {-webkit-user-drag:none; user-select:none}
-    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 4px}
+    #routeCardHead {display:flex; align-items:center; gap:4px; margin:0 -4px 14px}
     #routeCardHeadSpacer {flex:1}
     #routeBack,#routeClose {width:52px; height:52px; min-height:52px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; display:flex; align-items:center; justify-content:center; transition:background .15s ease}
     #routeBack:active,#routeClose:active {background:#E8EAED; transform:none}
@@ -5203,13 +5203,14 @@
     const origin = clamp(metres - 25, 0, total);
     const approach = pointAtMetres(usePath, useCum, origin).bearing;
     const samples = [];
-    for (let ahead = 20; ahead <= 200; ahead += 12) {
+    for (let ahead = 16; ahead <= 260; ahead += 10) {
       const at = clamp(metres + ahead, 0, total);
       const next = clamp(at + 28, 0, total);
       if (next <= at + 10) break;
       const here = pointAtMetres(usePath, useCum, at).bearing;
       const after = pointAtMetres(usePath, useCum, next).bearing;
       samples.push({
+        ahead: ahead,
         net: ((here - approach + 540) % 360) - 180,
         wobble: Math.abs(((after - here + 540) % 360) - 180)
       });
@@ -5219,10 +5220,23 @@
     for (let i = 1; i < samples.length; i++) {
       if (Math.abs(samples[i].net) > Math.abs(samples[peak].net)) peak = i;
     }
+    // The biggest swing is the circle itself. The exit is the stable heading
+    // just after that, not a bend further down the road. A straight-through
+    // comes back near the approach; a real turn stays off to one side.
+    const settleBy = samples[peak].ahead + 90;
+    let exit = null;
+    let nearest = null;
     for (let i = peak; i < samples.length; i++) {
-      if (samples[i].wobble <= 12) return samples[i].net;
+      if (samples[i].ahead > settleBy) break;
+      if (samples[i].wobble > 16) continue;
+      if (exit == null) exit = samples[i].net;
+      if (nearest == null || Math.abs(samples[i].net) < Math.abs(nearest)) nearest = samples[i].net;
     }
-    return samples[samples.length - 1].net;
+    if (nearest != null && Math.abs(nearest) <= 34) return nearest;
+    if (exit != null) return exit;
+    const last = samples[samples.length - 1].net;
+    if (Math.abs(last) + 18 < Math.abs(samples[peak].net)) return last;
+    return last;
   }
 
   function roundaboutGoesStraight(maneuver, instructions, metres){
@@ -5231,10 +5245,11 @@
     const text = stripNavHtml(instructions);
     const exitN = roundaboutExitNumber(text);
     const namedStraight = m.includes("STRAIGHT") || /\bstraight\b/i.test(text) || exitN === 2;
-    const namedTurn = (exitN === 1 || exitN >= 3 || m.includes("LEFT") || m.includes("RIGHT")) && !m.includes("STRAIGHT");
     const net = roundaboutExitHeading(metres);
-    if (net != null && Math.abs(net) <= 34 && (namedStraight || !namedTurn)) return true;
-    if (net != null && Math.abs(net) >= 40) return false;
+    // Heading is the road after the circle, so a left/right label on the
+    // roundabout itself does not turn a straight exit into a turn.
+    if (net != null && Math.abs(net) <= 32) return true;
+    if (net != null && Math.abs(net) >= 42) return false;
     return namedStraight;
   }
 

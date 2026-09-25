@@ -103,6 +103,8 @@ class CarWebViewHost(
     private var bootOverlay: ViewGroup? = null
     private var bootOverlayDismissed = false
     private var presentationRoot: View? = null
+    private var debugTapCount = 0
+    private var debugTapAtMs = 0L
 
     fun register() {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -176,7 +178,13 @@ class CarWebViewHost(
     fun setDebugOverlay(visible: Boolean) {
         onMain {
             debugOverlayVisible = visible
-            evaluateOrQueue("window.__aaSetDebugOverlay && window.__aaSetDebugOverlay(${visible});")
+            evaluateOrQueue(
+                "(function(){" +
+                    "if(window.__aaSetDebugOverlay){window.__aaSetDebugOverlay($visible);return;}" +
+                    "document.documentElement.classList.toggle('debug-open',$visible);" +
+                    "document.body.classList.toggle('debug-open',$visible);" +
+                    "})();"
+            )
         }
     }
 
@@ -605,22 +613,43 @@ class CarWebViewHost(
         val downTime = SystemClock.uptimeMillis()
         dispatchTouch(view, MotionEvent.ACTION_DOWN, x, y, downTime, downTime)
         dispatchTouch(view, MotionEvent.ACTION_UP, x, y, downTime, downTime + CLICK_DURATION_MS)
-        // The desktop head unit injects this click onto a virtual display. That
-        // touch often never becomes a DOM pointer event, so the page's triple-tap
-        // never runs. Count the corner tap in the page directly.
-        val density = (surfaceDpi / 160f).takeIf { it > 0f } ?: 1f
-        val cssX = x / density
-        val cssY = y / density
-        view.evaluateJavascript(
-            "window.__aaDebugCornerTap && window.__aaDebugCornerTap($cssX,$cssY);",
-            null
-        )
+        // Head-unit taps arrive here and never become page pointer events, so the
+        // phone's triple-tap never runs. Count them on the map surface itself.
+        noteDebugCornerClick(x, y)
         mainHandler.postDelayed({
             view.evaluateJavascript(CHECK_FOCUS_JS) { result ->
                 val value = parseFocusValue(result, requireFocused = true) ?: return@evaluateJavascript
                 notifyInputFocused(value)
             }
         }, FOCUS_CHECK_DELAY_MS)
+    }
+
+    // Head-unit clicks never become page pointer events (the virtual display drops
+    // injected touches), and the page's corner test also rejects them when the
+    // host reports visible-area coordinates. Count three taps on the map's
+    // top-left here and open the overlay through the existing page hook.
+    private fun noteDebugCornerClick(x: Float, y: Float) {
+        if (!isMapCorner(x, y)) return
+        val now = SystemClock.uptimeMillis()
+        if (now - debugTapAtMs > DEBUG_TAP_WINDOW_MS) debugTapCount = 0
+        debugTapAtMs = now
+        debugTapCount += 1
+        if (debugTapCount < 3) return
+        debugTapCount = 0
+        setDebugOverlay(!debugOverlayVisible)
+    }
+
+    private fun isMapCorner(x: Float, y: Float): Boolean {
+        val vis = visibleArea
+        val width = (vis?.width() ?: surfaceWidth).toFloat().coerceAtLeast(1f)
+        val height = (vis?.height() ?: surfaceHeight).toFloat().coerceAtLeast(1f)
+        val zoneW = width * 0.42f
+        val zoneH = height * 0.40f
+        val left = vis?.left?.toFloat() ?: 0f
+        val top = vis?.top?.toFloat() ?: 0f
+        val onSurface = x >= left - 12f && x <= left + zoneW && y >= top - 12f && y <= top + zoneH
+        val onVisible = x >= -12f && x <= zoneW && y >= -12f && y <= zoneH
+        return onSurface || onVisible
     }
 
     private fun dispatchScroll(distanceX: Float, distanceY: Float) {
@@ -857,6 +886,7 @@ class CarWebViewHost(
         const val GPS_MAX_ACCURACY_M = 50f
         private const val TWO_FINGER_MS = 420L
         private const val CLICK_DURATION_MS = 40L
+        private const val DEBUG_TAP_WINDOW_MS = 2800L
         private const val FOCUS_CHECK_DELAY_MS = 180L
         private const val DRAG_END_DELAY_MS = 90L
         private const val INPUT_NOTIFY_DEBOUNCE_MS = 600L
