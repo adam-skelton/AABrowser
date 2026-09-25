@@ -653,12 +653,12 @@ function bakeSpinFrames(wheelFile, imageFile, outDir) {
     { x: -0.7819, y: 0.334, z: -1.3559 },
     { x: 0.8095, y: 0.334, z: -1.3416 }
   ];
-  const frames = 8;
+  const frames = 16;
   fs.mkdirSync(outDir, { recursive: true });
   hubs.forEach((hub, hi) => {
     const mirror = hub.x < 0;
     for (let f = 0; f < frames; f++) {
-      const a = (f / frames) * Math.PI * 2 * (mirror ? -1 : 1);
+      const a = (f / frames) * Math.PI * 2 * (mirror ? -1 : -1);
       const c = Math.cos(a);
       const s = Math.sin(a);
       const positions = wheel.positions.map((p) => {
