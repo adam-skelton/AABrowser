@@ -4819,7 +4819,9 @@
 
     try {
       const noCard = !!(opts && opts.noCard);
-      if (!noCard) armStartCountdown();
+      const noCountdown = !!(opts && opts.noCountdown);
+      if (noCountdown) holdStartCountdown();
+      else if (!noCard) armStartCountdown();
       setSuppressRouteCard(noCard);
       const dest = Object.assign({}, destination, {
         name: destinationName || destination.name,
@@ -6852,6 +6854,100 @@
 
   function getRouteOrigin(){
     return currentGpsPoint ? { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng } : { lat: TEST_ORIGIN.lat, lng: TEST_ORIGIN.lng };
+  }
+
+  function droppedPinPlace(lat, lng, name, address){
+    const title = name || "Dropped pin";
+    return { name: title, lat: lat, lng: lng, address: address || "" };
+  }
+
+  async function placeAtMapPoint(lat, lng){
+    const here = { lat: lat, lng: lng };
+    if (explore.mode && explore.places && explore.places.length) {
+      let best = null, bestD = 80;
+      explore.places.forEach(place => {
+        if (!place || !Number.isFinite(place.lat)) return;
+        const d = distanceMetres(here, place);
+        if (d < bestD) { bestD = d; best = place; }
+      });
+      if (best) return Object.assign({}, best, { name: best.name || "Place" });
+    }
+    try {
+      const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
+      const req = {
+        fields: PLACE_CORE_FIELDS.concat(PLACE_EXTRA_FIELDS),
+        locationRestriction: { center: here, radius: 70 },
+        maxResultCount: 8
+      };
+      if (SearchNearbyRankPreference) req.rankPreference = SearchNearbyRankPreference.DISTANCE;
+      let places = [];
+      try {
+        const nearby = await Place.searchNearby(req);
+        places = nearby.places || [];
+      } catch (err) {
+        const nearby = await Place.searchNearby(req);
+        places = nearby.places || [];
+      }
+      let pick = null, pickD = 55;
+      places.forEach(place => {
+        const loc = latLngOf(place.location);
+        if (!loc) return;
+        const d = distanceMetres(here, loc);
+        if (d < pickD) { pickD = d; pick = place; }
+      });
+      if (pick) {
+        const dest = snapshotPlace(pick, "Place");
+        if (dest) return dest;
+      }
+    } catch (err) {
+      console.warn("Place at press failed", err);
+    }
+    try {
+      const { Geocoder } = await google.maps.importLibrary("geocoding");
+      const geocoder = new Geocoder();
+      const result = await geocoder.geocode({ location: here });
+      const hit = result && result.results && result.results[0];
+      const line = hit && (hit.formatted_address || hit.formattedAddress);
+      if (line) return droppedPinPlace(lat, lng, line.split(",")[0], line);
+    } catch (err) {}
+    return droppedPinPlace(lat, lng);
+  }
+
+  let mapHoldTimer = 0;
+  let mapHold = null;
+  function cancelMapHold(){
+    if (mapHoldTimer) window.clearTimeout(mapHoldTimer);
+    mapHoldTimer = 0;
+    mapHold = null;
+  }
+  function armMapHold(event){
+    cancelMapHold();
+    if (isNavigating() || carInspect || parkingMoveArmed) return;
+    if (!event || event.button != null && event.button !== 0) return;
+    if (gesturePointers.size > 1) return;
+    if (isChromeUiTarget(event.target)) return;
+    mapHold = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    mapHoldTimer = window.setTimeout(() => {
+      mapHoldTimer = 0;
+      const hold = mapHold;
+      mapHold = null;
+      if (!hold || isNavigating()) return;
+      if (mapDragStart) mapDragStart.held = true;
+      openHeldMapPlace(hold.x, hold.y);
+    }, 520);
+  }
+  async function openHeldMapPlace(x, y){
+    if (isNavigating()) return;
+    const p = groundPointFromScreen(x, y);
+    if (!p) return;
+    setMessage("Looking up this place...");
+    let dest = null;
+    try { dest = await placeAtMapPoint(p.lat, p.lng); } catch (err) { dest = null; }
+    if (isNavigating()) return;
+    if (!dest) dest = droppedPinPlace(p.lat, p.lng);
+    calculateRoute(getRouteOrigin(), dest, dest.name || "Dropped pin", { noCountdown: true }).catch(err => {
+      console.warn("Held place route failed", err);
+    });
   }
 
   async function randomRoute(opts){
@@ -10597,7 +10693,8 @@
     }
     releaseMapFromRoutePreview();
     noteMapPointerDown(event);
-    mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event) };
+    mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event), held: false };
+    armMapHold(event);
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
     if (pinchReachesMap(event)) event.stopPropagation();
@@ -10607,6 +10704,8 @@
     const dy = event.clientY - mapDragStart.y;
     const slop = mapDragStart.car ? 36 : 16;
     if (dx * dx + dy * dy < slop * slop) return;
+    cancelMapHold();
+    if (mapDragStart.held) return;
     if (carInspect) {
       mapDragStart.panned = true;
       chromeLocked = false;
@@ -10633,7 +10732,12 @@
     if (wasPinch && gesturePointers.size < 2) finishZoomPinch();
     const start = mapDragStart;
     mapDragStart = null;
+    cancelMapHold();
     if (!start) return;
+    if (start.held) {
+      scheduleRestoreRouteCard();
+      return;
+    }
     if (start.panned) {
       scheduleRestoreRouteCard();
       return;
