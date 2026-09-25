@@ -2692,6 +2692,7 @@
   }
 
   let parkingApproachLines = [];
+  let suppressParkingApproach = false;
   function clearParkingApproach(){
     (parkingApproachLines || []).forEach(line => { try { line.remove(); } catch (err) {} });
     parkingApproachLines = [];
@@ -2699,8 +2700,11 @@
 
   // The drive route ends on the road. When that leaves a gap to the parking pin,
   // close it with a straight segment. The exact aisle path is not known.
+  // Held back while a route to the parking lot is still being calculated, because
+  // that recalculation can move the path a long way.
   function drawParkingApproach(path){
     clearParkingApproach();
+    if (suppressParkingApproach) return;
     if (!map3d || typeof Polyline3DElement === "undefined" || typeof makeRouteLine !== "function") return;
     const pts = (path && path.length) ? path : activeRoutePath;
     if (!pts || !pts.length) return;
@@ -3375,12 +3379,14 @@
     const target = dest || activeDestination;
     parkingNear.selected = lot || null;
     drawParkingMarker(lot, target);
-    drawParkingApproach(activeRoutePath);
+    const willReroute = !(opts && opts.skipReroute) && !isNavigating() && activeRoutePath.length >= 2
+      && lot && target && !destIsSamePlace(target, lot)
+      && !(activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28);
+    if (willReroute) suppressParkingApproach = true;
+    if (!(opts && opts.skipReroute)) drawParkingApproach(activeRoutePath);
     if (lot && target && !destIsSamePlace(target, lot)) {
       if (!(opts && opts.skipWalk)) drawParkingWalk(lot, target);
-      if (!(opts && opts.skipReroute) && !isNavigating() && activeRoutePath.length >= 2) {
-        rerouteDriveToParking(lot, target);
-      }
+      if (willReroute) rerouteDriveToParking(lot, target);
     } else {
       parkingNear.walkId += 1;
       clearParkingWalk();
@@ -3389,25 +3395,50 @@
     if (lot && target) attachPreviewParking(lot, target);
   }
 
+  function releaseParkingApproach(){
+    if (!suppressParkingApproach) return;
+    suppressParkingApproach = false;
+    drawParkingApproach(activeRoutePath);
+  }
+
   async function rerouteDriveToParking(lot, dest){
-    if (!lot || !dest || isNavigating() || !RouteClass || !map3d) return;
-    if (destIsSamePlace(dest, lot)) return;
+    if (!lot || !dest || isNavigating() || !RouteClass || !map3d) {
+      releaseParkingApproach();
+      return;
+    }
+    if (destIsSamePlace(dest, lot)) {
+      releaseParkingApproach();
+      return;
+    }
     const origin = getRouteOrigin();
-    if (!origin || !Number.isFinite(origin.lat)) return;
-    if (activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28) return;
+    if (!origin || !Number.isFinite(origin.lat)) {
+      releaseParkingApproach();
+      return;
+    }
+    if (activeDriveTo && Number.isFinite(activeDriveTo.lat) && distanceMetres(activeDriveTo, lot) < 28) {
+      releaseParkingApproach();
+      return;
+    }
     const id = ++routeGen;
     const placeId = usablePlaceId(lot.placeId);
     const driveTo = placeId
       ? { lat: lot.lat, lng: lot.lng, name: lot.name, placeId }
       : { lat: lot.lat, lng: lot.lng, name: lot.name };
     activeDriveTo = driveTo;
+    suppressParkingApproach = true;
+    clearParkingApproach();
     try {
       const { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true);
-      if (id !== routeGen || isNavigating()) return;
+      if (id !== routeGen || isNavigating()) {
+        releaseParkingApproach();
+        return;
+      }
+      suppressParkingApproach = false;
       adoptRoute(route, path, intervals, dest, false, null);
       drawParkingWalk(lot, dest);
     } catch (err) {
       console.warn("Parking reroute failed", err);
+      releaseParkingApproach();
     }
   }
 
@@ -3417,6 +3448,7 @@
     parkingNear.destKey = "";
     parkingNear.options = [];
     parkingNear.selected = null;
+    suppressParkingApproach = false;
     clearParkingMarker();
     clearParkingWalk();
     clearParkingApproach();
@@ -3639,7 +3671,9 @@
       try {
         freeZoomDot = new Marker3DElement({
           position: pos,
-          altitudeMode: "RELATIVE_TO_GROUND",
+          altitudeMode: "CLAMP_TO_GROUND",
+          anchorLeft: "-50%",
+          anchorTop: "-50%",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3648,7 +3682,7 @@
         img.width = 40;
         img.height = 40;
         img.alt = "Current location";
-        img.style.cssText = "display:block;transform:translateY(50%)";
+        img.style.cssText = "display:block";
         const template = document.createElement("template");
         template.content.append(img);
         freeZoomDot.append(template);
@@ -3658,7 +3692,8 @@
         return;
       }
     }
-    try { freeZoomDot.altitudeMode = "RELATIVE_TO_GROUND"; } catch (err) {}
+    try { freeZoomDot.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
+    try { freeZoomDot.anchorLeft = "-50%"; freeZoomDot.anchorTop = "-50%"; } catch (err) {}
     try { freeZoomDot.position = pos; } catch (err) {}
     if (!freeZoomDot.parentElement) map3d.append(freeZoomDot);
   }
@@ -3681,7 +3716,9 @@
       try {
         exploreYouMarker = new Marker3DElement({
           position: pos,
-          altitudeMode: "RELATIVE_TO_GROUND",
+          altitudeMode: "CLAMP_TO_GROUND",
+          anchorLeft: "-50%",
+          anchorTop: "-50%",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
@@ -3690,7 +3727,7 @@
         img.width = 40;
         img.height = 40;
         img.alt = "Current location";
-        img.style.cssText = "display:block;transform:translateY(50%)";
+        img.style.cssText = "display:block";
         const template = document.createElement("template");
         template.content.append(img);
         exploreYouMarker.append(template);
@@ -3700,7 +3737,8 @@
         return;
       }
     } else {
-      try { exploreYouMarker.altitudeMode = "RELATIVE_TO_GROUND"; } catch (err) {}
+      try { exploreYouMarker.altitudeMode = "CLAMP_TO_GROUND"; } catch (err) {}
+      try { exploreYouMarker.anchorLeft = "-50%"; exploreYouMarker.anchorTop = "-50%"; } catch (err) {}
       try { exploreYouMarker.position = pos; } catch (err) {}
       if (!exploreYouMarker.parentElement) map3d.append(exploreYouMarker);
     }
@@ -4570,11 +4608,14 @@
         if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
         return;
       }
-      adoptRoute(route, path, intervals, dest, false, null);
-      const lot = parkingNear.selected;
-      if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && distanceMetres(driveTo, lot) > 28) {
-        rerouteDriveToParking(lot, dest);
+      const lotNow = parkingNear.selected;
+      const parkReroute = lotNow && Number.isFinite(lotNow.lat) && !destIsSamePlace(dest, lotNow) && distanceMetres(driveTo, lotNow) > 28;
+      if (parkReroute) {
+        suppressParkingApproach = true;
+        clearParkingApproach();
       }
+      adoptRoute(route, path, intervals, dest, false, null);
+      if (parkReroute) rerouteDriveToParking(lotNow, dest);
       if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters, { keepPreview: true });
       else if (!noCard) maybeStartRouteCountdown();
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
