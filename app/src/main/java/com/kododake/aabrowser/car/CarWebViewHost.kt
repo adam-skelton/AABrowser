@@ -173,12 +173,6 @@ class CarWebViewHost(
         }
     }
 
-    fun toggleDebugOverlay() {
-        onMain {
-            setDebugOverlay(!debugOverlayVisible)
-        }
-    }
-
     fun setDebugOverlay(visible: Boolean) {
         onMain {
             debugOverlayVisible = visible

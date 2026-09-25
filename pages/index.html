@@ -176,7 +176,7 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 16px 0 10px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:24px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 28px 0 20px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:24px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
     #navExit {width:60px; height:60px; min-height:60px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
@@ -1367,39 +1367,23 @@
   }
 
   let carPoseWritten = null;
-  let roadAltStamp = 0;
-  // One eased road height for the whole vehicle. Each wheel used to sample the
-  // ground under its own hub, so a bump lifted that wheel off the body.
-  function roadAltitudeForPose(point, heading){
-    const now = performance.now();
-    if (roadAltStamp && now - roadAltStamp < 8 && Number.isFinite(carAlt)) return carAlt;
-    const dt = roadAltStamp ? clamp((now - roadAltStamp) / 1000, 0, 0.05) : 0.05;
-    roadAltStamp = now;
-    const g = carGroundAltitude(point, heading, dt);
-    return Number.isFinite(g) ? g : null;
-  }
   function applyCarPose(point, heading){
     lastCarPoint = { lat: point.lat, lng: point.lng };
+    if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
     if (Number.isFinite(heading)) lastCarHeading = heading;
-    const hdg = Number.isFinite(lastCarHeading) ? lastCarHeading : 0;
-    const road = roadAltitudeForPose(lastCarPoint, hdg);
-    if (Number.isFinite(road)) lastCarPoint.altitude = road;
-    else if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
-    const pinned = Number.isFinite(lastCarPoint.altitude);
     if (userCar) {
       // Skip the native writes when nothing moved enough to see (the follow ticker
       // and the camera-change events both land here every frame).
       const w = carPoseWritten;
-      const alt = pinned ? lastCarPoint.altitude : 0;
-      const same = w && w.car === userCar && w.pinned === pinned &&
+      const same = w && w.car === userCar &&
         Math.abs(w.lat - lastCarPoint.lat) < 1e-8 && Math.abs(w.lng - lastCarPoint.lng) < 1e-8 &&
         Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02 &&
-        Math.abs((w.alt || 0) - alt) < 0.05;
+        Math.abs((w.alt || 0) - (Number(lastCarPoint.altitude) || 0)) < 0.05;
       if (!same) {
-        try { userCar.altitudeMode = pinned ? "ABSOLUTE" : MODEL_ALTITUDE_MODE; } catch (err) {}
+        try { userCar.altitudeMode = MODEL_ALTITUDE_MODE; } catch (err) {}
         try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
         try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
-        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt, pinned };
+        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt: Number(lastCarPoint.altitude) || 0 };
       }
     }
     applyWheelPose(lastCarPoint, lastCarHeading);
@@ -1546,12 +1530,9 @@
 
   function hubMapPoint(point, heading, hub, scale){
     const along = lookAhead(point, heading, hub.z * scale);
-    const pos = lookAhead(along, heading + 90, hub.x * scale);
-    const base = Number(point.altitude);
-    // Same road height as the body, plus the hub offset. A per-wheel ground
-    // sample is what throws a wheel above the car on a bump.
-    pos.altitude = (Number.isFinite(base) ? base : 0) + hub.y * scale;
-    return pos;
+    // Lat/lng only. The wheels use the same ground clamp as the body, so a
+    // bump under one hub cannot lift that wheel off the car.
+    return lookAhead(along, heading + 90, hub.x * scale);
   }
 
   function wheelScaleForHub(scale){
@@ -1587,15 +1568,11 @@
     const scale = currentShownCarScale();
     const hidden = scale <= 0.01;
     const w = wheelPoseWritten;
-    const pinned = Number.isFinite(point.altitude);
-    const alt = pinned ? point.altitude : 0;
-    const mode = pinned ? "ABSOLUTE" : "RELATIVE_TO_GROUND";
     const spinDelta = w ? Math.abs(((wheelSpinDeg - (w.spin || 0) + 540) % 360) - 180) : 360;
-    const samePos = w && w.pinned === pinned &&
+    const samePos = w &&
       Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
-      Math.abs(w.scale - scale) < 0.01 &&
-      Math.abs((w.alt || 0) - alt) < 0.02;
+      Math.abs(w.scale - scale) < 0.01;
     if (samePos && w.hidden === hidden && spinDelta < 0.4) return;
     spec.wheels.hubs.forEach((hub, i) => {
       const el = userWheels[i];
@@ -1606,7 +1583,7 @@
         } else {
           const moved = !samePos || !w || w.hidden;
           if (moved) {
-            el.altitudeMode = mode;
+            el.altitudeMode = MODEL_ALTITUDE_MODE;
             el.position = hubMapPoint(point, h, hub, scale);
             el.scale = wheelScaleForHub(scale);
           }
@@ -1614,7 +1591,7 @@
         }
         } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, alt, pinned, spin: wheelSpinDeg };
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, spin: wheelSpinDeg };
   }
 
   function attachUserWheels(position, heading){
@@ -1635,7 +1612,7 @@
           position: hubMapPoint(position, h, hub, placeScale),
           orientation: wheelOrientation(h, hub),
           scale: hidden ? 0.001 : wheelScaleForHub(scale),
-          altitudeMode: Number.isFinite(position && position.altitude) ? "ABSOLUTE" : "RELATIVE_TO_GROUND"
+          altitudeMode: MODEL_ALTITUDE_MODE
         });
         el.addEventListener("gmp-click", event => {
           try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
@@ -9809,7 +9786,10 @@
     window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
   }
   window.__aaDebugCornerTap = function(x, y){
-    if (!debugCornerZone(Number(x), Number(y))) return;
+    const px = Number(x), py = Number(y);
+    if (!debugCornerZone(px, py)) return;
+    const target = document.elementFromPoint(px, py);
+    if (target && target.closest && target.closest("button, a, input, select, textarea, #routeCard, #navHud, #navEtaBar, #topPanel, #buttonRow") && !target.closest("#carDebugBtn")) return;
     noteDebugCornerTap();
   };
   window.addEventListener("pointerdown", event => {
