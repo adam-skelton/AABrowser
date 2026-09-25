@@ -97,6 +97,7 @@
     #parkDialogList .park-check svg {width:22px; height:22px; display:block}
     #parkDialogList button.selected .park-check {visibility:visible}
     #parkDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; font-size:22px; line-height:1}
+    body.parking-move, body.parking-move gmp-map-3d {cursor:crosshair}
     #routeSnippet {display:none; margin-top:6px; font-size:13px; font-weight:500; color:#5F6368; line-height:1.35; cursor:pointer; overflow:visible; white-space:normal}
     #routeSnippet.visible {display:block}
     #descDialog {display:none; position:absolute; inset:0; z-index:48; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto; padding:24px}
@@ -2643,6 +2644,50 @@
     }
   }
 
+  async function quietStreetParking(dest){
+    if (!dest || !Number.isFinite(dest.lat)) return null;
+    const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
+    const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary)$"]["access"!="private"]["service"!="driveway"](around:160,' + lat + "," + lng + ");out geom tags;";
+    try {
+      const json = await overpassJson(query, 7000, OVERPASS_MIRRORS.slice(0, 2));
+      let best = null, bestD = 160, bestName = "";
+      (json.elements || []).forEach(el => {
+        const tags = el.tags || {};
+        if (isNoParkingLane(tags)) return;
+        const hw = String(tags.highway || "");
+        const name = String(tags.name || "").trim();
+        (el.geometry || []).forEach(g => {
+          if (!g || !Number.isFinite(g.lat) || !Number.isFinite(g.lon)) return;
+          const p = { lat: g.lat, lng: g.lon };
+          const d = distanceMetres(dest, p);
+          if (d < bestD) { bestD = d; best = p; bestName = name; }
+        });
+        if (!best && hw) return;
+      });
+      if (!best) return null;
+      const walkM = distanceMetres(dest, best);
+      return {
+        id: "street-near-" + best.lat.toFixed(5) + "," + best.lng.toFixed(5),
+        name: bestName ? bestName + " street parking" : "Street parking",
+        named: !!bestName,
+        lat: best.lat,
+        lng: best.lng,
+        color: "#1A73E8",
+        iconHref: "",
+        kind: "parking",
+        parkKind: "street",
+        busyRoad: false,
+        walkM,
+        score: 500 - walkM,
+        parking: { fee: "", capacity: 0, access: "", type: "street", line: formatDistance(walkM) + " walk · Street" },
+        description: "Street parking",
+        snippet: "Street parking"
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
   function usablePlaceId(value){
     const id = String(value || "").trim();
     return id && id.indexOf("__") !== 0 ? id : "";
@@ -3334,8 +3379,34 @@
     return distanceMetres(dest, lot) < 35;
   }
 
-  let parkingDrag = null;
-  let parkingDragSuppressClick = false;
+  let parkingMoveArmed = false;
+  let parkingPlacedAt = 0;
+  function setParkingMoveArmed(on){
+    parkingMoveArmed = !!on;
+    document.body.classList.toggle("parking-move", parkingMoveArmed);
+    if (parkingMoveArmed) setMessage("Click the map to move the parking pin.");
+  }
+
+  function placeParkingAt(lat, lng){
+    const lot = parkingNear.selected;
+    const dest = activeDestination;
+    parkingPlacedAt = performance.now();
+    setParkingMoveArmed(false);
+    if (!lot || !dest || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    lot.lat = lat;
+    lot.lng = lng;
+    lot.dragged = true;
+    lot.walkM = distanceMetres(dest, lot);
+    if (parkingMarker) {
+      try { parkingMarker.position = { lat: lat, lng: lng, altitude: 0 }; } catch (err) {}
+    }
+    updateParkingRow();
+    if (!destIsSamePlace(dest, lot)) drawParkingWalk(lot, dest);
+    else { parkingNear.walkId += 1; clearParkingWalk(); }
+    if (!isNavigating()) rerouteDriveToParking(lot, dest);
+    else drawParkingApproach(activeRoutePath);
+    setMessage(lot.name || "Parking area");
+  }
   function groundPointFromScreen(clientX, clientY){
     if (!map3d) return null;
     const rect = map3d.getBoundingClientRect();
@@ -3348,7 +3419,7 @@
     const range = Math.max(1, numOr(map3d.range, 200));
     const fov = ((numOr(map3d.fov, 40) * Math.PI) / 180) / 2;
     const tan = Math.tan(fov);
-    const nx = ((clientX - rect.left) - w / 2) / (h / 2) * tan * (w / h);
+    const nx = ((clientX - rect.left) - w / 2) / (h / 2) * tan;
     const ny = (h / 2 - (clientY - rect.top)) / (h / 2) * tan;
     const sh = Math.sin(heading), ch = Math.cos(heading);
     const st = Math.sin(tilt), ct = Math.cos(tilt);
@@ -3370,52 +3441,44 @@
     };
   }
 
-  function onParkingDragMove(event){
-    if (!parkingDrag || event.pointerId !== parkingDrag.pointerId) return;
-    if (Math.hypot(event.clientX - parkingDrag.x, event.clientY - parkingDrag.y) > 8) parkingDrag.moved = true;
-    if (!parkingDrag.moved) return;
-    const p = groundPointFromScreen(event.clientX, event.clientY);
-    const lot = parkingNear.selected;
-    if (!p || !lot) return;
-    lot.lat = p.lat;
-    lot.lng = p.lng;
-    lot.dragged = true;
-    if (activeDestination) lot.walkM = distanceMetres(activeDestination, lot);
-    if (parkingMarker) {
-      try { parkingMarker.position = { lat: p.lat, lng: p.lng, altitude: 0 }; } catch (err) {}
-    }
-    try { event.preventDefault(); } catch (err) {}
+  function screenPointForGround(lat, lng){
+    if (!map3d || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const rect = map3d.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    if (!(w > 2) || !(h > 2)) return null;
+    const center = readMapCenter();
+    if (!center || !Number.isFinite(center.lat)) return null;
+    const heading = (numOr(map3d.heading, 0) * Math.PI) / 180;
+    const tilt = (numOr(map3d.tilt, 0) * Math.PI) / 180;
+    const range = Math.max(1, numOr(map3d.range, 200));
+    const fov = ((numOr(map3d.fov, 40) * Math.PI) / 180) / 2;
+    const tan = Math.tan(Math.max(0.05, fov));
+    const sh = Math.sin(heading), ch = Math.cos(heading);
+    const st = Math.sin(tilt), ct = Math.cos(tilt);
+    const De = sh * st, Dn = ch * st, Du = -ct;
+    const Re = ch, Rn = -sh;
+    const Ue = sh * ct, Un = ch * ct, Uu = st;
+    const east = (lng - center.lng) * 111320 * Math.cos((center.lat * Math.PI) / 180);
+    const north = (lat - center.lat) * 110540;
+    const vx = east + De * range;
+    const vy = north + Dn * range;
+    const vz = -range * ct;
+    const fwd = De * vx + Dn * vy + Du * vz;
+    if (!(fwd > 1)) return null;
+    const nx = (Re * vx + Rn * vy) / fwd;
+    const ny = (Ue * vx + Un * vy + Uu * vz) / fwd;
+    return {
+      x: rect.left + w / 2 + nx * (h / 2) / tan,
+      y: rect.top + h / 2 - ny * (h / 2) / tan
+    };
   }
 
-  function onParkingDragEnd(event){
-    if (!parkingDrag || (event && event.pointerId !== parkingDrag.pointerId)) return;
-    const moved = parkingDrag.moved;
-    parkingDrag = null;
-    window.removeEventListener("pointermove", onParkingDragMove);
-    window.removeEventListener("pointerup", onParkingDragEnd);
-    window.removeEventListener("pointercancel", onParkingDragEnd);
-    if (!moved) return;
-    parkingDragSuppressClick = true;
-    window.setTimeout(() => { parkingDragSuppressClick = false; }, 400);
-    const lot = parkingNear.selected;
-    const dest = activeDestination;
-    if (!lot || !dest) return;
-    lot.walkM = distanceMetres(dest, lot);
-    lot.dragged = true;
-    updateParkingRow();
-    if (!destIsSamePlace(dest, lot)) drawParkingWalk(lot, dest);
-    else { parkingNear.walkId += 1; clearParkingWalk(); }
-    if (!isNavigating()) rerouteDriveToParking(lot, dest);
-    else drawParkingApproach(activeRoutePath);
-  }
-
-  function beginParkingDrag(event){
-    if (!parkingNear.selected || !map3d || (event && event.button != null && event.button !== 0)) return;
-    parkingDrag = { pointerId: event.pointerId, moved: false, x: event.clientX, y: event.clientY };
-    try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-    window.addEventListener("pointermove", onParkingDragMove);
-    window.addEventListener("pointerup", onParkingDragEnd);
-    window.addEventListener("pointercancel", onParkingDragEnd);
+  function hitParkingPin(event){
+    const lot = parkingMarker && parkingNear.selected;
+    if (!lot || !Number.isFinite(lot.lat)) return false;
+    const s = screenPointForGround(lot.lat, lot.lng);
+    if (!s) return false;
+    return Math.hypot(event.clientX - s.x, event.clientY - s.y) < 42;
   }
 
   function drawParkingMarker(lot, dest){
@@ -3440,17 +3503,12 @@
       template.content.append(img);
       marker.append(template);
       const onPick = event => {
-        if (parkingDragSuppressClick) { parkingDragSuppressClick = false; return; }
         try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-        window.setTimeout(() => {
-          if (!gestureWasTap()) return;
-          setSelectedParking(lot, dest || activeDestination, { frame: true });
-        }, 50);
+        if (performance.now() - parkingPlacedAt < 400) return;
+        setParkingMoveArmed(!parkingMoveArmed);
       };
       marker.addEventListener("gmp-click", onPick);
       marker.addEventListener("click", onPick);
-      marker.addEventListener("pointerdown", beginParkingDrag);
-      img.addEventListener("pointerdown", beginParkingDrag);
       map3d.append(marker);
       parkingMarker = marker;
       raiseDestinationMarker();
@@ -3534,6 +3592,7 @@
     parkingNear.options = [];
     parkingNear.selected = null;
     suppressParkingApproach = false;
+    setParkingMoveArmed(false);
     clearParkingMarker();
     clearParkingWalk();
     clearParkingApproach();
@@ -3668,8 +3727,8 @@
     const byWalk = (a, b) => (a.walkM || 0) - (b.walkM || 0);
     const near = (lot, cap) => !dest || !Number.isFinite(dest.lat) || lot.walkM <= cap;
     const streets = lots.filter(l => l.parkKind === "street" && !l.busyRoad && near(l, 250)).sort(byWalk).slice(0, 4);
-    const surfaces = lots.filter(l => l.parkKind === "lot" && near(l, 400)).sort(byWalk).slice(0, 4);
-    const buildings = lots.filter(l => l.parkKind === "building" && near(l, destIsBusyCentre(dest) ? 700 : 450)).sort(byWalk).slice(0, 6);
+    const surfaces = lots.filter(l => l.parkKind === "lot" && near(l, 800)).sort(byWalk).slice(0, 5);
+    const buildings = lots.filter(l => l.parkKind === "building" && near(l, destIsBusyCentre(dest) ? 1000 : 800)).sort(byWalk).slice(0, 6);
     const out = [];
     const push = lot => {
       if (!lot || !Number.isFinite(lot.lat)) return;
@@ -3716,7 +3775,7 @@
     parkingNear.destKey = key;
     if (dest.kind === "parking") setSelectedParking(dest, dest);
     else hideParkingRow();
-    const googleP = queryGoogleParking(dest, Math.max(PARKING_NEAR_M, 500));
+    const googleP = queryGoogleParking(dest, PARKING_NEAR_FALLBACK_M);
     try {
       let lots = [];
       let googleLots = [];
@@ -3739,6 +3798,29 @@
         try { lots = await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M); } catch (err) {}
       }
       if (id !== parkingNear.requestId) return;
+      if (!lots.some(l => l.parkKind === "street" && !l.busyRoad && l.walkM < 160) && dest.kind !== "parking") {
+        try {
+          const street = await Promise.race([
+            quietStreetParking(dest),
+            new Promise(resolve => setTimeout(() => resolve(null), 2500))
+          ]);
+          if (id !== parkingNear.requestId) return;
+          if (street && !lots.some(l => l.parkKind === "street" && distanceMetres(l, street) < 45)) lots.push(street);
+        } catch (err) {}
+      }
+      try {
+        const wider = await Promise.race([
+          queryOsmParking(dest, PARKING_NEAR_FALLBACK_M),
+          new Promise(resolve => setTimeout(() => resolve([]), 3500))
+        ]);
+        if (id !== parkingNear.requestId) return;
+        (wider || []).forEach(lot => {
+          if (!lot || lot.parkKind === "street" || !Number.isFinite(lot.lat)) return;
+          if (lot.walkM > 800) return;
+          if (lots.some(l => distanceMetres(l, lot) < 55)) return;
+          lots.push(lot);
+        });
+      } catch (err) {}
       if (!lots.length) {
         if (dest.kind === "parking") setSelectedParking(dest, dest);
         return;
@@ -10562,6 +10644,12 @@
     }
     if (carInspect) {
       carInspect.lastInteractMs = performance.now();
+      return;
+    }
+    if (parkingMoveArmed && !hitParkingPin(event) && !isChromeUiTarget(event.target)) {
+      const p = groundPointFromScreen(event.clientX, event.clientY);
+      if (p) placeParkingAt(p.lat, p.lng);
+      scheduleRestoreRouteCard();
       return;
     }
     onNavMapTap();
