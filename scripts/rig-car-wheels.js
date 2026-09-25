@@ -607,8 +607,97 @@ function composeRig(bodyFile, wheelFile, outFile) {
   }, null, 2));
 }
 
+function bakeLockedWheels(wheelFile, outFile) {
+  const wheel = extractSimpleMesh(wheelFile);
+  const hubs = [
+    { x: -0.8256, y: 0.334, z: 1.4 },
+    { x: 0.8018, y: 0.334, z: 1.3992 },
+    { x: -0.7819, y: 0.334, z: -1.3559 },
+    { x: 0.8095, y: 0.334, z: -1.3416 }
+  ];
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  hubs.forEach((hub) => {
+    const base = positions.length;
+    const mirror = hub.x < 0;
+    wheel.positions.forEach((p) => {
+      const x = (mirror ? -p[0] : p[0]) + hub.x;
+      positions.push([x, p[1] + hub.y, p[2] + hub.z]);
+    });
+    wheel.uvs.forEach((uv) => uvs.push(uv));
+    for (let i = 0; i < wheel.indices.length; i += 3) {
+      const a = base + wheel.indices[i];
+      const b = base + wheel.indices[i + 1];
+      const c = base + wheel.indices[i + 2];
+      if (mirror) indices.push(a, c, b);
+      else indices.push(a, b, c);
+    }
+  });
+  const glb = meshFrom(positions, uvs, indices, wheel.imageBin, wheel.json);
+  fs.writeFileSync(outFile, writeGlb(glb.json, glb.bin));
+  console.log(JSON.stringify({ out: outFile, bytes: fs.statSync(outFile).size, verts: positions.length }));
+}
+
+function bakeSpinFrames(wheelFile, imageFile, outDir) {
+  const wheel = extractSimpleMesh(wheelFile);
+  const image = fs.readFileSync(imageFile);
+  const mime = imageFile.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+  const fakeJson = {
+    materials: wheel.json.materials,
+    images: [{ mimeType: mime }]
+  };
+  const hubs = [
+    { x: -0.8256, y: 0.334, z: 1.4 },
+    { x: 0.8018, y: 0.334, z: 1.3992 },
+    { x: -0.7819, y: 0.334, z: -1.3559 },
+    { x: 0.8095, y: 0.334, z: -1.3416 }
+  ];
+  const frames = 8;
+  fs.mkdirSync(outDir, { recursive: true });
+  hubs.forEach((hub, hi) => {
+    const mirror = hub.x < 0;
+    for (let f = 0; f < frames; f++) {
+      const a = (f / frames) * Math.PI * 2 * (mirror ? -1 : 1);
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const positions = wheel.positions.map((p) => {
+        let x = p[0];
+        const y = p[1] * c - p[2] * s;
+        const z = p[1] * s + p[2] * c;
+        if (mirror) x = -x;
+        return [x + hub.x, y + hub.y, z + hub.z];
+      });
+      const indices = [];
+      for (let i = 0; i < wheel.indices.length; i += 3) {
+        const a0 = wheel.indices[i];
+        const b0 = wheel.indices[i + 1];
+        const c0 = wheel.indices[i + 2];
+        if (mirror) indices.push(a0, c0, b0);
+        else indices.push(a0, b0, c0);
+      }
+      const glb = meshFrom(positions, wheel.uvs, indices, image, fakeJson);
+      const file = path.join(outDir, "h" + hi + "-f" + f + ".glb");
+      fs.writeFileSync(file, writeGlb(glb.json, glb.bin));
+    }
+  });
+  console.log(JSON.stringify({ outDir, frames, hubs: hubs.length, image: image.length }));
+}
+
 const composeIdx = process.argv.indexOf("--compose");
-if (composeIdx >= 0) {
+const spinIdx = process.argv.indexOf("--bake-spin");
+const bakeIdx = process.argv.indexOf("--bake-wheels");
+if (spinIdx >= 0) {
+  const wheelFile = path.resolve(process.argv[spinIdx + 1] || path.join(OUT_DIR, "forte-new-wheel.glb"));
+  const imageFile = path.resolve(process.argv[spinIdx + 2]);
+  const outDir = path.resolve(process.argv[spinIdx + 3] || path.join(OUT_DIR, "wheel-spin"));
+  if (!imageFile) throw new Error("jpeg path required");
+  bakeSpinFrames(wheelFile, imageFile, outDir);
+} else if (bakeIdx >= 0) {
+  const wheelFile = path.resolve(process.argv[bakeIdx + 1] || path.join(OUT_DIR, "forte-new-wheel.glb"));
+  const outFile = path.resolve(process.argv[bakeIdx + 2] || path.join(OUT_DIR, "forte-wheels.glb"));
+  bakeLockedWheels(wheelFile, outFile);
+} else if (composeIdx >= 0) {
   const bodyFile = path.resolve(process.argv[composeIdx + 1] || path.join(OUT_DIR, "forte-new-body.glb"));
   const wheelFile = path.resolve(process.argv[composeIdx + 2] || path.join(OUT_DIR, "forte-new-wheel.glb"));
   const rigFile = path.resolve(process.argv[composeIdx + 3] || path.join(OUT_DIR, "forte-new-rig.glb"));

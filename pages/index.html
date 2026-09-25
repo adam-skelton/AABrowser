@@ -414,6 +414,7 @@
       <button id="turnCueTestBtn" type="button">Turn cue test</button>
       <button id="playTurnCueBtn" type="button">Play turn audio</button>
       <button id="fenceWalkTestBtn" type="button">Fence walk test</button>
+      <button id="bumpRoadTestBtn" type="button">Bump road test</button>
       <button id="privateTailTestBtn" type="button">Private tail test</button>
       <button id="freeFollowBtn" type="button">Free follow</button>
       <button id="randomBtn" type="button">Random route</button>
@@ -644,7 +645,7 @@
       label: "Kia Forte",
       url: modelFileUrl("forte-new.glb"),
       bodyUrl: modelFileUrl("forte-new-body.glb"),
-      wheelUrl: modelFileUrl("forte-new-wheel.glb"),
+      wheelUrl: modelFileUrl("wheel-spin/h0-f0.glb"),
       rigUrl: modelFileUrl("forte-new-rig.glb"),
       previewUrl: modelFileUrl("forte-new.glb"),
       orbit: "0deg 75deg 8m",
@@ -652,11 +653,13 @@
       yawOffset: 90,
       wheels: {
         radius: 0.328,
+        frames: 8,
+        // Each hub is its own model, parked on the car's ground point. Spin is a posed frame.
         hubs: [
-          { x: -0.8256, y: 0.334, z: 1.4000 },
-          { x: 0.8018, y: 0.334, z: 1.3992 },
-          { x: -0.7819, y: 0.334, z: -1.3559 },
-          { x: 0.8095, y: 0.334, z: -1.3416 }
+          { id: "h0" },
+          { id: "h1" },
+          { id: "h2" },
+          { id: "h3" }
         ]
       }
     },
@@ -1367,9 +1370,12 @@
   }
 
   let carPoseWritten = null;
+  // The map's own ground, not a sea-level terrain tile. Those tiles sit below
+  // the drawn road, and the gap changes along the route, so the car sank in
+  // some places. Ground is the smooth surface; mesh bumps and ghost cars are not.
+  const CAR_ALTITUDE_MODE = "RELATIVE_TO_GROUND";
   function applyCarPose(point, heading){
     lastCarPoint = { lat: point.lat, lng: point.lng };
-    if (Number.isFinite(point.altitude)) lastCarPoint.altitude = point.altitude;
     if (Number.isFinite(heading)) lastCarHeading = heading;
     if (userCar) {
       // Skip the native writes when nothing moved enough to see (the follow ticker
@@ -1377,13 +1383,12 @@
       const w = carPoseWritten;
       const same = w && w.car === userCar &&
         Math.abs(w.lat - lastCarPoint.lat) < 1e-8 && Math.abs(w.lng - lastCarPoint.lng) < 1e-8 &&
-        Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02 &&
-        Math.abs((w.alt || 0) - (Number(lastCarPoint.altitude) || 0)) < 0.05;
+        Math.abs(((w.heading - lastCarHeading + 540) % 360) - 180) < 0.02;
       if (!same) {
-        try { userCar.altitudeMode = MODEL_ALTITUDE_MODE; } catch (err) {}
-        try { userCar.position = carMapPosition(lastCarPoint); } catch (err) {}
+        try { userCar.altitudeMode = CAR_ALTITUDE_MODE; } catch (err) {}
+        try { userCar.position = { lat: lastCarPoint.lat, lng: lastCarPoint.lng, altitude: 0 }; } catch (err) {}
         try { userCar.orientation = carOrientation(lastCarHeading); } catch (err) {}
-        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading, alt: Number(lastCarPoint.altitude) || 0 };
+        carPoseWritten = { car: userCar, lat: lastCarPoint.lat, lng: lastCarPoint.lng, heading: lastCarHeading };
       }
     }
     applyWheelPose(lastCarPoint, lastCarHeading);
@@ -1408,10 +1413,10 @@
     try {
       userCar = new Model3DElement({
         src,
-        position: carMapPosition(position),
+        position: { lat: position.lat, lng: position.lng, altitude: 0 },
         orientation: carOrientation(h),
         scale,
-        altitudeMode: MODEL_ALTITUDE_MODE
+        altitudeMode: CAR_ALTITUDE_MODE
       });
       const revealModel = () => {
         carModelReady = true;
@@ -1515,6 +1520,7 @@
 
   function wheelOrientation(heading, hub){
     const rest = carOrientation(heading);
+    if (hub && hub.locked) return rest;
     const flip = !!(hub && hub.x > 0);
     // The extracted mesh is a right wheel with the alloy on +X, but Maps' rest
     // pose points that face inboard on the right side. Yaw those 180° so the
@@ -1530,9 +1536,10 @@
 
   function hubMapPoint(point, heading, hub, scale){
     const along = lookAhead(point, heading, hub.z * scale);
-    // Lat/lng only. The wheels use the same ground clamp as the body, so a
-    // bump under one hub cannot lift that wheel off the car.
-    return lookAhead(along, heading + 90, hub.x * scale);
+    const pos = lookAhead(along, heading + 90, hub.x * scale);
+    // Metres above the same ground the body sits on, so the hub is in the arch.
+    pos.altitude = hub.y * scale;
+    return pos;
   }
 
   function wheelScaleForHub(scale){
@@ -1560,6 +1567,12 @@
     }
   }
 
+  function wheelSpinFrame(spec){
+    const n = (spec && spec.wheels && spec.wheels.frames) || 1;
+    const deg = ((wheelSpinDeg % 360) + 360) % 360;
+    return Math.floor(deg / (360 / n)) % n;
+  }
+
   function applyWheelPose(point, heading){
     if (!userWheels.length || !point) return;
     const spec = carWheelSpec();
@@ -1567,68 +1580,74 @@
     const h = Number.isFinite(heading) ? heading : lastCarHeading;
     const scale = currentShownCarScale();
     const hidden = scale <= 0.01;
+    const frame = wheelSpinFrame(spec);
     const w = wheelPoseWritten;
-    const spinDelta = w ? Math.abs(((wheelSpinDeg - (w.spin || 0) + 540) % 360) - 180) : 360;
     const samePos = w &&
       Math.abs(w.lat - point.lat) < 1e-8 && Math.abs(w.lng - point.lng) < 1e-8 &&
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01;
-    if (samePos && w.hidden === hidden && spinDelta < 0.4) return;
-    spec.wheels.hubs.forEach((hub, i) => {
-      const el = userWheels[i];
-      if (!el) return;
+    if (samePos && w.hidden === hidden && w.frame === frame) return;
+    const pose = { lat: point.lat, lng: point.lng, altitude: 0 };
+    const orient = carOrientation(h);
+    const shown = wheelScaleForHub(scale);
+    userWheels.forEach(el => {
       try {
-        if (hidden) {
-          el.scale = 0.001;
-        } else {
-          const moved = !samePos || !w || w.hidden;
-          if (moved) {
-            el.altitudeMode = MODEL_ALTITUDE_MODE;
-            el.position = hubMapPoint(point, h, hub, scale);
-            el.scale = wheelScaleForHub(scale);
-          }
-          if (moved || spinDelta >= 0.4) el.orientation = wheelOrientation(h, hub);
+        const show = !hidden && el.__aaFrame === frame;
+        if (!samePos || !w || w.hidden !== hidden) {
+          el.altitudeMode = CAR_ALTITUDE_MODE;
+          el.position = pose;
+          el.orientation = orient;
         }
-        } catch (err) {}
+        el.scale = show ? shown : 0.001;
+      } catch (err) {}
     });
-    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, spin: wheelSpinDeg };
+    wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, frame, spin: wheelSpinDeg };
   }
 
   function attachUserWheels(position, heading){
     const spec = carWheelSpec();
     if (!spec || !Model3DElement || !map3d) return;
+    const posed = (position && Number.isFinite(position.altitude)) ? position : currentCarPoint();
     if (userWheels.length) {
-      applyWheelPose(position, heading);
+      applyWheelPose(posed, heading);
       return;
     }
     const h = Number.isFinite(heading) ? heading : 0;
     const scale = currentShownCarScale();
     const hidden = scale <= 0.01;
     const placeScale = hidden ? 1 : scale;
+    position = posed;
+    const frames = spec.wheels.frames || 1;
+    const startFrame = wheelSpinFrame(spec);
     spec.wheels.hubs.forEach(hub => {
-      try {
-        const el = new Model3DElement({
-          src: spec.wheelUrl,
-          position: hubMapPoint(position, h, hub, placeScale),
-          orientation: wheelOrientation(h, hub),
-          scale: hidden ? 0.001 : wheelScaleForHub(scale),
-          altitudeMode: MODEL_ALTITUDE_MODE
-        });
-        el.addEventListener("gmp-click", event => {
-          try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
-          if (!gestureWasTap()) return;
-          startCarInspect();
-        });
-        el.addEventListener("gmp-error", () => {
-          console.error("3D wheel model failed to load", spec.wheelUrl);
+      for (let frame = 0; frame < frames; frame++) {
+        try {
+          const src = modelFileUrl("wheel-spin/" + hub.id + "-f" + frame + ".glb");
+          const show = !hidden && frame === startFrame;
+          const el = new Model3DElement({
+            src,
+            position: { lat: position.lat, lng: position.lng, altitude: 0 },
+            orientation: carOrientation(h),
+            scale: show ? wheelScaleForHub(placeScale) : 0.001,
+            altitudeMode: CAR_ALTITUDE_MODE
+          });
+          el.__aaFrame = frame;
+          el.addEventListener("gmp-click", event => {
+            try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
+            if (!gestureWasTap()) return;
+            startCarInspect();
+          });
+          el.addEventListener("gmp-error", () => {
+            console.error("3D wheel model failed to load", src);
+            fallbackSolidCar();
+          });
+          map3d.append(el);
+          try { el.src = src; } catch (err) {}
+          userWheels.push(el);
+        } catch (err) {
+          console.error(err);
           fallbackSolidCar();
-        });
-        map3d.append(el);
-        try { el.src = spec.wheelUrl; } catch (err) {}
-        userWheels.push(el);
-      } catch (err) {
-        console.error(err);
-        fallbackSolidCar();
+        }
       }
     });
     wheelPoseWritten = null;
@@ -8534,6 +8553,8 @@
     if (demoBtn) demoBtn.textContent = "Drive route demo";
     const freeBtn = document.getElementById("freeFollowBtn");
     if (freeBtn) freeBtn.textContent = "Free follow";
+    const bumpBtn = document.getElementById("bumpRoadTestBtn");
+    if (bumpBtn) bumpBtn.textContent = "Bump road test";
     const tracesBtn = document.getElementById("tracesBtn");
     if (tracesBtn) tracesBtn.textContent = "Traces";
     const cueBtn = document.getElementById("turnCueTestBtn");
@@ -8639,6 +8660,52 @@
     if (!item) return;
     cueDecor.push(item);
     try { map3d.append(item); } catch (err) {}
+  }
+
+  // Westbound from the bumpy stretch in East Auckland. Ghost cars and mesh
+  // spikes along here used to throw the model off the road.
+  const BUMP_ROAD_TEST = { lat: -36.92916482235166, lng: 174.9137264537898, heading: 270, distanceM: 1400 };
+
+  async function startBumpRoadTest(){
+    if (demoKind === "bump" && isDemoRunning()) {
+      stopDemo();
+      setMessage("Bump road test stopped.");
+      return;
+    }
+    if (!map3d || !RouteClass) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    if (isDemoRunning()) stopDemo();
+    if (watchId !== null) stopGps();
+    const origin = { lat: BUMP_ROAD_TEST.lat, lng: BUMP_ROAD_TEST.lng };
+    const dest = lookAhead(origin, BUMP_ROAD_TEST.heading, BUMP_ROAD_TEST.distanceM);
+    dest.name = "Bump road";
+    setMessage("Bump road test: routing west along the bumpy stretch…");
+    try {
+      await calculateRoute(origin, dest, dest.name, { preview: false, waitRefine: false, noCard: true });
+    } catch (err) {
+      setMessage("Bump road test failed. " + (err && err.message ? err.message : String(err)));
+      return;
+    }
+    if (!activeRoutePath || activeRoutePath.length < 2) {
+      setMessage("Bump road test: no route.");
+      return;
+    }
+    try { cancelStartCountdown(); } catch (err) {}
+    stopDestPreview();
+    const heading = bearingDegrees(activeRoutePath[0], activeRoutePath[1]);
+    demoKind = "bump";
+    demoActive = true;
+    const btn = document.getElementById("bumpRoadTestBtn");
+    if (btn) btn.textContent = "Stop bump test";
+    applyGpsFix(activeRoutePath[0], heading, { speed: 11, accuracy: 4, headingMeasured: true });
+    enterNavigation({ flyover: false });
+    driveAlongPath(activeRoutePath, () => {
+      stopDemo();
+      setMessage("Bump road test finished.");
+    }, 11);
+    setMessage("Bump road test: driving west. The car should stay on the road through the bumps.");
   }
 
   async function startBucklandsAccessTest(){
@@ -9634,6 +9701,11 @@
     resumeNavAudio();
     playTurnCue("both");
     setMessage("Playing turn audio.");
+  });
+  const bumpRoadTestBtn = document.getElementById("bumpRoadTestBtn");
+  if (bumpRoadTestBtn) bumpRoadTestBtn.addEventListener("click", event => {
+    event.preventDefault();
+    startBumpRoadTest();
   });
   const fenceWalkTestBtn = document.getElementById("fenceWalkTestBtn");
   if (fenceWalkTestBtn) fenceWalkTestBtn.addEventListener("click", event => {
