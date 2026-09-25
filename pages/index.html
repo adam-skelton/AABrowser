@@ -1587,18 +1587,27 @@
       Math.abs(((w.heading - h + 540) % 360) - 180) < 0.02 &&
       Math.abs(w.scale - scale) < 0.01;
     if (samePos && w.hidden === hidden && w.frame === frame) return;
+    const poseMoved = !w || !samePos;
+    const reveal = !w || w.hidden !== hidden || w.frame !== frame;
     const pose = { lat: point.lat, lng: point.lng, altitude: 0 };
     const orient = carOrientation(h);
     const shown = wheelScaleForHub(scale);
     userWheels.forEach(el => {
       try {
-        const show = !hidden && el.__aaFrame === frame;
-        if (!samePos || !w || w.hidden !== hidden) {
-          el.altitudeMode = CAR_ALTITUDE_MODE;
+        const isFrame = el.__aaFrame === frame;
+        if (hidden) {
+          if (!w || !w.hidden) el.scale = 0.001;
+          return;
+        }
+        if (!isFrame) {
+          if (reveal && w && el.__aaFrame === w.frame) el.scale = 0.001;
+          return;
+        }
+        if (poseMoved || reveal) {
           el.position = pose;
           el.orientation = orient;
         }
-        el.scale = show ? shown : 0.001;
+        if (reveal || !w || Math.abs(w.scale - scale) >= 0.01) el.scale = shown;
       } catch (err) {}
     });
     wheelPoseWritten = { lat: point.lat, lng: point.lng, heading: h, scale, hidden, frame, spin: wheelSpinDeg };
