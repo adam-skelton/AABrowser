@@ -1,47 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed (monochrome) launcher layer: single-colour silhouette of the 3D map tile,
-     two buildings, the route and the puck. The system applies the theme tint. -->
+<!-- Themed launcher: the same pin as a single silhouette. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:pivotX="54"
-        android:pivotY="52.5"
-        android:scaleX="1.1"
-        android:scaleY="1.1">
-        <!-- tile top rim -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:fillType="evenOdd"
-            android:pathData="M54,33L81.7,49L54,65L26.3,49Z M54,36.4L29.8,50.4L54,64.4L78.2,50.4Z" />
-        <!-- tile sides -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M26.3,49L54,65L54,71.5L26.3,55.5Z M54,65L81.7,49L81.7,55.5L54,71.5Z" />
-        <!-- hero building -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M66.1,26L72.2,29.5L72.2,47.5L66.1,51L60.1,47.5L60.1,29.5Z" />
-        <!-- second building -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M51.4,26.5L57.5,30L57.5,41L51.4,44.5L45.3,41L45.3,30Z" />
-        <!-- route -->
-        <path
-            android:pathData="M39.3,56.5L53.1,48.5L66.1,56"
-            android:strokeColor="#FFFFFFFF"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round"
-            android:strokeWidth="2.6" />
-        <!-- destination -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M63.3,56a2.8,2.8 0 1 1 5.6,0a2.8,2.8 0 1 1 -5.6,0z" />
-        <!-- puck -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M40.7,53.4a3.9,3.9 0 1 1 7.8,0a3.9,3.9 0 1 1 -7.8,0z" />
+        android:pivotX="48"
+        android:pivotY="68"
+        android:scaleX="0.50"
+        android:scaleY="0.50"
+        android:translateX="6"
+        android:translateY="-14">
+        <group
+            android:translateX="2"
+            android:translateY="2">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M60.2,2.2C55.8,0.8 51,0 46.1,0 32,0 19.3,6.4 10.8,16.5l21.8,18.3L60.2,2.2z" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M10.8,16.5C4.1,24.5 0,34.9 0,46.1c0,8.7 1.7,15.7 4.6,22l28,-33.3 -21.8,-18.3z" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M46.2,28.5c9.8,0 17.7,7.9 17.7,17.7 0,4.3 -1.6,8.3 -4.2,11.4 0,0 13.9,-16.6 27.5,-32.7 -5.6,-10.8 -15.3,-19 -27,-22.7L32.6,34.8c3.3,-3.8 8.1,-6.3 13.6,-6.3" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M46.2,63.8c-9.8,0 -17.7,-7.9 -17.7,-17.7 0,-4.3 1.5,-8.3 4.1,-11.3l-28,33.3c4.8,10.6 12.8,19.2 21,29.9l34.1,-40.5c-3.3,3.9 -8.1,6.3 -13.5,6.3" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M59.1,109.2c15.4,-24.1 33.3,-35 33.3,-63 0,-7.7 -1.9,-14.9 -5.2,-21.3L25.6,98c2.6,3.4 5.3,7.3 7.9,11.3 9.4,14.5 6.8,23.1 12.8,23.1s3.4,-8.7 12.8,-23.2" />
+        </group>
     </group>
 </vector>
