@@ -613,6 +613,11 @@ class CarWebViewHost(
         val downTime = SystemClock.uptimeMillis()
         dispatchTouch(view, MotionEvent.ACTION_DOWN, x, y, downTime, downTime)
         dispatchTouch(view, MotionEvent.ACTION_UP, x, y, downTime, downTime + CLICK_DURATION_MS)
+        // The 3D parking pin does not receive this touch. Hand the same point to the page.
+        view.evaluateJavascript(
+            "window.__aaMapClick && window.__aaMapClick($x,$y);",
+            null
+        )
         // Head-unit taps arrive here and never become page pointer events, so the
         // phone's triple-tap never runs. Count them on the map surface itself.
         noteDebugCornerClick(x, y)

@@ -98,6 +98,12 @@
     #parkDialogList button.selected .park-check {visibility:visible}
     #parkDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; font-size:22px; line-height:1}
     body.parking-move, body.parking-move gmp-map-3d {cursor:crosshair}
+    #parkMoveBanner {display:none; position:absolute; z-index:39; left:50%; top:calc(var(--aa-inset-top) + max(18px,env(safe-area-inset-top))); transform:translateX(-50%); align-items:center; gap:12px; min-height:68px; max-width:calc(100% - 32px); padding:0 22px 0 14px; border-radius:34px; background:#E37400; color:#fff; font-size:18px; font-weight:750; letter-spacing:-.2px; box-shadow:0 6px 22px rgba(0,0,0,.42); pointer-events:none; white-space:nowrap}
+    body.parking-move #parkMoveBanner,html.parking-move #parkMoveBanner {display:flex}
+    #parkMoveBadge {flex:0 0 auto; width:40px; height:40px; border-radius:50%; background:#fff; color:#E37400; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800}
+    #parkMoveRing {display:none; position:fixed; z-index:35; width:96px; height:96px; margin:-48px 0 0 -48px; border-radius:50%; border:4px solid #F9AB00; box-shadow:0 0 0 10px rgba(249,171,0,.38); pointer-events:none; animation:parkPulse 1.05s ease-out infinite}
+    body.parking-move #parkMoveRing,html.parking-move #parkMoveRing {display:block}
+    @keyframes parkPulse {0%{transform:scale(.82); opacity:1} 100%{transform:scale(1.22); opacity:.2}}
     #routeSnippet {display:none; margin-top:6px; font-size:13px; font-weight:500; color:#5F6368; line-height:1.35; cursor:pointer; overflow:visible; white-space:normal}
     #routeSnippet.visible {display:block}
     #descDialog {display:none; position:absolute; inset:0; z-index:48; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto; padding:24px}
@@ -564,6 +570,11 @@
     <div id="message">Loading Google 3D map...</div>
     <div><span id="coords">Auckland CBD</span> · heading <span id="heading">0°</span></div>
   </div>
+  <div id="parkMoveBanner" aria-live="polite">
+    <span id="parkMoveBadge">P</span>
+    <span>Swipe the map, then tap to place</span>
+  </div>
+  <div id="parkMoveRing" aria-hidden="true"></div>
   <button id="recenterBtn" type="button">
     <svg viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path d="M24 0c11.6 0 21 9.2 21 20.6 0 14.4-21 35.4-21 35.4S3 35 3 20.6C3 9.2 12.4 0 24 0z"/>
@@ -2719,12 +2730,15 @@
     return dest;
   }
 
-  function parkingPinDataUrl(){
+  function parkingPinDataUrl(active){
+    const fill = active ? "#E37400" : "#1A73E8";
+    const ring = active ? '<circle cx="26" cy="26" r="24" fill="none" stroke="#F9AB00" stroke-width="3.5"/>' : "";
     const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">' +
-      '<circle cx="20" cy="21" r="17.5" fill="rgba(0,0,0,.22)"/>' +
-      '<circle cx="20" cy="20" r="17.5" fill="#1A73E8" stroke="#fff" stroke-width="2.4"/>' +
-      '<path fill="#fff" transform="translate(9.2 9.2) scale(.9)" d="' + CATALOG_ICON_PATHS.parking + '"/>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">' +
+      ring +
+      '<circle cx="26" cy="27.2" r="18" fill="rgba(0,0,0,.22)"/>' +
+      '<circle cx="26" cy="26" r="18" fill="' + fill + '" stroke="#fff" stroke-width="3"/>' +
+      '<path fill="#fff" transform="translate(12.2 12.2) scale(.92)" d="' + CATALOG_ICON_PATHS.parking + '"/>' +
       "</svg>";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
@@ -3385,25 +3399,52 @@
 
   let parkingMoveArmed = false;
   let parkingPlacedAt = 0;
+  let parkingTapMs = 0;
+  let parkingTapX = NaN;
+  let parkingTapY = NaN;
   function setParkingMoveArmed(on){
-    parkingMoveArmed = !!on;
+    const next = !!on;
+    if (next === parkingMoveArmed) {
+      syncParkingMoveHud();
+      return;
+    }
+    parkingMoveArmed = next;
     document.body.classList.toggle("parking-move", parkingMoveArmed);
-    if (parkingMoveArmed) setMessage("Click the map to move the parking pin.");
+    document.documentElement.classList.toggle("parking-move", parkingMoveArmed);
+    const lot = parkingNear.selected;
+    if (lot && activeDestination) drawParkingMarker(lot, activeDestination);
+    if (parkingMoveArmed) ensureFollowTicker();
+    syncParkingMoveHud();
+  }
+
+  function syncParkingMoveHud(){
+    const ring = document.getElementById("parkMoveRing");
+    if (!ring) return;
+    if (!parkingMoveArmed) return;
+    const lot = parkingNear.selected;
+    const s = lot && Number.isFinite(lot.lat) ? screenPointForGround(lot.lat, lot.lng) : null;
+    if (!s) {
+      ring.style.visibility = "hidden";
+      return;
+    }
+    ring.style.visibility = "visible";
+    ring.style.left = Math.round(s.x) + "px";
+    ring.style.top = Math.round(s.y) + "px";
   }
 
   function placeParkingAt(lat, lng){
     const lot = parkingNear.selected;
     const dest = activeDestination;
     parkingPlacedAt = performance.now();
-    setParkingMoveArmed(false);
-    if (!lot || !dest || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!lot || !dest || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setParkingMoveArmed(false);
+      return;
+    }
     lot.lat = lat;
     lot.lng = lng;
     lot.dragged = true;
     lot.walkM = distanceMetres(dest, lot);
-    if (parkingMarker) {
-      try { parkingMarker.position = { lat: lat, lng: lng, altitude: 0 }; } catch (err) {}
-    }
+    setParkingMoveArmed(false);
     updateParkingRow();
     if (!destIsSamePlace(dest, lot)) drawParkingWalk(lot, dest);
     else { parkingNear.walkId += 1; clearParkingWalk(); }
@@ -3479,37 +3520,80 @@
 
   function hitParkingPin(event){
     const lot = parkingMarker && parkingNear.selected;
-    if (!lot || !Number.isFinite(lot.lat)) return false;
+    if (!lot || !Number.isFinite(lot.lat) || !event) return false;
     const s = screenPointForGround(lot.lat, lot.lng);
     if (!s) return false;
-    return Math.hypot(event.clientX - s.x, event.clientY - s.y) < 42;
+    const radius = isAndroidAuto() ? 92 : 48;
+    return Math.hypot(event.clientX - s.x, event.clientY - s.y) < radius;
+  }
+
+  // One tap picks the pin up. Swipes then pan the map. The next tap drops it.
+  // Dash clicks often never reach the 3D marker, so the same path runs from
+  // the head-unit click coordinates.
+  function handleParkingSurfaceTap(x, y, target){
+    if (!parkingMarker || !parkingNear.selected) return false;
+    if (target && isChromeUiTarget(target)) return false;
+    const now = performance.now();
+    if (now - parkingTapMs < 520 && Math.hypot(x - parkingTapX, y - parkingTapY) < 36) return true;
+    const onPin = hitParkingPin({ clientX: x, clientY: y });
+    if (onPin && now - parkingPlacedAt < 650) return true;
+    if (!onPin && !parkingMoveArmed) return false;
+    parkingTapMs = now;
+    parkingTapX = x;
+    parkingTapY = y;
+    if (onPin) {
+      setParkingMoveArmed(!parkingMoveArmed);
+      return true;
+    }
+    const p = groundPointFromScreen(x, y);
+    if (p) placeParkingAt(p.lat, p.lng);
+    return true;
+  }
+
+  function carSurfacePoint(x, y){
+    let cx = Number(x), cy = Number(y);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth || 1;
+    const h = window.innerHeight || 1;
+    if (dpr > 1.15 && (cx > w * 1.08 || cy > h * 1.08)) {
+      cx /= dpr;
+      cy /= dpr;
+    }
+    return { x: cx, y: cy };
   }
 
   function drawParkingMarker(lot, dest){
     clearParkingMarker();
     if (!map3d || !lot || destIsSamePlace(dest, lot)) return;
     try {
-      const Ctor = Marker3DInteractiveElement || Marker3DElement;
+      const Ctor = Marker3DElement || Marker3DInteractiveElement;
       const marker = new Ctor({
-        position: { lat: lot.lat, lng: lot.lng },
+        position: { lat: lot.lat, lng: lot.lng, altitude: 0 },
         altitudeMode: "CLAMP_TO_GROUND",
         sizePreserved: true,
         drawsWhenOccluded: true
       });
+      try { marker.anchorLeft = "-50%"; marker.anchorTop = "-50%"; } catch (err) {}
+      const active = parkingMoveArmed;
       const img = document.createElement("img");
-      img.src = parkingPinDataUrl();
-      img.width = 40;
-      img.height = 40;
+      img.src = parkingPinDataUrl(active);
+      img.width = active ? 52 : 40;
+      img.height = active ? 52 : 40;
       img.alt = lot.name || "Parking area";
       img.draggable = false;
-      img.style.cssText = "width:40px;height:40px;touch-action:none;cursor:grab";
+      img.style.cssText = "display:block;width:" + (active ? 52 : 40) + "px;height:" + (active ? 52 : 40) + "px;pointer-events:none";
       const template = document.createElement("template");
       template.content.append(img);
       marker.append(template);
       const onPick = event => {
         try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-        if (performance.now() - parkingPlacedAt < 400) return;
-        setParkingMoveArmed(!parkingMoveArmed);
+        const pt = event && Number.isFinite(event.clientX) ? event : null;
+        const s = pt ? null : screenPointForGround(lot.lat, lot.lng);
+        const x = pt ? pt.clientX : (s ? s.x : NaN);
+        const y = pt ? pt.clientY : (s ? s.y : NaN);
+        if (!Number.isFinite(x)) return;
+        handleParkingSurfaceTap(x, y, event && event.target);
       };
       marker.addEventListener("gmp-click", onPick);
       marker.addEventListener("click", onPick);
@@ -7666,6 +7750,7 @@
     updateNavHud();
     updateTurnCue();
     updateNavInfoButton();
+    if (parkingMoveArmed) syncParkingMoveHud();
   }
 
   function stepPuck(dtRaw, dtEase, now){
@@ -9914,6 +9999,18 @@
   window.__aaRecenter = function(){
     recenterToCar();
   };
+  window.__aaMapClick = function(x, y){
+    const rawX = Number(x), rawY = Number(y);
+    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return;
+    const primary = carSurfacePoint(rawX, rawY) || { x: rawX, y: rawY };
+    const dpr = window.devicePixelRatio || 1;
+    const alt = { x: rawX / dpr, y: rawY / dpr };
+    let pt = primary;
+    if (!hitParkingPin({ clientX: pt.x, clientY: pt.y }) && hitParkingPin({ clientX: alt.x, clientY: alt.y })) pt = alt;
+    let el = null;
+    try { el = document.elementFromPoint(pt.x, pt.y); } catch (err) {}
+    handleParkingSurfaceTap(pt.x, pt.y, el);
+  };
   window.__aaUserPanned = function(){
     if (carInspect) {
       carInspect.lastInteractMs = performance.now();
@@ -10721,7 +10818,8 @@
     releaseMapFromRoutePreview();
     noteMapPointerDown(event);
     mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event), held: false };
-    armMapHold(event);
+    if (hitParkingPin(event) || parkingMoveArmed) cancelMapHold();
+    else armMapHold(event);
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
     if (pinchReachesMap(event)) event.stopPropagation();
@@ -10751,6 +10849,7 @@
       markUserPanned(true);
     }
     stowRouteCard();
+    if (parkingMoveArmed) syncParkingMoveHud();
   }, { capture:true, passive:true });
   window.addEventListener("pointerup", event => {
     const wasPinch = gesturePointers.size >= 2;
@@ -10769,18 +10868,16 @@
       scheduleRestoreRouteCard();
       return;
     }
+    if (handleParkingSurfaceTap(event.clientX, event.clientY, event.target)) {
+      scheduleRestoreRouteCard();
+      return;
+    }
     if (!carInspect && (start.car || tapHitsCar(event))) {
       startCarInspect();
       return;
     }
     if (carInspect) {
       carInspect.lastInteractMs = performance.now();
-      return;
-    }
-    if (parkingMoveArmed && !hitParkingPin(event) && !isChromeUiTarget(event.target)) {
-      const p = groundPointFromScreen(event.clientX, event.clientY);
-      if (p) placeParkingAt(p.lat, p.lng);
-      scheduleRestoreRouteCard();
       return;
     }
     onNavMapTap();
