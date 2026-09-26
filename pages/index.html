@@ -198,7 +198,7 @@
     #compassBtn.visible {display:none !important}
     #compassBtn svg {width:38px; height:38px; display:block}
     #compassBtn.north-up {background:#1A73E8}
-    body.night gmp-map-3d {filter:brightness(.68) saturate(.82)}
+    body.night gmp-map-3d {filter:brightness(.85)}
     body.night #speedLimitBadge {background:#ECEDEE}
     #traceOverlay {display:none; position:absolute; inset:0; z-index:47; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto}
     #traceOverlay.open {display:flex}
@@ -3429,34 +3429,21 @@
     syncParkingMoveHud();
   }
 
-  function markerScreenCenter(el){
-    if (!el || typeof el.getBoundingClientRect !== "function") return null;
-    const rect = el.getBoundingClientRect();
-    if (rect.width > 8 && rect.height > 8 && rect.width < 280 && rect.height < 280) {
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }
-    const root = el.shadowRoot;
-    if (!root || !root.querySelector) return null;
-    const inner = root.querySelector("img, svg");
-    if (!inner || inner === el) return null;
-    return markerScreenCenter(inner);
-  }
-
   function syncParkingMoveHud(){
     const ring = document.getElementById("parkMoveRing");
     if (!ring) return;
     if (!parkingMoveArmed) return;
-    const drawn = markerScreenCenter(parkingMarker);
     const lot = parkingNear.selected;
-    const projected = !drawn && lot && Number.isFinite(lot.lat) ? screenPointForGround(lot.lat, lot.lng) : null;
-    const s = drawn || projected;
+    const s = lot && Number.isFinite(lot.lat) ? screenPointForGround(lot.lat, lot.lng) : null;
     if (!s) {
       ring.style.visibility = "hidden";
       return;
     }
+    // The 3D pin is pinned by its bottom edge. The P sits half an icon above that.
+    const lift = 26;
     ring.style.visibility = "visible";
     ring.style.left = s.x + "px";
-    ring.style.top = s.y + "px";
+    ring.style.top = (s.y - lift) + "px";
   }
 
   function placeParkingAt(lat, lng){
@@ -4028,11 +4015,13 @@
     return range;
   }
 
-  // Free follow hides the car. Once the camera is pulled back (up-arrow widen or a
-  // pinch), a blue dot marks the fix until the view is back on the car.
+  // Free follow and navigation draw the chase view. Everywhere else, a stopped
+  // car gets a blue dot. A widened free-follow view still gets one too.
   let freeZoomDot = null;
   function freeZoomDotWanted(){
     if (isNavigating() || explore.mode || carInspect) return false;
+    noteFollowStill(speedKalman.speed || 0);
+    if (!following && followStill) return true;
     if (infoLevel > 0) return true;
     if (cam.userRange != null && cam.userRange > freeFollowRange() * 1.2) return true;
     if (!following && map3d) {
@@ -10197,6 +10186,7 @@
       if (followBtn) followBtn.textContent = "Following: OFF";
     }
     updateRecenterButton();
+    syncFreeZoomDot();
   }
 
   function updateRecenterButton(){

@@ -1,5 +1,12 @@
 package com.kododake.aabrowser.car
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
@@ -11,6 +18,7 @@ import androidx.car.app.model.Row
 import androidx.car.app.model.SearchTemplate
 import androidx.car.app.model.SearchTemplate.SearchCallback
 import androidx.car.app.model.Template
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -27,6 +35,9 @@ class CarKeyboardScreen(
 
     private var typedText = initialText
     private var suggestions: List<SearchSuggestion> = emptyList()
+    private var listening = false
+    private var voiceHint: String? = null
+    private var speechRecognizer: SpeechRecognizer? = null
 
     init {
         lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -42,6 +53,7 @@ class CarKeyboardScreen(
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
+                releaseRecognizer()
                 if (webHost.searchSuggestionsListener != null) {
                     webHost.searchSuggestionsListener = null
                 }
@@ -64,27 +76,130 @@ class CarKeyboardScreen(
 
         val builder = SearchTemplate.Builder(callback)
             .setHeaderAction(Action.BACK)
-            .setShowKeyboardByDefault(true)
-            .setSearchHint(carContext.getString(R.string.car_keyboard_hint))
+            .setShowKeyboardByDefault(!listening)
+            .setSearchHint(voiceHint ?: carContext.getString(
+                if (listening) R.string.car_keyboard_listening else R.string.car_keyboard_hint
+            ))
             .setInitialSearchText(typedText)
             .setItemList(suggestionList())
-        if (typedText.isNotBlank()) {
-            builder.setActionStrip(
-                ActionStrip.Builder()
-                    .addAction(
-                        Action.Builder()
-                            .setTitle(carContext.getString(R.string.car_keyboard_clear))
-                            .setOnClickListener {
-                                typedText = ""
-                                onTextChanged("")
-                                onClearRequest()
-                            }
-                            .build()
-                    )
+            .setActionStrip(searchActions())
+        return builder.build()
+    }
+
+    // The mic drawn on the car keyboard is the host's button. It does not deliver
+    // audio to the app, so Voice on this screen runs dictation and fills the box.
+    private fun searchActions(): ActionStrip {
+        val strip = ActionStrip.Builder().addAction(voiceAction())
+        if (typedText.isNotBlank() && !listening) {
+            strip.addAction(
+                Action.Builder()
+                    .setTitle(carContext.getString(R.string.car_keyboard_clear))
+                    .setOnClickListener {
+                        typedText = ""
+                        voiceHint = null
+                        onTextChanged("")
+                        onClearRequest()
+                    }
                     .build()
             )
         }
-        return builder.build()
+        return strip.build()
+    }
+
+    private fun voiceAction(): Action {
+        return Action.Builder()
+            .setTitle(carContext.getString(
+                if (listening) R.string.car_keyboard_listening else R.string.car_keyboard_voice
+            ))
+            .setIcon(
+                CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_mic)).build()
+            )
+            .setOnClickListener {
+                if (listening) finishVoice(null) else startVoice()
+            }
+            .build()
+    }
+
+    private fun startVoice() {
+        val permission = Manifest.permission.RECORD_AUDIO
+        if (ContextCompat.checkSelfPermission(carContext, permission) != PackageManager.PERMISSION_GRANTED) {
+            carContext.requestPermissions(listOf(permission)) { granted, _ ->
+                if (granted.contains(permission)) startVoice()
+            }
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(carContext)) {
+            voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
+            invalidate()
+            return
+        }
+        releaseRecognizer()
+        listening = true
+        voiceHint = null
+        invalidate()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(carContext).also { recognizer ->
+            recognizer.setRecognitionListener(voiceListener)
+            recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            })
+        }
+    }
+
+    private fun finishVoice(text: String?) {
+        listening = false
+        releaseRecognizer()
+        if (!text.isNullOrBlank()) {
+            typedText = text.trim()
+            voiceHint = null
+            onTextChanged(typedText)
+        }
+        invalidate()
+    }
+
+    private fun releaseRecognizer() {
+        val recognizer = speechRecognizer ?: return
+        speechRecognizer = null
+        try {
+            recognizer.destroy()
+        } catch (_: Exception) {
+        }
+    }
+
+    private val voiceListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val text = partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                ?.trim()
+                .orEmpty()
+            if (text.isNotEmpty()) typedText = text
+        }
+
+        override fun onResults(results: Bundle?) {
+            val text = results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                ?.trim()
+                .orEmpty()
+                .ifEmpty { typedText }
+            finishVoice(text)
+        }
+
+        override fun onError(error: Int) {
+            if (!listening) return
+            listening = false
+            releaseRecognizer()
+            invalidate()
+        }
     }
 
     private fun suggestionList(): ItemList {

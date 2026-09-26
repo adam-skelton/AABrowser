@@ -126,6 +126,9 @@
     <string name="car_keyboard_empty">Tap Search to list matching places, then choose one.</string>
     <string name="car_keyboard_clear">Clear search</string>
     <string name="car_keyboard_clear_hint">Remove all typed text</string>
+    <string name="car_keyboard_voice">Voice</string>
+    <string name="car_keyboard_listening">Listening…</string>
+    <string name="car_keyboard_voice_unavailable">Voice search isn\'t available on this car</string>
 
     <string name="media_notification_channel_name">Media playback</string>
     <string name="media_notification_channel_description">Controls media playback in web pages</string>
