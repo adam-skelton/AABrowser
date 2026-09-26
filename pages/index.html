@@ -747,6 +747,12 @@
     FREE_RECKON_S: 2.5,     // free-follow dead-reckon cap (a dropped signal can't run the car away)
     FREE_GENTLE_M: 8,       // free-follow residual treated as GPS noise (gentle correction)...
     FREE_FULL_M: 30,        // ...and where the correction reaches full catch-up rate
+    FREE_HDG_TAU: 1.25,     // straight free-follow course (a raw GPS bearing chatters a few degrees)
+    FREE_HDG_TURN_DEG: 16,  // past a small deadband, this much error is a real turn
+    FREE_CROSS_TAU: 3.6,    // sideways GPS error must not be eaten at half the car's speed
+    FREE_CROSS_QUIET_M: 9,  // under this, the offset looks like fix noise, not a new lane
+    FREE_CROSS_QUIET_MPS: 0.55,
+    CAM_CROSS_EXTRA: 1.05,  // extra position tau for sideways camera motion on a straight road
     DEAD_RECKON_S: 3.0,     // nav dead-reckon cap
     CORRECT_TIME_S: 0.6,    // seconds to absorb an along-route position error
     SMOOTH_SAMPLES: 7,      // boxcar samples across the along-route smoothing window
@@ -7222,6 +7228,18 @@
     return { lat: point.lat + dLat, lng: point.lng + dLng };
   }
 
+  // Metres of `to` ahead of `from` (along) and to its right (cross), in the same
+  // frame lookAhead uses. Cross-track GPS noise is what weaves a free chase camera.
+  function trackOffset(from, to, heading){
+    const north = (to.lat - from.lat) * 111320;
+    const east = (to.lng - from.lng) * 111320 * Math.max(0.2, Math.cos(toRad(from.lat)));
+    const rad = toRad(heading);
+    return {
+      along: east * Math.sin(rad) + north * Math.cos(rad),
+      cross: east * Math.cos(rad) - north * Math.sin(rad)
+    };
+  }
+
   // NZ drives on the left: shift the Google centerline into the left lane.
   function offsetPathLeft(path, metres){
     if (!metres || !path || path.length < 2) return path;
@@ -7808,27 +7826,52 @@
       if (sinceFix > FOLLOW.FREE_RECKON_S) speedKalman.decay(dtRaw);
       const v = speedKalman.speed;
       const moving = v > 1.5 && Number.isFinite(puck.freeHeading);
-      const reckonM = moving ? v * Math.min(sinceFix, FOLLOW.FREE_RECKON_S) : 0;
-      const tgt = reckonM > 0 ? lookAhead(fix, puck.freeHeading, reckonM) : fix;
       if (Number.isFinite(puck.freeHeading)) {
-        puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, puck.freeHeading, dtEase, FOLLOW.CAR_BRG_TAU) : puck.freeHeading;
+        // A straight-road GPS course wanders a few degrees each fix. Following that
+        // quickly swings the look-ahead point, and the swing gets wider as speed
+        // zooms the camera out. A real turn is still allowed through.
+        const errDeg = Number.isFinite(puck.heading) ? angleDelta(puck.heading, puck.freeHeading) : 0;
+        const turn = clamp((errDeg - 6) / FOLLOW.FREE_HDG_TURN_DEG, 0, 1);
+        const hdgTau = FOLLOW.FREE_HDG_TAU + (FOLLOW.CAR_BRG_TAU - FOLLOW.FREE_HDG_TAU) * turn;
+        puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, puck.freeHeading, dtEase, hdgTau) : puck.freeHeading;
       }
+      const course = Number.isFinite(puck.heading) ? puck.heading : puck.freeHeading;
+      const reckonM = moving && Number.isFinite(course) ? v * Math.min(sinceFix, FOLLOW.FREE_RECKON_S) : 0;
+      // Reckon the fix along the smoothed course. The raw bearing would wag the
+      // target left and right of the road.
+      const tgt = reckonM > 0 ? lookAhead(fix, course, reckonM) : fix;
       if (moving && sinceFix <= FOLLOW.FREE_RECKON_S && Number.isFinite(puck.heading)) {
         const rolled = lookAhead({ lat: puck.lat, lng: puck.lng }, puck.heading, v * dtRaw);
         puck.lat = rolled.lat;
         puck.lng = rolled.lng;
       }
-      const errM = distanceMetres({ lat: puck.lat, lng: puck.lng }, tgt);
-      if (errM > 1e-3) {
-        // Correction rate cap: gentle (half the speed) for a noise-sized residual, ramping
-        // up to the route model's 1.5v+2 catch-up by FREE_FULL_M, and never slower than a
-        // ~3 s glide for a huge one (GPS re-lock after an outage, under the teleport cap).
-        const ramp = clamp((errM - FOLLOW.FREE_GENTLE_M) / (FOLLOW.FREE_FULL_M - FOLLOW.FREE_GENTLE_M), 0, 1);
-        const cap = Math.max(Math.max(v * 0.5, 2) + (v + 2) * ramp, ramp * errM / 3);
-        const corrSpeed = Math.min(errM / FOLLOW.CORRECT_TIME_S, cap);
-        const f = Math.min(1, corrSpeed * dtRaw / errM);
-        puck.lat += (tgt.lat - puck.lat) * f;
-        puck.lng += (tgt.lng - puck.lng) * f;
+      if (Number.isFinite(puck.lat) && Number.isFinite(tgt.lat) && Number.isFinite(course)) {
+        const off = trackOffset({ lat: puck.lat, lng: puck.lng }, tgt, course);
+        const alongAbs = Math.abs(off.along);
+        let alongStep = 0;
+        if (alongAbs > 1e-3) {
+          // Same bounded catch-up as before, but only ALONG the road. Sideways
+          // error used to be pulled in at half the car's speed, so each new fix
+          // slid the chase camera across the lane, harder the faster you went.
+          const ramp = clamp((alongAbs - FOLLOW.FREE_GENTLE_M) / (FOLLOW.FREE_FULL_M - FOLLOW.FREE_GENTLE_M), 0, 1);
+          const cap = Math.max(Math.max(v * 0.5, 2) + (v + 2) * ramp, ramp * alongAbs / 3);
+          const corrSpeed = Math.min(alongAbs / FOLLOW.CORRECT_TIME_S, cap);
+          alongStep = Math.sign(off.along) * Math.min(alongAbs, corrSpeed * dtRaw);
+        }
+        const crossAbs = Math.abs(off.cross);
+        let crossStep = 0;
+        if (crossAbs > 0.04) {
+          const big = clamp((crossAbs - FOLLOW.FREE_CROSS_QUIET_M) / 24, 0, 1);
+          const cap = FOLLOW.FREE_CROSS_QUIET_MPS + (Math.max(v * 0.45, 6) - FOLLOW.FREE_CROSS_QUIET_MPS) * big;
+          const tau = FOLLOW.FREE_CROSS_TAU + (0.7 - FOLLOW.FREE_CROSS_TAU) * big;
+          const crossSpeed = Math.min(crossAbs / tau, cap);
+          crossStep = Math.sign(off.cross) * Math.min(crossAbs, crossSpeed * dtRaw);
+        }
+        let pos = { lat: puck.lat, lng: puck.lng };
+        if (alongStep) pos = lookAhead(pos, course, alongStep);
+        if (crossStep) pos = lookAhead(pos, course + 90, crossStep);
+        puck.lat = pos.lat;
+        puck.lng = pos.lng;
       }
     }
   }
@@ -8700,8 +8743,24 @@
     }
 
     const kPos = easeK(dtEase, FOLLOW.POS_TAU + extra);
-    cam.lat += (aim.lat - cam.lat) * kPos;
-    cam.lng += (aim.lng - cam.lng) * kPos;
+    // On a straight road, sideways camera motion is GPS and heading chatter.
+    // Follow it slowly. A real turn opens a heading error and keeps the old,
+    // quick catch-up so the car stays centred.
+    const straightChase = !fly && !cam.rejoin && view.headingUp && angleDelta(cam.heading, headingTarget) < 8;
+    if (!straightChase) {
+      cam.lat += (aim.lat - cam.lat) * kPos;
+      cam.lng += (aim.lng - cam.lng) * kPos;
+    } else {
+      const off = trackOffset({ lat: cam.lat, lng: cam.lng }, aim, cam.heading);
+      const kCross = easeK(dtEase, FOLLOW.POS_TAU + extra + FOLLOW.CAM_CROSS_EXTRA);
+      const alongStep = off.along * kPos;
+      const crossStep = off.cross * kCross;
+      let pos = { lat: cam.lat, lng: cam.lng };
+      if (alongStep) pos = lookAhead(pos, cam.heading, alongStep);
+      if (crossStep) pos = lookAhead(pos, cam.heading + 90, crossStep);
+      cam.lat = pos.lat;
+      cam.lng = pos.lng;
+    }
     // Camera heading is adaptively damped: heavy while the error is a few degrees of
     // road-geometry wiggle, quick once it's turn-sized. Google's grammar: a crisp car
     // under a heavy camera.
