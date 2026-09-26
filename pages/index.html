@@ -749,7 +749,11 @@
     RECENTER_ZOOM_EXTRA: 0.12,
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
-    MIN_DRIVE_RANGE: 125,   // parked extra-zoom-in must not dive inside this on follow / re-center
+    MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
+    STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked, frame the block instead of the bumper
+    STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again, back to the speed-band zoom
+    STILL_RANGE_NAV: 460,   // stopped nav: a few surrounding blocks
+    STILL_RANGE_FREE: 420,  // stopped free: the steep tilt otherwise sits on the roof
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
     HOLD_MPS: 2.0,          // ...and the course keeps updating while latched only above this
     REJOIN_CLOSE_M: 800,    // a few streets/blocks: fly straight back, no city hop
@@ -977,7 +981,7 @@
   let infoBtnArmed = false;
   let infoIdleTimer = 0;
   const NAV_INFO = {
-    IDLE_MS: 16000,
+    IDLE_MS: 32000,
     MAX_LEVEL: 5,
     RANGE_STEPS: [2.2, 4.4, 8.8, 17.6, 35.2],
     TILT_CAPS: [62, 50, 42, 34, 26],
@@ -3890,11 +3894,26 @@
     return null;
   }
 
+  let followStill = true;
+  function noteFollowStill(speed){
+    const v = Number(speed) || 0;
+    if (followStill) {
+      if (v > FOLLOW.STILL_EXIT_MPS) followStill = false;
+    } else if (v < FOLLOW.STILL_ENTER_MPS) followStill = true;
+    return followStill;
+  }
+
+  function stillFollowRange(){
+    return isNavigating() ? FOLLOW.STILL_RANGE_NAV : FOLLOW.STILL_RANGE_FREE;
+  }
+
   function freeFollowRange(){
     const view = viewTargets();
-    const zoom = zoomBandForSpeed(speedKalman.speed || 0);
+    const speed = speedKalman.speed || 0;
+    const zoom = zoomBandForSpeed(speed);
     let range = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
-    if (view.breathe && isNavigating()) range = Math.max(range, FOLLOW.MIN_DRIVE_RANGE);
+    if (view.breathe && followStill) range = Math.max(range, stillFollowRange());
+    else if (view.breathe && isNavigating()) range = Math.max(range, FOLLOW.MIN_DRIVE_RANGE);
     return range;
   }
 
@@ -7629,7 +7648,10 @@
         updateRecenterButton();
         syncFreeZoomDot();
       } else if (!following && !destPreview && !exploreFly && !carInspect && currentGpsPoint) {
-        attachFollow(currentView === "overview" ? "drive" : null);
+        if (explore.mode) {
+          autoRefollowArmed = false;
+          exploreShowOverview();
+        } else attachFollow(currentView === "overview" ? "drive" : null);
       }
     }
     if (exploreFly) {
@@ -8494,7 +8516,8 @@
     cam.zoom += (zoomBandForSpeed(cam.speedLP) - cam.zoom) * easeK(dtEase, FOLLOW.ZOOM_TAU);
     let tgtRange = cam.userRange != null ? cam.userRange
       : view.range * (view.breathe ? rangeFactorForZoom(cam.zoom) : 1);
-    if (cam.userRange == null && view.breathe && isNavigating()) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
+    if (cam.userRange == null && view.breathe && noteFollowStill(cam.speedLP)) tgtRange = Math.max(tgtRange, stillFollowRange());
+    else if (cam.userRange == null && view.breathe && isNavigating()) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
     let tiltTarget = view.tilt;
     // Heading-up latch (Vela): the camera takes the car's course only once the car is
     // genuinely moving; parked, it holds where it is instead of spinning with GPS noise.
@@ -8664,6 +8687,10 @@
 
   function recenterToCar(){
     if (!map3d) return;
+    if (explore.mode) {
+      exploreShowOverview();
+      return;
+    }
     resetNavInfo(false);
     attachFollow("drive");
     if (!isDemoRunning()) startGps(); // (startGps stops a running demo - keep a mock drive alive)
