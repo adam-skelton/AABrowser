@@ -212,7 +212,16 @@
     .trace-row .trace-meta {display:block; font-size:12px; font-weight:500; color:rgba(255,255,255,.62); margin-top:2px}
     .trace-row button {min-height:40px; background:#2E3134; color:#fff; box-shadow:none; font-size:14px}
     .trace-row button.trace-replay {background:#1A73E8}
-    #traceClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
+    #traceClose,#hostProbeClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
+    #hostProbeOverlay {display:none; position:absolute; inset:0; z-index:48; align-items:center; justify-content:center; background:rgba(0,0,0,.55); pointer-events:auto}
+    #hostProbeOverlay.open {display:flex}
+    #hostProbeCard {position:relative; width:min(92vw,760px); max-height:min(86vh,720px); border-radius:20px; background:#1C1C1E; color:#fff; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden; display:flex; flex-direction:column}
+    #hostProbeTitle {padding:16px 56px 10px 16px; font-size:17px; font-weight:700}
+    #hostProbeList {flex:1; min-height:0; overflow:auto; padding:0 12px 14px}
+    .host-row {display:flex; gap:10px; align-items:flex-start; padding:8px 2px; border-top:1px solid rgba(255,255,255,.1)}
+    .host-row .host-label {flex:0 0 38%; font-size:14px; font-weight:700}
+    .host-row .host-value {flex:1; min-width:0; font-size:13px; font-weight:500; color:rgba(255,255,255,.72); word-break:break-word}
+    .host-row button {flex:0 0 auto; min-height:40px; background:#1A73E8; color:#fff; box-shadow:none; font-size:14px}
     html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
@@ -428,6 +437,7 @@
       <button id="navCardTestBtn" type="button">Nav card</button>
       <button id="viewSpecBtn" type="button">View controls</button>
       <button id="carApiBtn" type="button">API level</button>
+      <button id="hostProbeBtn" type="button">Car host</button>
       <button id="carModelBtn" type="button">Car model</button>
       <button id="traceRecBtn" type="button">Rec trace</button>
       <button id="tracesBtn" type="button">Traces</button>
@@ -488,6 +498,13 @@
       </div>
       <div id="carModelHost"></div>
       <div id="carModelHint">Kia Forte · drag to rotate · pinch to zoom</div>
+    </div>
+  </div>
+  <div id="hostProbeOverlay" hidden>
+    <div id="hostProbeCard">
+      <button id="hostProbeClose" type="button" aria-label="Close car host">&times;</button>
+      <div id="hostProbeTitle">Car host</div>
+      <div id="hostProbeList"></div>
     </div>
   </div>
   <div id="traceOverlay" hidden>
@@ -9809,6 +9826,80 @@
     overlay.classList.remove("open");
   }
 
+  function renderHostProbe(data){
+    const list = document.getElementById("hostProbeList");
+    if (!list) return;
+    list.replaceChildren();
+    const rows = data && Array.isArray(data.rows) ? data.rows : [];
+    if (!rows.length) {
+      const empty = document.createElement("div");
+      empty.className = "host-value";
+      empty.textContent = "No car host values.";
+      list.append(empty);
+      return;
+    }
+    rows.forEach(row => {
+      const line = document.createElement("div");
+      line.className = "host-row";
+      const label = document.createElement("div");
+      label.className = "host-label";
+      label.textContent = row && row.label ? String(row.label) : "";
+      const value = document.createElement("div");
+      value.className = "host-value";
+      value.textContent = row && row.value != null ? String(row.value) : "";
+      line.append(label, value);
+      if (row && row.action) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = row.button ? String(row.button) : "Send";
+        btn.addEventListener("click", () => {
+          try {
+            if (window.Car && typeof Car.hostProbeAction === "function") Car.hostProbeAction(String(row.action));
+          } catch (err) {
+            value.textContent = String(err && err.message ? err.message : err);
+          }
+        });
+        line.append(btn);
+      }
+      list.append(line);
+    });
+  }
+
+  function openHostProbe(){
+    if (window.__aaSetDebugOverlay) window.__aaSetDebugOverlay(false);
+    const overlay = document.getElementById("hostProbeOverlay");
+    const list = document.getElementById("hostProbeList");
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.classList.add("open");
+    if (list) list.textContent = "Reading car host…";
+    try {
+      if (window.Car && typeof Car.openHostProbe === "function") Car.openHostProbe();
+      else renderHostProbe({ rows: [{ label: "Car host", value: "Not running in Android Auto" }] });
+    } catch (err) {
+      renderHostProbe({ rows: [{ label: "Car host", value: String(err && err.message ? err.message : err) }] });
+    }
+  }
+
+  function closeHostProbe(){
+    const overlay = document.getElementById("hostProbeOverlay");
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove("open");
+    try {
+      if (window.Car && typeof Car.closeHostProbe === "function") Car.closeHostProbe();
+    } catch (err) {}
+  }
+
+  window.__aaHostProbe = function(payload){
+    try {
+      const data = typeof payload === "string" ? JSON.parse(payload) : payload;
+      renderHostProbe(data);
+    } catch (err) {
+      renderHostProbe({ rows: [{ label: "Car host", value: String(err && err.message ? err.message : err) }] });
+    }
+  };
+
   async function startTraceReplay(id){
     const trace = traceStore.read(id);
     if (!trace || !Array.isArray(trace.fixes) || trace.fixes.length < 2) { setMessage("Trace is empty or unreadable."); return; }
@@ -10446,6 +10537,16 @@
     event.stopPropagation();
     toggleCarApiHud();
   });
+  document.getElementById("hostProbeBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openHostProbe();
+  });
+  document.getElementById("hostProbeClose").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeHostProbe();
+  });
   document.getElementById("carModelBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -10579,7 +10680,7 @@
     const px = Number(x), py = Number(y);
     if (!debugCornerZone(px, py)) return;
     const target = document.elementFromPoint(px, py);
-    if (target && target.closest && target.closest("button, a, input, select, textarea, #routeCard, #navHud, #navEtaBar, #topPanel, #buttonRow") && !target.closest("#carDebugBtn")) return;
+    if (target && target.closest && target.closest("button, a, input, select, textarea, #routeCard, #navHud, #navEtaBar, #topPanel, #buttonRow, #hostProbeOverlay") && !target.closest("#carDebugBtn")) return;
     noteDebugCornerTap();
   };
   window.addEventListener("pointerdown", event => {
@@ -10595,7 +10696,7 @@
     if (Math.hypot(x - down.x, y - down.y) > 24) return;
     if (!debugCornerZone(x, y) && !debugCornerZone(down.x, down.y)) return;
     const target = event.target;
-    if (target && target.closest && target.closest("button, a, input, select, textarea") && !target.closest("#carDebugBtn")) return;
+    if (target && target.closest && target.closest("button, a, input, select, textarea, #hostProbeOverlay") && !target.closest("#carDebugBtn")) return;
     noteDebugCornerTap();
   }, true);
   document.getElementById("carDebugBtn").addEventListener("click", event => {
@@ -10751,7 +10852,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;

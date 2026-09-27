@@ -48,6 +48,7 @@ class CarWebViewHost(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endDragRunnable = Runnable { endDrag() }
     private var debugOverlayVisible = false
+    private lateinit var hostProbe: CarHostProbe
     private val jsBridge = CarJsBridge(
         onMain = ::onMain,
         notifyInputFocused = { value -> notifyInputFocused(value) },
@@ -69,8 +70,18 @@ class CarWebViewHost(
         notifyBootPainted = { dismissBootOverlay() },
         resolveCarApiLevel = ::resolvedCarApiLevel,
         traceStore = TraceStore(carContext),
-        appContext = carContext
+        appContext = carContext,
+        onOpenHostProbe = { hostProbe.open() },
+        onCloseHostProbe = { hostProbe.close() },
+        onHostProbeAction = { name -> hostProbe.action(name) }
     )
+
+    init {
+        hostProbe = CarHostProbe(carContext) { js ->
+            onMain { webView?.evaluateJavascript(js, null) }
+        }
+    }
+
     // Accelerometer feed for the page's speed filter; runs while location runs.
     private val motionFeed = MotionFeed(carContext) { js -> onMain { webView?.evaluateJavascript(js, null) } }
     private var hadGoodGpsFix = false
@@ -149,6 +160,7 @@ class CarWebViewHost(
             runCatching {
                 carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
             }
+            hostProbe.close()
             stopAndroidLocation()
             releaseDisplay(destroyWebView = true)
         }

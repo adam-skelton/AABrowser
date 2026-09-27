@@ -14,7 +14,10 @@ class CarJsBridge(
     private val notifyBootPainted: () -> Unit = {},
     private val resolveCarApiLevel: () -> Int,
     private val traceStore: TraceStore? = null,
-    private val appContext: Context? = null
+    private val appContext: Context? = null,
+    private val onOpenHostProbe: () -> Unit = {},
+    private val onCloseHostProbe: () -> Unit = {},
+    private val onHostProbeAction: (String) -> Unit = {}
 ) {
     @JavascriptInterface
     fun onInputFocused(value: String?) {
@@ -92,6 +95,21 @@ class CarJsBridge(
     fun playNavChime(side: String?) {
         val context = appContext ?: return
         NavChime.play(context, side)
+    }
+
+    @JavascriptInterface
+    fun openHostProbe() {
+        onMain { onOpenHostProbe() }
+    }
+
+    @JavascriptInterface
+    fun closeHostProbe() {
+        onMain { onCloseHostProbe() }
+    }
+
+    @JavascriptInterface
+    fun hostProbeAction(name: String?) {
+        onMain { onHostProbeAction(name.orEmpty()) }
     }
 
     @JavascriptInterface
