@@ -8905,7 +8905,17 @@
     const center = { lat: cam.lat, lng: cam.lng };
     const alt = followGroundAltitude(center, dtEase);
     if (Number.isFinite(alt)) center.altitude = alt;
-    map3d.center = center;
+    // Startup detail settle owns the camera for a moment. Writing over it keeps
+    // the photorealistic tiles on the first blurry frame.
+    if (mapDetailHoldUntil > performance.now()) {
+      applyLiveCarScale();
+      updateCompassNeedle(cam.heading);
+      syncFreeZoomDot();
+      return;
+    }
+    // A fresh center object every frame counts as camera motion, so the tile
+    // stream never finishes the full-res pass until a finger stops follow.
+    if (!sameMapCenter(center)) map3d.center = center;
     if (Math.abs(((numOr(map3d.heading, 0) - cam.heading + 540) % 360) - 180) > 0.005) map3d.heading = cam.heading;
     if (Math.abs(numOr(map3d.range, 0) - cam.range) > 0.02) map3d.range = cam.range;
     if (Math.abs(numOr(map3d.tilt, 0) - cam.tilt) > 0.005) map3d.tilt = cam.tilt;
@@ -10364,6 +10374,7 @@
     }
     if (fromTouch && isNavigating()) infoBtnArmed = true;
     exploreFly = null;
+    cancelMapDetail();
     if (following) {
       following = false;
       cam.seeded = false; // re-attach eases in from wherever the user leaves the camera
@@ -10558,6 +10569,149 @@
     }
   }
 
+  // While this is in the future, follow must not write the camera. A finger pan
+  // clears it. The photorealistic tiles stay on the coarse startup mesh until the
+  // camera both moves and then holds still; the follow loop used to assign a new
+  // center every frame, so that rest never arrived.
+  let mapDetailHoldUntil = 0;
+  let mapDetailToken = 0;
+  let mapDetailStop = false;
+
+  function cancelMapDetail(){
+    mapDetailToken += 1;
+    mapDetailHoldUntil = 0;
+    mapDetailStop = true;
+  }
+
+  function sameMapCenter(next){
+    const prev = map3d && map3d.center;
+    if (!prev || !next) return false;
+    const lat = Number(prev.lat), lng = Number(prev.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    if (!Number.isFinite(next.lat) || !Number.isFinite(next.lng)) return false;
+    const cos = Math.cos(toRad(next.lat));
+    const dy = (next.lat - lat) * 111320;
+    const dx = (next.lng - lng) * 111320 * cos;
+    if (dx * dx + dy * dy > 0.09) return false;
+    const alt = Number(next.altitude);
+    const prevAlt = Number(prev.altitude);
+    if (Number.isFinite(alt) && (!Number.isFinite(prevAlt) || Math.abs(alt - prevAlt) > 0.25)) return false;
+    return true;
+  }
+
+  function bumpMapLayout(){
+    const host = document.getElementById("map");
+    if (!host) return;
+    host.style.height = "calc(108.696% + 1px)";
+    requestAnimationFrame(() => {
+      try { host.style.height = ""; } catch (err) {}
+      try { window.dispatchEvent(new Event("resize")); } catch (err) {}
+    });
+  }
+
+  function mapDetailCamera(){
+    if (!map3d || !map3d.center) return null;
+    const c = map3d.center;
+    const lat = Number(c.lat), lng = Number(c.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const range = Number(map3d.range);
+    if (!(range > 0)) return null;
+    return {
+      lat, lng,
+      altitude: Number.isFinite(Number(c.altitude)) ? Number(c.altitude) : 0,
+      heading: numOr(map3d.heading, 0),
+      tilt: numOr(map3d.tilt, 0),
+      range,
+      roll: numOr(map3d.roll, 0)
+    };
+  }
+
+  function flyMapDetail(cam, ms){
+    if (!map3d || !cam) return;
+    const endCamera = {
+      center: { lat: cam.lat, lng: cam.lng, altitude: cam.altitude },
+      heading: cam.heading,
+      tilt: cam.tilt,
+      range: cam.range,
+      roll: cam.roll
+    };
+    if (typeof map3d.flyCameraTo === "function") {
+      try {
+        map3d.flyCameraTo({ endCamera, durationMillis: ms });
+        return;
+      } catch (err) {}
+    }
+    map3d.center = endCamera.center;
+    map3d.heading = cam.heading;
+    map3d.tilt = cam.tilt;
+    map3d.range = cam.range;
+  }
+
+  function syncFollowCamFromMap(){
+    const live = mapDetailCamera();
+    if (!live || !cam.seeded) return;
+    cam.lat = live.lat;
+    cam.lng = live.lng;
+    cam.heading = live.heading;
+    cam.range = live.range;
+    cam.tilt = live.tilt;
+    const fov = Number(map3d.fov);
+    if (fov >= 5) cam.fov = fov;
+  }
+
+  // One small yaw/range step, back to the same view, then a quiet stretch so the
+  // high-res mesh can land. Skipped once the car is rolling, and cancelled if a
+  // finger takes the camera. Returns false when the camera is not ready yet.
+  function runMapDetailPass(){
+    if (mapDetailStop || !map3d || !mapRevealDone) return false;
+    if (exploreFly || destPreview || carInspect || flyover) return false;
+    const speed = Number(speedKalman.speed);
+    if (Number.isFinite(speed) && speed >= FOLLOW.STILL_EXIT_MPS) return false;
+    const home = mapDetailCamera();
+    if (!home) return false;
+    const token = ++mapDetailToken;
+    bumpMapLayout();
+    const returnAt = 380;
+    const quietMs = 1200;
+    mapDetailHoldUntil = performance.now() + returnAt + 340 + quietMs;
+    flyMapDetail({
+      lat: home.lat,
+      lng: home.lng,
+      altitude: home.altitude,
+      heading: normaliseHeading(home.heading + 1.4),
+      tilt: home.tilt,
+      range: home.range * 1.02,
+      roll: home.roll
+    }, 320);
+    window.setTimeout(() => {
+      if (token !== mapDetailToken || !map3d) return;
+      flyMapDetail(home, 320);
+      mapDetailHoldUntil = performance.now() + 340 + quietMs;
+    }, returnAt);
+    window.setTimeout(() => {
+      if (token !== mapDetailToken) return;
+      syncFollowCamFromMap();
+      mapDetailHoldUntil = 0;
+    }, returnAt + 340 + quietMs);
+    return true;
+  }
+
+  let mapDetailArmed = false;
+  let mapDetailTries = 0;
+  function armMapDetail(){
+    if (!mapRevealDone || mapDetailArmed || mapDetailStop) return;
+    if (!runMapDetailPass()) {
+      if (mapDetailTries++ > 12) return;
+      window.setTimeout(armMapDetail, 400);
+      return;
+    }
+    mapDetailArmed = true;
+    window.setTimeout(() => {
+      if (mapDetailStop) return;
+      runMapDetailPass();
+    }, 3200);
+  }
+
   function wakeMapRenderer(){
     try { window.focus(); } catch (err) {}
     const host = document.getElementById("map");
@@ -10567,15 +10721,7 @@
     });
     try { window.dispatchEvent(new Event("resize")); } catch (err) {}
     if (!map3d) return;
-    try {
-      const heading = Number(map3d.heading);
-      if (Number.isFinite(heading)) {
-        map3d.heading = heading + 1e-4;
-        requestAnimationFrame(() => {
-          try { map3d.heading = heading; } catch (err) {}
-        });
-      }
-    } catch (err) {}
+    armMapDetail();
   }
 
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
