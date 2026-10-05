@@ -467,7 +467,7 @@ class CarWebViewHost(
             // A virtual-display WebView is treated as background and stays on the
             // coarse tile set until the first real touch. Keep the GPU process hot.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                setRendererPriorityPolicy(RENDERER_PRIORITY_IMPORTANT, false)
+                setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
             }
             setLayerType(View.LAYER_TYPE_NONE, null)
             configureWebView(
