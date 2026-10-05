@@ -5873,9 +5873,14 @@
     return out.length ? out : list.slice(-1);
   }
 
+  function isDirectionWord(name){
+    return /^(the\s+)?(left|right|straight|ahead|continue|slight(\s+|-)?(left|right)|sharp(\s+|-)?(left|right)|keep(\s+|-)?(left|right)|bear(\s+|-)?(left|right)|turn(\s+|-)?(left|right)|u-?turn)(\s+(left|right))?$/i.test(String(name || "").trim());
+  }
+
   function isBannerStreetPart(s){
     const name = String(s || "").trim();
     if (!name || name.length > 48) return false;
+    if (isDirectionWord(name)) return false;
     if (/^\d+(st|nd|rd|th)?$/i.test(name)) return false;
     if (/^(first|second|third|fourth|exit|ramp|pin)$/i.test(name)) return false;
     if (/^(overbridge|bridge|motorway|highway)$/i.test(name)) return false;
@@ -5919,13 +5924,58 @@
     if (!name && !/^\s*(at\b|take\b|turn\b|keep\b|bear\b|merge\b|continue\b|head\b|slight\b|sharp\b)/i.test(raw) && raw.length <= 42) {
       name = raw;
     }
-    return cleanBannerStreet(name);
+    const street = cleanBannerStreet(name);
+    return isBannerStreetPart(street) ? street : "";
   }
 
-  function shortInstruction(text, maneuver){
+  // The road the route is on just after the turn. Used when the instruction
+  // only says "left" or "right" and never names the street.
+  function roadNameAfterTurn(metres){
+    if (!activeRoutePath || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return "";
+    if (!speedLimit.ways.length) return "";
+    const total = routeCum[routeCum.length - 1] || 0;
+    const at = pointAtMetres(activeRoutePath, routeCum, Math.min(total, (Number(metres) || 0) + 28));
+    const point = at && at.point;
+    const heading = at && at.bearing;
+    if (!point) return "";
+    let best = "", bestD = 28;
+    for (const way of speedLimit.ways) {
+      const name = cleanBannerStreet(way.name);
+      if (!isBannerStreetPart(name) || !way.pts || way.pts.length < 2) continue;
+      for (let i = 1; i < way.pts.length; i++) {
+        const a = way.pts[i - 1], b = way.pts[i];
+        const d = distanceMetres(point, projectOnSegment(point, a, b).point);
+        if (d >= bestD) continue;
+        if (Number.isFinite(heading)) {
+          const diff = angleDelta(bearingDegrees(a, b), heading);
+          if (Math.min(diff, 180 - diff) > 40) continue;
+        }
+        bestD = d;
+        best = name;
+      }
+    }
+    return best;
+  }
+
+  function streetForNavStep(step, maneuver){
+    const fromText = streetNameFromInstruction(step && step.instructions);
+    if (fromText) return fromText;
+    if (!step || maneuverFamily(maneuver) === "dest") return "";
+    const look = speedLimit.routeId + ":" + speedLimit.ways.length;
+    if (step.roadLook === look) return step.roadName || "";
+    const name = roadNameAfterTurn(step.m);
+    step.roadName = name;
+    step.roadLook = look;
+    return name;
+  }
+
+  function shortInstruction(step, maneuver){
     const fam = maneuverFamily(maneuver);
-    if (fam === "uturn") return String(maneuver || "").toUpperCase().includes("RIGHT") ? "U-turn right" : "U-turn left";
-    const street = streetNameFromInstruction(text);
+    const street = streetForNavStep(step, maneuver);
+    if (fam === "uturn") {
+      const side = String(maneuver || "").toUpperCase().includes("RIGHT") ? "U-turn right" : "U-turn left";
+      return street || side;
+    }
     if (street) return street;
     if (fam === "dest") return activeDestination?.name || "Destination";
     if (fam === "left") return "Turn left";
@@ -6354,7 +6404,7 @@
       banner.hidden = false;
       banner.classList.add("visible");
       const turn = hudManeuver(current);
-      const title = shortInstruction(current.instructions, turn);
+      const title = shortInstruction(current, turn);
       if (text && text.textContent !== title) text.textContent = title;
       const iconKey = turn;
       if (icon && icon.dataset.maneuver !== iconKey) {
