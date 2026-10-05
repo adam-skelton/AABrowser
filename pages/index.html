@@ -784,6 +784,7 @@
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
+    MIN_FREE_RANGE: 300,    // moving free: 84° at the speed-band range puts the camera in the houses
     STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked, frame the block instead of the bumper
     STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again, back to the speed-band zoom
     STILL_RANGE_NAV: 460,   // stopped nav: a few surrounding blocks
@@ -4029,6 +4030,7 @@
     let range = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
     if (view.breathe && followStill) range = Math.max(range, stillFollowRange());
     else if (view.breathe && isNavigating()) range = Math.max(range, FOLLOW.MIN_DRIVE_RANGE);
+    else if (view.breathe) range = Math.max(range, FOLLOW.MIN_FREE_RANGE);
     return range;
   }
 
@@ -8673,6 +8675,7 @@
       : view.range * (view.breathe ? rangeFactorForZoom(cam.zoom) : 1);
     if (cam.userRange == null && view.breathe && noteFollowStill(cam.speedLP)) tgtRange = Math.max(tgtRange, stillFollowRange());
     else if (cam.userRange == null && view.breathe && isNavigating()) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
+    else if (cam.userRange == null && view.breathe) tgtRange = Math.max(tgtRange, FOLLOW.MIN_FREE_RANGE);
     let tiltTarget = view.tilt;
     // Heading-up latch (Vela): the camera takes the car's course only once the car is
     // genuinely moving; parked, it holds where it is instead of spinning with GPS noise.
