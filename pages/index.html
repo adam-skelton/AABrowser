@@ -963,10 +963,10 @@
   const CAR_INSPECT = {
     SWOOP_MS: 900,
     RANGE: 24,
-    TILT: 52,
+    TILT: 64,
     FOV: 32,
-    LOOK_AT_M: 0.85,
-    SPIN_MS: 12000,
+    LOOK_AT_M: 1.4,
+    SPIN_MS: 30000,
     PAUSE_MS: 1500,
     IDLE_MS: 20000
   };
@@ -7576,11 +7576,35 @@
       || parseMaxspeed(tags["maxspeed:type"])
       || parseMaxspeed(tags["source:maxspeed"]);
     if (tagged) return tagged;
+    const service = String(tags.service || "");
+    if (service === "driveway" || service === "parking_aisle" || service === "drive-through" || service === "alley") return null;
     const hw = String(tags.highway || "");
-    if (hw === "living_street" || hw === "residential") return 50;
-    if (hw === "motorway" || hw === "motorway_link") return 100;
-    if (hw === "trunk" || hw === "trunk_link") return 100;
+    // Most NZ ways have no maxspeed tag. The signed default is 50 in town and
+    // 100 on motorways and the open road. A real tag above still wins.
+    if (hw === "motorway" || hw === "motorway_link" || hw === "trunk" || hw === "trunk_link") return 100;
+    if (hw === "living_street" || hw === "residential" || hw === "unclassified" || hw === "tertiary" || hw === "tertiary_link" || hw === "secondary" || hw === "secondary_link" || hw === "primary" || hw === "primary_link" || hw === "service") return 50;
     return null;
+  }
+
+  function samplePathEvery(path, spacingM){
+    if (!path || path.length < 2) return path ? path.slice() : [];
+    const out = [path[0]];
+    let carry = 0;
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      const d = distanceMetres(a, b);
+      if (d < 0.5) continue;
+      let walked = spacingM - carry;
+      while (walked <= d) {
+        const t = walked / d;
+        out.push({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
+        walked += spacingM;
+      }
+      carry = d - (walked - spacingM);
+    }
+    const last = path[path.length - 1];
+    if (distanceMetres(out[out.length - 1], last) > 15) out.push(last);
+    return out;
   }
 
   async function fetchSpeedLimits(path){
@@ -7590,15 +7614,22 @@
     speedLimit.lastHitMs = 0;
     updateSpeedLimitBadge();
     if (!path || path.length < 2) return;
-    const pts = downsamplePath(path, 36).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
-    const query = `[out:json][timeout:12];(way["highway"]["maxspeed"](around:30,${pts});way["highway"]["maxspeed:type"](around:30,${pts});way["highway"]["source:maxspeed"](around:30,${pts});way["highway"]["maxspeed:forward"](around:30,${pts});way["highway"]["turn:lanes"](around:30,${pts});way["highway"]["turn:lanes:forward"](around:30,${pts});way["highway"~"^(residential|living_street|motorway|motorway_link|trunk|trunk_link)$"](around:24,${pts}););out geom;`;
-    try {
-      const json = await overpassJson(query, 12000);
-      if (id !== speedLimit.routeId) return; // a newer route superseded this query
-      speedLimit.ways = ingestSpeedLimitWays(json.elements);
-      rebuildOsmSideStreets();
-    } catch (err) {
-      console.warn("Speed limits unavailable", err);
+    const samples = samplePathEvery(path, 80);
+    const hw = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service";
+    const collected = [];
+    for (let i = 0; i < samples.length; i += 40) {
+      if (id !== speedLimit.routeId) return;
+      const pts = samples.slice(i, i + 40).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(",");
+      const query = `[out:json][timeout:20];way["highway"~"^(${hw})$"](around:55,${pts});out geom;`;
+      try {
+        const json = await overpassJson(query, 18000);
+        if (id !== speedLimit.routeId) return;
+        collected.push(...ingestSpeedLimitWays(json.elements));
+        speedLimit.ways = collected.slice();
+        rebuildOsmSideStreets();
+      } catch (err) {
+        console.warn("Speed limits unavailable", err);
+      }
     }
   }
 
@@ -7684,7 +7715,7 @@
         if (Number.isFinite(heading)) {
           // Ways are undirected here: accept either direction, reject cross streets.
           const diff = angleDelta(bearingDegrees(a, b), heading);
-          if (Math.min(diff, 180 - diff) > 40) continue;
+          if (Math.min(diff, 180 - diff) > 55) continue;
         }
         bestD = d;
         best = way;
@@ -7695,9 +7726,13 @@
 
   function updateSpeedLimit(fix){
     if (!fix) return;
-    maybeFetchNearbySpeedLimits(fix);
-    const heading = fix.bearingOk ? fix.heading : (Number.isFinite(puck.heading) ? puck.heading : NaN);
-    const hit = matchSpeedLimit(fix, heading);
+    const onRoute = isNavigating() && Number.isFinite(puck.lat) && Number.isFinite(puck.lng);
+    const point = onRoute ? { lat: puck.lat, lng: puck.lng } : fix;
+    maybeFetchNearbySpeedLimits(point);
+    const heading = onRoute && Number.isFinite(puck.heading)
+      ? puck.heading
+      : (fix.bearingOk ? fix.heading : (Number.isFinite(puck.heading) ? puck.heading : NaN));
+    const hit = matchSpeedLimit(point, heading);
     const now = performance.now();
     if (hit != null && hit.kmh) {
       speedLimit.current = hit.kmh;
