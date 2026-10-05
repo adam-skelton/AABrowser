@@ -183,14 +183,14 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:76px; padding:0 28px 0 20px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:24px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:96px; padding:10px 32px 10px 22px; border-radius:48px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:22px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
-    #navExit {width:60px; height:60px; min-height:60px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
+    #navExit {width:68px; height:68px; min-height:68px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
-    #navExit svg {width:30px; height:30px; display:block}
-    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; text-align:center}
-    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:22px; font-weight:800; letter-spacing:-.4px; line-height:1.05; color:#81C995; font-variant-numeric:tabular-nums}
-    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; overflow:hidden; font-size:14px; font-weight:600; line-height:1.2; color:rgba(255,255,255,.74); font-variant-numeric:tabular-nums}
+    #navExit svg {width:34px; height:34px; display:block}
+    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center}
+    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:26px; font-weight:800; letter-spacing:-.3px; line-height:1.1; color:#81C995; font-variant-numeric:tabular-nums}
+    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; overflow:hidden; font-size:18px; font-weight:650; line-height:1.2; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
     #navEtaSep {display:none; flex:0 0 auto; opacity:.55; font-weight:700; line-height:1}
     #navEtaSep.visible {display:inline}
     #navEtaDist,#navEtaClock {flex:0 0 auto}
@@ -7290,6 +7290,9 @@
     routeCum = cumulativeLengths(path);
     disengageRoutePuck();
     prefetchRouteTerrain(path, routeCum);
+    // A replacement route is usable as soon as the car can sit on it. Otherwise
+    // the pose stays put until a later fix acquires.
+    if (isNavigating() && path.length >= 2 && puck.fix) ingestRouteFix(puck.fix, performance.now());
   }
 
   function disengageRoutePuck(){
@@ -7844,6 +7847,9 @@
       const degenerate = Math.abs(a.point.lat - b.point.lat) + Math.abs(a.point.lng - b.point.lng) < 1e-7;
       const chord = degenerate ? b.bearing : bearingDegrees(a.point, b.point);
       puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, chord, dtEase, FOLLOW.CAR_BRG_TAU) : chord;
+    } else if (isNavigating()) {
+      // Route swapped, still loading, or not matched yet. Free-follow would steer
+      // toward the raw fix and walk the car off the road into the houses.
     } else {
       // Free follow (no route): the car rolls on under its own modelled speed along its
       // smoothed heading, and the last fix - dead-reckoned forward along its course
