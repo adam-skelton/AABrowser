@@ -113,7 +113,7 @@
     #descDialogBody {flex:1; min-height:0; overflow:auto; padding:0 18px 18px; font-size:15px; line-height:1.45; white-space:pre-wrap}
     #descDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#DADCE0; color:#202124; box-shadow:none; font-size:22px; line-height:1}
     body.chrome-hidden #status {opacity:0; pointer-events:none; transform:translateY(10px)}
-    #carDebugBtn {display:none; position:absolute; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(12px,env(safe-area-inset-left))); z-index:32; width:76px; height:76px; min-height:76px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
+    #carDebugBtn {display:none; position:absolute; top:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); z-index:36; width:76px; height:76px; min-height:76px; padding:0; border-radius:50%; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45); align-items:center; justify-content:center}
     #carDebugBtn svg {width:34px; height:34px; fill:currentColor}
     html.debug-cog-visible body.debug-open #carDebugBtn,body.debug-cog-visible.debug-open #carDebugBtn {background:#1A73E8}
     #recenterBtn {position:absolute; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(20px,env(safe-area-inset-bottom))); z-index:32; display:none; align-items:center; gap:10px; min-height:76px; padding:0 24px 0 18px; border-radius:38px; font:inherit; font-size:18px; font-weight:650; background:#2E3134; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -227,8 +227,8 @@
     html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
     html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
-    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:12px; left:calc(var(--aa-inset-left) + 12px)}
-    html.aa-car:not(.debug-cog-visible) #carDebugBtn,body.aa-car:not(.debug-cog-visible) #carDebugBtn {opacity:0}
+    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); pointer-events:auto}
+    html.aa-car:not(.debug-cog-visible) #carDebugBtn,body.aa-car:not(.debug-cog-visible) #carDebugBtn {opacity:0; background:transparent; box-shadow:none}
     html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:calc(var(--aa-inset-left) + max(140px,env(safe-area-inset-left) + 128px)); right:calc(var(--aa-inset-right) + 148px); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); top:auto; z-index:30; overflow:visible}
     html.aa-car #buttonRow button,html.aa-car #buttonRow select,
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
@@ -10882,67 +10882,18 @@
     document.documentElement.classList.add("debug-cog-visible");
     document.body.classList.add("debug-cog-visible");
   }
-  let debugCogTaps = 0;
-  let debugCogTapMs = 0;
-  let debugCornerDown = null;
-  function debugCornerZone(x, y){
-    const w = Math.max(1, window.innerWidth || 1);
-    const h = Math.max(1, window.innerHeight || 1);
-    const cs = getComputedStyle(document.documentElement);
-    const left = parseFloat(cs.getPropertyValue("--aa-inset-left")) || 0;
-    const top = parseFloat(cs.getPropertyValue("--aa-inset-top")) || 0;
-    const right = parseFloat(cs.getPropertyValue("--aa-inset-right")) || 0;
-    const bottom = parseFloat(cs.getPropertyValue("--aa-inset-bottom")) || 0;
-    const visW = Math.max(1, w - left - right);
-    const visH = Math.max(1, h - top - bottom);
-    const zoneW = Math.min(420, Math.max(240, visW * 0.42));
-    const zoneH = Math.min(320, Math.max(200, visH * 0.46));
-    return x >= left && x <= left + zoneW && y >= top && y <= top + zoneH;
-  }
-  let lastDebugTapMs = 0;
-  function noteDebugCornerTap(){
-    const now = performance.now();
-    // A head-unit click can arrive both as a pointer and as a direct tap.
-    if (now - lastDebugTapMs < 90) return;
-    lastDebugTapMs = now;
-    if (SHOW_DEBUG_COG) {
-      window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
-      return;
-    }
-    if (now - debugCogTapMs > 1800) debugCogTaps = 0;
-    debugCogTapMs = now;
-    debugCogTaps += 1;
-    if (debugCogTaps < 3) return;
-    debugCogTaps = 0;
-    window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
-  }
-  window.__aaDebugCornerTap = function(x, y){
-    const px = Number(x), py = Number(y);
-    if (!debugCornerZone(px, py)) return;
-    const target = document.elementFromPoint(px, py);
-    if (target && target.closest && target.closest("button, a, input, select, textarea, #routeCard, #navHud, #navEtaBar, #topPanel, #buttonRow, #hostProbeOverlay") && !target.closest("#carDebugBtn")) return;
-    noteDebugCornerTap();
-  };
-  window.addEventListener("pointerdown", event => {
-    if (event.isPrimary === false) return;
-    debugCornerDown = { x: event.clientX, y: event.clientY, t: performance.now() };
-  }, true);
-  window.addEventListener("pointerup", event => {
-    const down = debugCornerDown;
-    debugCornerDown = null;
-    if (!down || event.isPrimary === false) return;
-    if (performance.now() - down.t > 700) return;
-    const x = event.clientX, y = event.clientY;
-    if (Math.hypot(x - down.x, y - down.y) > 24) return;
-    if (!debugCornerZone(x, y) && !debugCornerZone(down.x, down.y)) return;
-    const target = event.target;
-    if (target && target.closest && target.closest("button, a, input, select, textarea, #hostProbeOverlay") && !target.closest("#carDebugBtn")) return;
-    noteDebugCornerTap();
-  }, true);
+  let debugBtnTaps = 0;
+  let debugBtnTapMs = 0;
   document.getElementById("carDebugBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
-    noteDebugCornerTap();
+    const now = performance.now();
+    if (now - debugBtnTapMs > 3000) debugBtnTaps = 0;
+    debugBtnTapMs = now;
+    debugBtnTaps += 1;
+    if (debugBtnTaps < 3) return;
+    debugBtnTaps = 0;
+    window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
   });
   document.getElementById("routeClose").addEventListener("click", event => {
     event.preventDefault();
