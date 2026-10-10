@@ -2327,6 +2327,7 @@
       if (!snap) return null;
       return Object.assign(snap, {
         id: snap.placeId || ("poi-" + index),
+        poiType: entry.type,
         color: entry.color,
         glyph: CATALOG_ICON_PATHS[entry.id] ? entry.id : "pin",
         iconHref: "",
@@ -2732,8 +2733,16 @@
     return id && id.indexOf("__") !== 0 ? id : "";
   }
 
+  function isFuelStop(dest){
+    if (!dest) return false;
+    const kinds = [dest.poiType, dest.primaryType].concat(dest.types || []);
+    if (kinds.some(kind => String(kind || "") === "gas_station")) return true;
+    return /\b(petrol|gas station|fuel station|service station)\b/i.test(String(dest.name || ""));
+  }
+
   async function pickDriveDestination(dest, opts){
     if (!dest || !Number.isFinite(dest.lat)) return dest;
+    if (isFuelStop(dest)) return dest;
     const lot = parkingNear.selected;
     if (lot && Number.isFinite(lot.lat) && !destIsSamePlace(dest, lot) && (!(lot.walkM > 450))) {
       const id = usablePlaceId(lot.placeId);
@@ -4689,7 +4698,9 @@
       userRatingCount: Number.isFinite(reviews) && reviews > 0 ? reviews : 0,
       photoUrl,
       photoAttr,
-      hours: describeOpeningHours(place)
+      hours: describeOpeningHours(place),
+      primaryType: place.primaryType || "",
+      types: Array.isArray(place.types) ? place.types.slice() : []
     };
   }
 
@@ -4706,6 +4717,9 @@
     } catch (err) {
       console.warn("Place extra fields failed", err);
     }
+    try {
+      await place.fetchFields({ fields: ["primaryType", "types"] });
+    } catch (err) {}
     return snapshotPlace(place, fallbackName);
   }
 
@@ -4930,7 +4944,7 @@
     }
     updateRouteInfo(route, destination.name, keepNav);
     fetchSpeedLimits(driven);
-    if (!keepNav) {
+    if (!keepNav && !isFuelStop(destination)) {
       const key = destination.lat.toFixed(5) + "," + destination.lng.toFixed(5);
       if (parkingNear.destKey !== key) fetchParkingNear(destination);
     }
@@ -4985,9 +4999,11 @@
         updateRecenterButton();
       }
       const gen = ++routeGen;
-      const parkingP = fetchParkingNear(destination);
+      const fuelStop = isFuelStop(dest);
+      if (fuelStop) clearParkingOverlay();
+      const parkingP = fuelStop ? Promise.resolve() : fetchParkingNear(destination);
       const fast = !!(opts && opts.refineWalk === false);
-      if (!fast) {
+      if (!fuelStop && !fast) {
         try {
           await Promise.race([
             parkingP,
@@ -4995,7 +5011,7 @@
           ]);
         } catch (err) {}
       }
-      const driveTo = await pickDriveDestination(destination, { skipOsm: fast });
+      const driveTo = fuelStop ? dest : await pickDriveDestination(destination, { skipOsm: fast });
       if (gen !== routeGen) {
         if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
         return;
@@ -5007,7 +5023,7 @@
         return;
       }
       const lotNow = parkingNear.selected;
-      const parkReroute = lotNow && Number.isFinite(lotNow.lat) && !destIsSamePlace(dest, lotNow) && distanceMetres(driveTo, lotNow) > 28;
+      const parkReroute = !fuelStop && lotNow && Number.isFinite(lotNow.lat) && !destIsSamePlace(dest, lotNow) && distanceMetres(driveTo, lotNow) > 28;
       if (parkReroute) {
         suppressParkingApproach = true;
         clearParkingApproach();
@@ -5017,6 +5033,7 @@
       if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters, { keepPreview: true });
       else if (!noCard) maybeStartRouteCountdown();
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
+      if (fuelStop) return;
 
       const applyRefine = async () => {
         try { await parkingP; } catch (err) {}

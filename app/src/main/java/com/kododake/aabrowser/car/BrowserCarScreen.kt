@@ -85,12 +85,7 @@ class BrowserCarScreen(
             initialText = initialText,
             webHost = webHost,
             onTextChanged = { text -> webHost.setInputText(text, submit = false) },
-            onSubmitted = { text -> webHost.setInputText(text, submit = true) },
-            onClearRequest = {
-                keyboardVisible = false
-                screenManager.pop()
-                openKeyboard("")
-            }
+            onSubmitted = { text -> webHost.setInputText(text, submit = true) }
         )
         keyboardScreen.lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {

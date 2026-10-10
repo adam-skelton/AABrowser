@@ -4,11 +4,14 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
+import androidx.car.app.constraints.ConstraintManager
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarColor
@@ -29,25 +32,30 @@ class CarKeyboardScreen(
     private val initialText: String,
     private val webHost: CarWebViewHost,
     private val onTextChanged: (String) -> Unit,
-    private val onSubmitted: (String) -> Unit,
-    private val onClearRequest: () -> Unit = {}
+    private val onSubmitted: (String) -> Unit
 ) : Screen(carContext) {
 
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var typedText = initialText
     private var suggestions: List<SearchSuggestion> = emptyList()
     private var listening = false
     private var voiceHint: String? = null
     private var speechRecognizer: SpeechRecognizer? = null
+    // Once a letter has arrived, later refreshes must not push text back into
+    // the open keyboard. Doing that drops the input connection and the host
+    // kills the app.
+    private var userEditing = false
+    private var forceSearchText = false
 
     init {
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 webHost.searchSuggestionsListener = { query, items ->
-                    val catalog = items.any { it.placeId.startsWith("__map") }
-                    if (query.isEmpty() || query.equals(typedText.trim(), ignoreCase = true) || catalog) {
-                        suggestions = items
-                        invalidate()
-                    }
+                    val current = typedText.trim()
+                    val matches = query.equals(current, ignoreCase = true) || (query.isEmpty() && current.isEmpty())
+                    if (!matches) return@searchSuggestionsListener
+                    suggestions = items
+                    invalidate()
                 }
                 onTextChanged(typedText)
             }
@@ -64,6 +72,7 @@ class CarKeyboardScreen(
     override fun onGetTemplate(): Template {
         val callback = object : SearchCallback {
             override fun onSearchTextChanged(searchText: String) {
+                userEditing = true
                 typedText = searchText
                 onTextChanged(searchText)
             }
@@ -74,36 +83,26 @@ class CarKeyboardScreen(
             }
         }
 
+        val pushText = forceSearchText || !userEditing
         val builder = SearchTemplate.Builder(callback)
             .setHeaderAction(Action.BACK)
-            .setShowKeyboardByDefault(!listening)
+            .setShowKeyboardByDefault(!listening && (forceSearchText || !userEditing))
             .setSearchHint(voiceHint ?: carContext.getString(
                 if (listening) R.string.car_keyboard_listening else R.string.car_keyboard_hint
             ))
-            .setInitialSearchText(typedText)
             .setItemList(suggestionList())
             .setActionStrip(searchActions())
+        if (pushText) {
+            builder.setInitialSearchText(typedText)
+            forceSearchText = false
+        }
         return builder.build()
     }
 
-    // The mic drawn on the car keyboard is the host's button. It does not deliver
-    // audio to the app, so Voice on this screen runs dictation and fills the box.
+    // One strip action only. A second action (Clear) is rejected while the
+    // keyboard is up, which crashed the app on the first letter.
     private fun searchActions(): ActionStrip {
-        val strip = ActionStrip.Builder().addAction(voiceAction())
-        if (typedText.isNotBlank() && !listening) {
-            strip.addAction(
-                Action.Builder()
-                    .setTitle(carContext.getString(R.string.car_keyboard_clear))
-                    .setOnClickListener {
-                        typedText = ""
-                        voiceHint = null
-                        onTextChanged("")
-                        onClearRequest()
-                    }
-                    .build()
-            )
-        }
-        return strip.build()
+        return ActionStrip.Builder().addAction(voiceAction()).build()
     }
 
     private fun voiceAction(): Action {
@@ -120,15 +119,20 @@ class CarKeyboardScreen(
             .build()
     }
 
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
     private fun startVoice() {
         val permission = Manifest.permission.RECORD_AUDIO
-        if (ContextCompat.checkSelfPermission(carContext, permission) != PackageManager.PERMISSION_GRANTED) {
+        val appContext = carContext.applicationContext
+        if (ContextCompat.checkSelfPermission(appContext, permission) != PackageManager.PERMISSION_GRANTED) {
             carContext.requestPermissions(listOf(permission)) { granted, _ ->
-                if (granted.contains(permission)) startVoice()
+                if (granted.contains(permission)) onMain { startVoice() }
             }
             return
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(carContext)) {
+        if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
             invalidate()
             return
@@ -136,15 +140,22 @@ class CarKeyboardScreen(
         releaseRecognizer()
         listening = true
         voiceHint = null
-        invalidate()
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(carContext).also { recognizer ->
-            recognizer.setRecognitionListener(voiceListener)
-            recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            })
+        try {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext).also { recognizer ->
+                recognizer.setRecognitionListener(voiceListener)
+                recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
+                })
+            }
+        } catch (_: Exception) {
+            listening = false
+            speechRecognizer = null
+            voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
         }
+        invalidate()
     }
 
     private fun finishVoice(text: String?) {
@@ -153,6 +164,8 @@ class CarKeyboardScreen(
         if (!text.isNullOrBlank()) {
             typedText = text.trim()
             voiceHint = null
+            userEditing = true
+            forceSearchText = true
             onTextChanged(typedText)
         }
         invalidate()
@@ -181,7 +194,8 @@ class CarKeyboardScreen(
                 ?.firstOrNull()
                 ?.trim()
                 .orEmpty()
-            if (text.isNotEmpty()) typedText = text
+            if (text.isEmpty()) return
+            onMain { typedText = text }
         }
 
         override fun onResults(results: Bundle?) {
@@ -190,43 +204,61 @@ class CarKeyboardScreen(
                 ?.firstOrNull()
                 ?.trim()
                 .orEmpty()
-                .ifEmpty { typedText }
-            finishVoice(text)
+            onMain { finishVoice(text.ifEmpty { typedText }) }
         }
 
         override fun onError(error: Int) {
-            if (!listening) return
-            listening = false
-            releaseRecognizer()
-            invalidate()
+            onMain {
+                if (!listening) return@onMain
+                listening = false
+                releaseRecognizer()
+                voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
+                invalidate()
+            }
         }
+    }
+
+    private fun listLimit(): Int {
+        return runCatching {
+            carContext.getCarService(ConstraintManager::class.java)
+                .getContentLimit(ConstraintManager.CONTENT_LIMIT_TYPE_LIST)
+        }.getOrDefault(6).coerceIn(1, 6)
+    }
+
+    private fun clipRowText(value: String): String {
+        return value.replace(Regex("\\s+"), " ").trim().take(80)
     }
 
     private fun suggestionList(): ItemList {
         val builder = ItemList.Builder()
-        if (typedText.isNotBlank()) {
+        var room = listLimit()
+        if (typedText.isNotBlank() && room > 0) {
             builder.addItem(
                 Row.Builder()
                     .setTitle(carContext.getString(R.string.car_keyboard_clear))
                     .addText(carContext.getString(R.string.car_keyboard_clear_hint))
                     .setOnClickListener {
                         typedText = ""
+                        suggestions = emptyList()
+                        voiceHint = null
+                        forceSearchText = true
                         onTextChanged("")
-                        onClearRequest()
+                        invalidate()
                     }
                     .build()
             )
+            room -= 1
         }
         if (suggestions.isEmpty() && typedText.isBlank()) {
             builder.setNoItemsMessage(carContext.getString(R.string.car_keyboard_empty))
             return builder.build()
         }
-        suggestions.take(12).forEach { hit ->
-            val row = Row.Builder().setTitle(hit.title)
-            if (hit.subtitle.isNotBlank()) {
-                row.addText(hit.subtitle)
-            }
-            row.setImage(suggestionIcon(hit.placeId), Row.IMAGE_TYPE_ICON)
+        suggestions.take(room).forEach { hit ->
+            val title = clipRowText(hit.title).ifBlank { return@forEach }
+            val row = Row.Builder().setTitle(title)
+            val subtitle = clipRowText(hit.subtitle)
+            if (subtitle.isNotBlank()) row.addText(subtitle)
+            runCatching { row.setImage(suggestionIcon(hit.placeId), Row.IMAGE_TYPE_ICON) }
             row.setOnClickListener {
                 webHost.chooseSearchSuggestion(hit.placeId, hit.title)
                 screenManager.pop()
