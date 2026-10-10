@@ -53,9 +53,10 @@ class CarKeyboardScreen(
                 webHost.searchSuggestionsListener = { query, items ->
                     val current = typedText.trim()
                     val matches = query.equals(current, ignoreCase = true) || (query.isEmpty() && current.isEmpty())
-                    if (!matches) return@searchSuggestionsListener
-                    suggestions = items
-                    invalidate()
+                    if (matches) {
+                        suggestions = items
+                        invalidate()
+                    }
                 }
                 onTextChanged(typedText)
             }
