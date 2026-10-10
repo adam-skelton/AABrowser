@@ -661,6 +661,7 @@
     <div id="navLanes" hidden></div>
   </div>
 
+<script src="host-gestures.js"></script>
 <script>
   // Injected at GitHub Pages deploy from repo secrets.
   const GOOGLE_MAPS_API_KEY = "__GOOGLE_MAPS_API_KEY__";
@@ -10278,6 +10279,21 @@
     return g;
   }
 
+  let hostGesture = null;
+  window.__aaHostScale = function(focusX, focusY, factor){
+    if (typeof planHostGesture !== "function") return;
+    const step = planHostGesture(hostGesture, {
+      type: "scale",
+      focusX: Number(focusX),
+      focusY: Number(focusY),
+      factor: Number(factor)
+    });
+    hostGesture = step.state;
+    step.actions.forEach(action => {
+      if (action.type === "zoom") window.__aaScaleMap(action.factor);
+      if (action.type === "nudge") window.__aaNudgeCamera(action.heading, action.tilt);
+    });
+  };
   window.__aaScaleMap = function(factor){
     if (!map3d) return;
     if (carInspect) {
@@ -11348,71 +11364,46 @@
       startHeading: map3d ? (Number(map3d.heading) || 0) : 0
     };
   }
-  function classifyTwoFinger(state, dAngle, dDist, dMidY){
-    state.accAngle += dAngle;
-    state.accLog += Math.log(dDist || 1);
-    state.accMidY += dMidY;
-    const twist = Math.abs(state.accAngle);
-    const zoom = Math.abs(state.accLog);
-    if (state.mode === "undecided") {
-      if (zoom > 0.04 && twist < 14) state.mode = "zoom";
-      else if (twist > 14 && zoom < 0.03) state.mode = "rotate";
-      else if (Math.abs(state.accMidY) > 18 && zoom < 0.03 && twist < 8) state.mode = "tilt";
-    }
-    return state.mode;
-  }
   function applyTwoFingerCamera(event){
-    if (!map3d || event.touches.length !== 2 || isChromeUiTarget(event.target)) {
+    if (!map3d || event.touches.length !== 2 || isChromeUiTarget(event.target) || typeof stepTouchGesture !== "function") {
       if (event.touches.length < 2) camGesture = null;
       return false;
     }
     noteMapPinch();
-    const next = twoTouchState(event.touches[0], event.touches[1]);
+    const pair = twoTouchState(event.touches[0], event.touches[1]);
     if (!camGesture) {
-      camGesture = next;
+      camGesture = stepTouchGesture(null, pair);
+      camGesture.zoomHeading = null;
+      camGesture.startHeading = map3d ? (Number(map3d.heading) || 0) : 0;
       return true;
     }
-    let dAngle = (next.angle - camGesture.angle) * 180 / Math.PI;
-    if (dAngle > 180) dAngle -= 360;
-    if (dAngle < -180) dAngle += 360;
-    const dDist = next.dist / camGesture.dist;
-    const dMidY = next.midY - camGesture.midY;
-    const mode = classifyTwoFinger(camGesture, dAngle, dDist, dMidY);
-    if (mode === "zoom" && !Number.isFinite(camGesture.zoomHeading)) {
-      camGesture.zoomHeading = Number(map3d.heading) || 0;
+    const startHeading = camGesture.startHeading;
+    const zoomHeading = camGesture.zoomHeading;
+    const next = stepTouchGesture(camGesture, pair);
+    next.startHeading = startHeading;
+    next.zoomHeading = zoomHeading;
+    if (next.mode === "zoom" && !Number.isFinite(next.zoomHeading)) {
+      next.zoomHeading = Number(map3d.heading) || 0;
     }
-    camGesture.dist = next.dist;
-    camGesture.angle = next.angle;
-    camGesture.midX = next.midX;
-    camGesture.midY = next.midY;
+    camGesture = next;
     chromeLocked = false;
     hideChrome();
-    // Fingers lifting collapses the span and swings its angle by about 90°. That frame is not a gesture.
-    const spanOk = dDist > 0.72 && dDist < 1.4;
-    const angleOk = Math.abs(dAngle) <= 28;
-    const zooming = (mode === "undecided" || mode === "zoom") && spanOk && Math.abs(dDist - 1) > 0.008;
     if (carInspect) {
-      if (mode === "rotate" && angleOk && Math.abs(dAngle) > 0.6) carInspect.yaw = (Number(carInspect.yaw) || 0) + dAngle;
-      if (zooming) {
+      if (next.heading) carInspect.yaw = (Number(carInspect.yaw) || 0) + next.heading;
+      if (next.zoom !== 1) {
         const cur = Number(carInspect.userRange) || CAR_INSPECT.RANGE;
-        carInspect.userRange = clamp(cur / dDist, 8, 90);
+        carInspect.userRange = clamp(cur / next.zoom, 8, 90);
       }
-      if (mode === "tilt" && Math.abs(dMidY) > 1.5) {
-        carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) - dMidY * 0.18, 20, 85);
-      }
+      if (next.tilt) carInspect.userTilt = clamp((Number(carInspect.userTilt) || CAR_INSPECT.TILT) + next.tilt, 20, 85);
       carInspect.lastInteractMs = performance.now();
       return true;
     }
     markUserPanned(true);
-    if (mode === "rotate" && angleOk && Math.abs(dAngle) > 0.6) {
-      map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + dAngle);
-    }
-    if (mode === "tilt" && Math.abs(dMidY) > 1.5) {
-      map3d.tilt = clamp((Number(map3d.tilt) || 0) - dMidY * 0.18, 0, 90);
-    }
-    if (zooming) {
+    if (next.heading) map3d.heading = normaliseHeading((Number(map3d.heading) || 0) + next.heading);
+    if (next.tilt) map3d.tilt = clamp((Number(map3d.tilt) || 0) + next.tilt, 0, 90);
+    if (next.zoom !== 1) {
       const range = Number(map3d.range) || 260;
-      map3d.range = clamp(range / dDist, 40, 20000);
+      map3d.range = clamp(range / next.zoom, 40, 20000);
       syncCarLod();
     }
     refreshViewSpecs();

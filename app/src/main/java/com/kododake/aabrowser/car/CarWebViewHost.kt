@@ -104,10 +104,6 @@ class CarWebViewHost(
     private var dragX = 0f
     private var dragY = 0f
     private var dragDownTime = 0L
-    private var twoFingerUntil = 0L
-    private var lastScaleFocusX = Float.NaN
-    private var lastScaleFocusY = Float.NaN
-    private var scaleGestureZoomed = false
     private var lastInputNotifyAt = 0L
     private var suppressFocusUntil = 0L
     private var pendingJs: String? = null
@@ -267,50 +263,34 @@ class CarWebViewHost(
                 )
                 return@onMain
             }
-            if (SystemClock.uptimeMillis() < twoFingerUntil) {
-                extendTwoFingerSession()
-                endDrag()
-                nudgeFromTwoFinger(webView, distanceX * 0.18f, distanceY * 0.12f)
-                return@onMain
-            }
-            dispatchScroll(distanceX, distanceY)
+            // One finger is always a pan. A pinch must not turn the next drag into a tilt.
+            dispatchScroll(distanceX * PAN_GAIN, distanceY * PAN_GAIN)
         }
     }
 
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
             if (jsBridge.carInspecting) return@onMain
-            if (SystemClock.uptimeMillis() < twoFingerUntil) return@onMain
             endDrag()
-            webView?.flingScroll(velocityX.toInt(), velocityY.toInt())
+            val view = webView ?: return@onMain
+            val vx = (velocityX * FLING_GAIN).coerceIn(-FLING_CAP, FLING_CAP)
+            val vy = (velocityY * FLING_GAIN).coerceIn(-FLING_CAP, FLING_CAP)
+            if (kotlin.math.abs(vx) > 40f || kotlin.math.abs(vy) > 40f) {
+                view.flingScroll(vx.toInt(), vy.toInt())
+            }
         }
     }
 
     override fun onScale(focusX: Float, focusY: Float, scaleFactor: Float) {
         onMain {
             val view = webView ?: return@onMain
-            extendTwoFingerSession()
             endDrag()
-            val zooming = scaleFactor > 1.012f || scaleFactor < 0.988f
-            if (zooming) {
-                scaleGestureZoomed = true
-                view.evaluateJavascript(
-                    "window.__aaScaleMap && window.__aaScaleMap($scaleFactor);",
-                    null
-                )
-            } else if (!scaleGestureZoomed && focusX >= 0f && focusY >= 0f && lastScaleFocusX.isFinite()) {
-                val dx = focusX - lastScaleFocusX
-                val dy = focusY - lastScaleFocusY
-                if (kotlin.math.abs(dx) > 1.2f || kotlin.math.abs(dy) > 1.2f) {
-                    nudgeFromTwoFinger(view, dx * 0.18f, dy * 0.12f)
-                }
-            } else {
-                // The sample after a pinch-zoom is the fingers lifting. Its focal
-                // point jumps (often to the origin) and would yaw the map ~90°.
-                scaleGestureZoomed = false
-            }
-            lastScaleFocusX = if (focusX >= 0f) focusX else Float.NaN
-            lastScaleFocusY = if (focusY >= 0f) focusY else Float.NaN
+            // Zoom, tilt, and rotate are decided in the page from the focus point.
+            // The car host does not report a twist angle.
+            view.evaluateJavascript(
+                "window.__aaHostScale && window.__aaHostScale($focusX,$focusY,$scaleFactor);",
+                null
+            )
         }
     }
 
@@ -661,22 +641,6 @@ class CarWebViewHost(
         mainHandler.postDelayed(endDragRunnable, DRAG_END_DELAY_MS)
     }
 
-    private fun extendTwoFingerSession() {
-        twoFingerUntil = SystemClock.uptimeMillis() + TWO_FINGER_MS
-    }
-
-    private fun nudgeFromTwoFinger(view: WebView?, dHeading: Float, dTilt: Float) {
-        if (view == null) return
-        // One callback of a real twist is a few degrees. A finger-up is one
-        // huge jump, about a quarter turn on a car screen, and is not a twist.
-        if (kotlin.math.abs(dHeading) > 28f || kotlin.math.abs(dTilt) > 22f) return
-        if (kotlin.math.abs(dHeading) < 0.05f && kotlin.math.abs(dTilt) < 0.05f) return
-        view.evaluateJavascript(
-            "window.__aaNudgeCamera && window.__aaNudgeCamera($dHeading,$dTilt);",
-            null
-        )
-    }
-
     private fun endDrag() {
         if (!dragging) return
         val view = webView
@@ -873,7 +837,9 @@ class CarWebViewHost(
         fun nightJs(dark: Boolean): String = "window.__aaSetNight && window.__aaSetNight($dark);"
 
         const val GPS_MAX_ACCURACY_M = 50f
-        private const val TWO_FINGER_MS = 420L
+        private const val PAN_GAIN = 0.55f
+        private const val FLING_GAIN = 0.18f
+        private const val FLING_CAP = 700f
         private const val CLICK_DURATION_MS = 40L
         private const val FOCUS_CHECK_DELAY_MS = 180L
         private const val DRAG_END_DELAY_MS = 90L
