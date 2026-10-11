@@ -1,12 +1,15 @@
 package com.kododake.aabrowser.car
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.car.app.CarContext
@@ -26,6 +29,7 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.kododake.aabrowser.R
+import java.util.Locale
 
 class CarKeyboardScreen(
     carContext: CarContext,
@@ -40,6 +44,8 @@ class CarKeyboardScreen(
     private var suggestions: List<SearchSuggestion> = emptyList()
     private var listening = false
     private var voiceHint: String? = null
+    private var heardText = ""
+    private var lastPartialAt = 0L
     private var speechRecognizer: SpeechRecognizer? = null
     // Once a letter has arrived, later refreshes must not push text back into
     // the open keyboard. Doing that drops the input connection and the host
@@ -63,6 +69,7 @@ class CarKeyboardScreen(
 
             override fun onDestroy(owner: LifecycleOwner) {
                 releaseRecognizer()
+                stopMicSession()
                 if (webHost.searchSuggestionsListener != null) {
                     webHost.searchSuggestionsListener = null
                 }
@@ -73,6 +80,9 @@ class CarKeyboardScreen(
     override fun onGetTemplate(): Template {
         val callback = object : SearchCallback {
             override fun onSearchTextChanged(searchText: String) {
+                // Rebuilding the template while listening makes the host echo an
+                // empty field, which used to wipe the words already heard.
+                if (listening) return
                 userEditing = true
                 typedText = searchText
                 onTextChanged(searchText)
@@ -88,9 +98,7 @@ class CarKeyboardScreen(
         val builder = SearchTemplate.Builder(callback)
             .setHeaderAction(Action.BACK)
             .setShowKeyboardByDefault(!listening && (forceSearchText || !userEditing))
-            .setSearchHint(voiceHint ?: carContext.getString(
-                if (listening) R.string.car_keyboard_listening else R.string.car_keyboard_hint
-            ))
+            .setSearchHint(searchHintText())
             .setItemList(suggestionList())
             .setActionStrip(searchActions())
         if (pushText) {
@@ -140,36 +148,119 @@ class CarKeyboardScreen(
         }
         releaseRecognizer()
         listening = true
+        heardText = ""
         voiceHint = null
+        // Android Auto keeps this process in the background, and the mic is
+        // blocked there unless a microphone foreground service is running.
+        startMicSession()
         try {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext).also { recognizer ->
+            speechRecognizer = createRecognizer(appContext).also { recognizer ->
                 recognizer.setRecognitionListener(voiceListener)
+                val language = Locale.getDefault().toLanguageTag()
                 recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
+                    if (language.isNotBlank()) {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
+                    }
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1400L)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
                 })
             }
         } catch (_: Exception) {
             listening = false
+            heardText = ""
             speechRecognizer = null
+            stopMicSession()
             voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
         }
         invalidate()
     }
 
+    private fun searchHintText(): String {
+        if (listening && heardText.isNotBlank()) return heardText
+        voiceHint?.let { return it }
+        return carContext.getString(
+            if (listening) R.string.car_keyboard_listening else R.string.car_keyboard_hint
+        )
+    }
+
+    private fun createRecognizer(context: android.content.Context): SpeechRecognizer {
+        val component = recognitionService(context)
+        return if (component != null) {
+            SpeechRecognizer.createSpeechRecognizer(context, component)
+        } else {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        }
+    }
+
+    private fun recognitionService(context: android.content.Context): ComponentName? {
+        val services = context.packageManager.queryIntentServices(
+            Intent(RecognitionService.SERVICE_INTERFACE),
+            0
+        )
+        val match = services.firstOrNull {
+            it.serviceInfo?.packageName == "com.google.android.googlequicksearchbox"
+        } ?: services.firstOrNull()
+        val info = match?.serviceInfo ?: return null
+        if (info.packageName.isNullOrBlank() || info.name.isNullOrBlank()) return null
+        return ComponentName(info.packageName, info.name)
+    }
+
+    private fun startMicSession() {
+        val appContext = carContext.applicationContext
+        try {
+            ContextCompat.startForegroundService(
+                appContext,
+                Intent(appContext, CarVoiceCaptureService::class.java)
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun stopMicSession() {
+        val appContext = carContext.applicationContext
+        try {
+            appContext.startService(
+                Intent(appContext, CarVoiceCaptureService::class.java)
+                    .setAction(CarVoiceCaptureService.ACTION_STOP)
+            )
+        } catch (_: Exception) {
+            try {
+                appContext.stopService(Intent(appContext, CarVoiceCaptureService::class.java))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private fun finishVoice(text: String?) {
         listening = false
         releaseRecognizer()
-        if (!text.isNullOrBlank()) {
-            typedText = text.trim()
+        stopMicSession()
+        val spoken = text?.trim().orEmpty().ifBlank { heardText.trim() }
+        heardText = ""
+        if (spoken.isNotBlank()) {
+            typedText = spoken
             voiceHint = null
             userEditing = true
             forceSearchText = true
             onTextChanged(typedText)
         }
         invalidate()
+    }
+
+    private fun transcript(bundle: Bundle?): String {
+        if (bundle == null) return ""
+        val stable = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            ?.firstOrNull()
+            ?.trim()
+            .orEmpty()
+        if (stable.isNotEmpty()) return stable
+        return bundle.getString("android.speech.extra.UNSTABLE_TEXT")?.trim().orEmpty()
     }
 
     private fun releaseRecognizer() {
@@ -190,30 +281,42 @@ class CarKeyboardScreen(
         override fun onEvent(eventType: Int, params: Bundle?) {}
 
         override fun onPartialResults(partialResults: Bundle?) {
-            val text = partialResults
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-                .orEmpty()
+            val text = transcript(partialResults)
             if (text.isEmpty()) return
-            onMain { typedText = text }
+            onMain {
+                if (!listening || text == heardText) return@onMain
+                heardText = text
+                typedText = text
+                val now = SystemClock.uptimeMillis()
+                if (now - lastPartialAt < 200L) return@onMain
+                lastPartialAt = now
+                forceSearchText = true
+                invalidate()
+            }
         }
 
         override fun onResults(results: Bundle?) {
-            val text = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-                .orEmpty()
-            onMain { finishVoice(text.ifEmpty { typedText }) }
+            val text = transcript(results)
+            onMain { finishVoice(text) }
         }
 
         override fun onError(error: Int) {
             onMain {
                 if (!listening) return@onMain
+                val missed = error == SpeechRecognizer.ERROR_NO_MATCH ||
+                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                if (missed && heardText.isNotBlank()) {
+                    finishVoice(heardText)
+                    return@onMain
+                }
                 listening = false
+                heardText = ""
                 releaseRecognizer()
-                voiceHint = carContext.getString(R.string.car_keyboard_voice_unavailable)
+                stopMicSession()
+                voiceHint = carContext.getString(
+                    if (missed) R.string.car_keyboard_voice_missed
+                    else R.string.car_keyboard_voice_unavailable
+                )
                 invalidate()
             }
         }

@@ -270,7 +270,7 @@
     #routePlaceCopy {min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden}
     #routePhoto {width:64px; height:64px; border-radius:12px; object-fit:cover; background:#E8EAED; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); flex:0 0 auto}
     #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; cursor:pointer; flex:0 0 auto}
-    #routeTitle {margin:0; flex:1; min-width:0; font-size:22px; font-weight:750; letter-spacing:-.35px; line-height:1.2; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
+    #routeTitle {margin:0; flex:1; min-width:0; font-size:19px; font-weight:750; letter-spacing:-.35px; line-height:1.2; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
     #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#9AA0A6; display:flex}
     #routeTitleChevron svg {width:22px; height:22px; display:block}
     #routeRating {margin-top:8px; display:flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:#5F6368; font-variant-numeric:tabular-nums; flex:0 0 auto}
@@ -10343,9 +10343,54 @@
   window.__aaRecenter = function(){
     recenterToCar();
   };
+  let debugBtnTaps = 0;
+  let debugBtnTapMs = 0;
+  function debugTapCandidates(x, y){
+    const rawX = Number(x), rawY = Number(y);
+    const pts = [];
+    const add = (px, py) => {
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+      if (pts.some(p => Math.abs(p.x - px) < 0.5 && Math.abs(p.y - py) < 0.5)) return;
+      pts.push({ x: px, y: py });
+    };
+    add(rawX, rawY);
+    const dpr = window.devicePixelRatio || 1;
+    if (dpr > 1.01) add(rawX / dpr, rawY / dpr);
+    const mapped = carSurfacePoint(rawX, rawY);
+    if (mapped) add(mapped.x, mapped.y);
+    return pts;
+  }
+  // The car reports a surface tap. It does not become a click on a button
+  // whose paint is fully transparent, so the corner is tested directly.
+  function hitsDebugCorner(x, y){
+    const btn = document.getElementById("carDebugBtn");
+    if (!btn) return false;
+    const style = getComputedStyle(btn);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    const rect = btn.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) return false;
+    const h = window.innerHeight || 1;
+    const zoneRight = Math.max(rect.right, rect.left + rect.width) + 28;
+    const zoneTop = Math.min(rect.top, h) - 28;
+    return debugTapCandidates(x, y).some(p => p.x >= -12 && p.x <= zoneRight && p.y >= zoneTop && p.y <= h + 12);
+  }
+  function noteDebugTap(){
+    const now = performance.now();
+    if (now - debugBtnTapMs < 120) return;
+    if (now - debugBtnTapMs > 3000) debugBtnTaps = 0;
+    debugBtnTapMs = now;
+    debugBtnTaps += 1;
+    if (debugBtnTaps < 3) return;
+    debugBtnTaps = 0;
+    window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
+  }
   window.__aaMapClick = function(x, y){
     const rawX = Number(x), rawY = Number(y);
     if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return;
+    if (hitsDebugCorner(rawX, rawY)) {
+      noteDebugTap();
+      return;
+    }
     const primary = carSurfacePoint(rawX, rawY) || { x: rawX, y: rawY };
     const dpr = window.devicePixelRatio || 1;
     const alt = { x: rawX / dpr, y: rawY / dpr };
@@ -10963,18 +11008,10 @@
     document.documentElement.classList.add("debug-cog-visible");
     document.body.classList.add("debug-cog-visible");
   }
-  let debugBtnTaps = 0;
-  let debugBtnTapMs = 0;
   document.getElementById("carDebugBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
-    const now = performance.now();
-    if (now - debugBtnTapMs > 3000) debugBtnTaps = 0;
-    debugBtnTapMs = now;
-    debugBtnTaps += 1;
-    if (debugBtnTaps < 3) return;
-    debugBtnTaps = 0;
-    window.__aaSetDebugOverlay(!document.body.classList.contains("debug-open"));
+    noteDebugTap();
   });
   document.getElementById("routeClose").addEventListener("click", event => {
     event.preventDefault();

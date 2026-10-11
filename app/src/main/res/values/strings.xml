@@ -129,6 +129,7 @@
     <string name="car_keyboard_voice">Voice</string>
     <string name="car_keyboard_listening">Listening…</string>
     <string name="car_keyboard_voice_unavailable">Voice search isn\'t available on this car</string>
+    <string name="car_keyboard_voice_missed">Didn\'t catch that. Try again.</string>
 
     <string name="media_notification_channel_name">Media playback</string>
     <string name="media_notification_channel_description">Controls media playback in web pages</string>
