@@ -269,7 +269,7 @@
     #routePlace.has-photo {grid-template-columns:64px minmax(0,1fr)}
     #routePlaceCopy {min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden}
     #routePhoto {width:64px; height:64px; border-radius:12px; object-fit:cover; background:#E8EAED; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); flex:0 0 auto}
-    #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; cursor:pointer; flex:0 0 auto}
+    #routeTitleRow {display:flex; align-items:center; gap:2px; min-width:0; margin:0 0 10px; cursor:pointer; flex:0 0 auto}
     #routeTitle {margin:0; flex:1; min-width:0; font-size:19px; font-weight:750; letter-spacing:-.35px; line-height:1.2; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:1}
     #routeTitleChevron {flex:0 0 auto; width:22px; height:22px; color:#9AA0A6; display:flex}
     #routeTitleChevron svg {width:22px; height:22px; display:block}
@@ -291,6 +291,7 @@
     #routeSub.traffic-delay {color:#E8710A}
     #routeGo {position:relative; overflow:hidden; margin-top:16px; width:100%; min-height:48px; border-radius:24px; background:#1A73E8; color:#fff; box-shadow:0 2px 8px rgba(26,115,232,.32); display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease, box-shadow .15s ease}
     #routeCard.route-card-tight #routeCardHead {margin-bottom:8px}
+    #routeCard.route-card-tight #routeTitleRow {margin-bottom:6px}
     #routeCard.route-card-tight #routeRating,#routeCard.route-card-tight #routeHours {margin-top:4px}
     #routeCard.route-card-tight #routeSnippet {margin-top:4px}
     #routeCard.route-card-tight #routeTime {margin-top:8px; padding-top:8px}
@@ -560,15 +561,15 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <div id="routeTitleRow">
+      <div id="routeTitle"></div>
+      <span id="routeTitleChevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M9 5.5L15.5 12 9 18.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </div>
     <div id="routePlace">
       <img id="routePhoto" alt="" hidden>
       <div id="routePlaceCopy">
-        <div id="routeTitleRow">
-          <div id="routeTitle"></div>
-          <span id="routeTitleChevron" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M9 5.5L15.5 12 9 18.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </div>
         <div id="routeRating" hidden></div>
         <div id="routeHours" hidden></div>
         <div id="routeSnippet" hidden></div>

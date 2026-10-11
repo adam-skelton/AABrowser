@@ -48,6 +48,13 @@ class CarWebViewHost(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endDragRunnable = Runnable { endDrag() }
     private var debugOverlayVisible = false
+    private var debugHoldUntil = 0L
+    private var debugHoldMoved = 0f
+    private var lastMapScrollAt = 0L
+    private val debugHoldRunnable = Runnable {
+        debugHoldUntil = 0L
+        setDebugOverlay(!debugOverlayVisible)
+    }
     private lateinit var hostProbe: CarHostProbe
     private val jsBridge = CarJsBridge(
         onMain = ::onMain,
@@ -248,11 +255,26 @@ class CarWebViewHost(
     }
 
     override fun onClick(x: Float, y: Float) {
-        onMain { dispatchClick(x, y) }
+        onMain {
+            // A still press in the bottom-left. The head unit never delivers this
+            // as a click on the invisible page button, so the surface handles it.
+            if (isDebugCorner(x, y) && SystemClock.uptimeMillis() - lastMapScrollAt > 450L) {
+                armDebugHold()
+                return@onMain
+            }
+            cancelDebugHold()
+            dispatchClick(x, y)
+        }
     }
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
         onMain {
+            if (debugHoldUntil > 0L) {
+                debugHoldMoved += kotlin.math.abs(distanceX) + kotlin.math.abs(distanceY)
+                if (debugHoldMoved <= DEBUG_HOLD_SLOP) return@onMain
+                cancelDebugHold()
+            }
+            lastMapScrollAt = SystemClock.uptimeMillis()
             if (jsBridge.carInspecting) {
                 endDrag()
                 val dHeading = distanceX * 0.18f
@@ -270,6 +292,7 @@ class CarWebViewHost(
 
     override fun onFling(velocityX: Float, velocityY: Float) {
         onMain {
+            if (debugHoldUntil > 0L) cancelDebugHold()
             if (jsBridge.carInspecting) return@onMain
             endDrag()
             val view = webView ?: return@onMain
@@ -601,6 +624,28 @@ class CarWebViewHost(
         bootOverlay = null
     }
 
+    private fun armDebugHold() {
+        debugHoldMoved = 0f
+        debugHoldUntil = SystemClock.uptimeMillis() + DEBUG_HOLD_MS
+        mainHandler.removeCallbacks(debugHoldRunnable)
+        mainHandler.postDelayed(debugHoldRunnable, DEBUG_HOLD_MS)
+    }
+
+    private fun cancelDebugHold() {
+        if (debugHoldUntil == 0L) return
+        debugHoldUntil = 0L
+        mainHandler.removeCallbacks(debugHoldRunnable)
+    }
+
+    private fun isDebugCorner(x: Float, y: Float): Boolean {
+        val w = surfaceWidth.toFloat().coerceAtLeast(1f)
+        val h = surfaceHeight.toFloat().coerceAtLeast(1f)
+        val normalized = x in 0f..1.5f && y in 0f..1.5f
+        val px = if (normalized) x * w else x
+        val py = if (normalized) y * h else y
+        return px <= w * 0.36f && py >= h * 0.58f
+    }
+
     private fun dispatchClick(x: Float, y: Float) {
         val view = webView ?: return
         endDrag()
@@ -837,6 +882,8 @@ class CarWebViewHost(
         fun nightJs(dark: Boolean): String = "window.__aaSetNight && window.__aaSetNight($dark);"
 
         const val GPS_MAX_ACCURACY_M = 50f
+        private const val DEBUG_HOLD_MS = 600L
+        private const val DEBUG_HOLD_SLOP = 28f
         private const val PAN_GAIN = 0.55f
         private const val FLING_GAIN = 0.18f
         private const val FLING_CAP = 700f

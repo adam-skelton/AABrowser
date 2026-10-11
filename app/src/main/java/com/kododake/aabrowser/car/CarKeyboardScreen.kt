@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -52,6 +54,8 @@ class CarKeyboardScreen(
     // kills the app.
     private var userEditing = false
     private var forceSearchText = false
+    private var retainSearchText = false
+    private var micTone: ToneGenerator? = null
 
     init {
         lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -70,6 +74,11 @@ class CarKeyboardScreen(
             override fun onDestroy(owner: LifecycleOwner) {
                 releaseRecognizer()
                 stopMicSession()
+                try {
+                    micTone?.release()
+                } catch (_: Exception) {
+                }
+                micTone = null
                 if (webHost.searchSuggestionsListener != null) {
                     webHost.searchSuggestionsListener = null
                 }
@@ -83,6 +92,10 @@ class CarKeyboardScreen(
                 // Rebuilding the template while listening makes the host echo an
                 // empty field, which used to wipe the words already heard.
                 if (listening) return
+                if (retainSearchText) {
+                    if (searchText == typedText || searchText.isEmpty()) return
+                    retainSearchText = false
+                }
                 userEditing = true
                 typedText = searchText
                 onTextChanged(searchText)
@@ -94,10 +107,10 @@ class CarKeyboardScreen(
             }
         }
 
-        val pushText = forceSearchText || !userEditing
+        val pushText = forceSearchText || !userEditing || retainSearchText
         val builder = SearchTemplate.Builder(callback)
             .setHeaderAction(Action.BACK)
-            .setShowKeyboardByDefault(!listening && (forceSearchText || !userEditing))
+            .setShowKeyboardByDefault(!listening && !retainSearchText && (forceSearchText || !userEditing))
             .setSearchHint(searchHintText())
             .setItemList(suggestionList())
             .setActionStrip(searchActions())
@@ -171,6 +184,7 @@ class CarKeyboardScreen(
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
                 })
             }
+            playMicTone(starting = true)
         } catch (_: Exception) {
             listening = false
             heardText = ""
@@ -247,10 +261,38 @@ class CarKeyboardScreen(
             typedText = spoken
             voiceHint = null
             userEditing = true
+            retainSearchText = true
             forceSearchText = true
             onTextChanged(typedText)
+        } else {
+            retainSearchText = false
         }
+        playMicTone(starting = false)
         invalidate()
+    }
+
+    private fun playMicTone(starting: Boolean) {
+        try {
+            micTone?.release()
+        } catch (_: Exception) {
+        }
+        micTone = null
+        try {
+            val generator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+            micTone = generator
+            val tone = if (starting) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_BEEP2
+            generator.startTone(tone, 180)
+            mainHandler.postDelayed({
+                if (micTone !== generator) return@postDelayed
+                try {
+                    generator.release()
+                } catch (_: Exception) {
+                }
+                micTone = null
+            }, 500L)
+        } catch (_: Exception) {
+            micTone = null
+        }
     }
 
     private fun transcript(bundle: Bundle?): String {
@@ -313,6 +355,7 @@ class CarKeyboardScreen(
                 heardText = ""
                 releaseRecognizer()
                 stopMicSession()
+                playMicTone(starting = false)
                 voiceHint = carContext.getString(
                     if (missed) R.string.car_keyboard_voice_missed
                     else R.string.car_keyboard_voice_unavailable
@@ -345,6 +388,7 @@ class CarKeyboardScreen(
                         typedText = ""
                         suggestions = emptyList()
                         voiceHint = null
+                        retainSearchText = false
                         forceSearchText = true
                         onTextChanged("")
                         invalidate()
