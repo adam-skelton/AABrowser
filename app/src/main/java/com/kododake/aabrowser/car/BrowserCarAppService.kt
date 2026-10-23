@@ -33,7 +33,7 @@ class BrowserCarSession : Session() {
     override fun onCreateScreen(intent: Intent): Screen {
         webHost = CarWebViewHost(carContext)
         webHost.register()
-        requestLocationIfNeeded()
+        requestStartupPermissions()
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onResume(owner: LifecycleOwner) {
                 webHost.onForegrounded()
@@ -51,8 +51,8 @@ class BrowserCarSession : Session() {
         if (::webHost.isInitialized) webHost.setNightMode(carContext.isDarkMode)
     }
 
-    private fun requestLocationIfNeeded() {
-        val needed = LOCATION_PERMISSIONS.filter {
+    private fun requestStartupPermissions() {
+        val needed = STARTUP_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(carContext, it) != PackageManager.PERMISSION_GRANTED
         }
         if (needed.isEmpty()) {
@@ -65,9 +65,10 @@ class BrowserCarSession : Session() {
     }
 
     private companion object {
-        val LOCATION_PERMISSIONS = listOf(
+        val STARTUP_PERMISSIONS = listOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.RECORD_AUDIO
         )
     }
 }

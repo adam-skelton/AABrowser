@@ -55,7 +55,9 @@ class MainActivity : AppCompatActivity() {
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        val allow = granted.values.any { it }
+        val allow = hasLocationPermission() ||
+            granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         pendingGeoGrant?.invoke(allow)
         pendingGeoGrant = null
         if (allow) startPhoneLocation()
@@ -81,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupBackPressHandling()
-        ensureLocationPermissionIfNeeded()
+        ensureStartupPermissions()
         setupUi()
     }
 
@@ -130,17 +132,22 @@ class MainActivity : AppCompatActivity() {
         return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun ensureLocationPermissionIfNeeded() {
-        if (hasLocationPermission()) {
+    private fun hasMicrophonePermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun ensureStartupPermissions() {
+        val needed = mutableListOf<String>()
+        if (!hasLocationPermission()) {
+            needed += Manifest.permission.ACCESS_FINE_LOCATION
+            needed += Manifest.permission.ACCESS_COARSE_LOCATION
+        }
+        if (!hasMicrophonePermission()) needed += Manifest.permission.RECORD_AUDIO
+        if (needed.isEmpty()) {
             startPhoneLocation()
             return
         }
-        locationPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
-        )
+        locationPermissionLauncher.launch(needed.toTypedArray())
     }
 
     private fun startPhoneLocation() {
