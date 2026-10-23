@@ -26,12 +26,18 @@
     #searchRow,#buttonRow,#carDebugBtn {pointer-events:auto}
     #searchRow {display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:8px; align-items:stretch}
     #searchRow.has-query {grid-template-columns:minmax(0,1fr) 44px 48px}
+    #searchRow.has-start {grid-template-columns:minmax(0,1fr) 48px 48px}
+    #searchRow.has-query.has-start {grid-template-columns:minmax(0,1fr) 44px 48px 48px}
     #searchHost {position:relative; min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
     #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
     #searchHost gmp-place-autocomplete::part(input),
     #searchHost gmp-place-autocomplete::part(search) {border:0; border-radius:12px; background:transparent; min-height:44px}
     #searchClear {display:none; width:44px; height:44px; min-height:44px; padding:0; border-radius:12px; background:#E8EAED; color:#3C4043; box-shadow:0 2px 10px rgba(0,0,0,.18); font-size:26px; line-height:1; align-items:center; justify-content:center}
     #searchRow.has-query #searchClear {display:flex}
+    #startPlaceBtn {display:none; width:48px; min-height:44px; padding:0; border-radius:12px; background:#E6F4EA; color:#137333; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(0,0,0,.18)}
+    #searchRow.has-start #startPlaceBtn {display:flex}
+    #startPlaceBtn:active {background:#CEEAD6; transform:none}
+    #startPlaceBtn svg {width:26px; height:26px; display:block}
     button,select {min-height:44px; border:0; border-radius:12px; padding:0 13px; font:inherit; font-weight:650; background:rgba(255,255,255,.96); color:#111; box-shadow:0 2px 10px rgba(0,0,0,.24)}
     button:active {transform:translateY(1px)}
     #buttonRow {display:flex; flex-wrap:wrap; gap:7px}
@@ -355,7 +361,7 @@
     #carModelHost model-viewer {width:100%; height:100%; --poster-color:transparent; touch-action:none}
     #carModelHint {padding:8px 14px; font-size:13px; font-weight:600; color:rgba(255,255,255,.7); text-align:center}
     #carModelClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
-    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}#searchRow.has-query{grid-template-columns:minmax(0,1fr) 44px 48px}button,select{font-size:14px}}
+    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}#searchRow.has-query{grid-template-columns:minmax(0,1fr) 44px 48px}#searchRow.has-start{grid-template-columns:minmax(0,1fr) 48px 48px}#searchRow.has-query.has-start{grid-template-columns:minmax(0,1fr) 44px 48px 48px}button,select{font-size:14px}}
   </style>
   <script>
     try { if (window.Car) document.documentElement.classList.add("native-boot"); } catch (e) {}
@@ -421,6 +427,12 @@
     <div id="searchRow">
       <div id="searchHost"></div>
       <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
+      <button id="startPlaceBtn" type="button" hidden aria-label="Navigate back to where you started">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" d="M14.2 3.2 21.4 9.2V21H8.2V9.2L14.2 3.2zm-2 17.8v-6.2h4.2V21h-4.2z"/>
+          <path fill="currentColor" d="M6.7 6.1 4.4 3.5v2.1H3.6a3.4 3.4 0 1 0 0 6.8h2.2V11H3.6a2 2 0 1 1 0-4h.8v2.1L6.7 6.1z"/>
+        </svg>
+      </button>
       <button id="mapsBrowseBtn" type="button" aria-label="Maps">
         <svg viewBox="-4 -4 100.3 140.3" aria-hidden="true">
           <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
@@ -435,7 +447,7 @@
     <div id="buttonRow">
       <div id="zoomMod">
         <button type="button" id="zoomModOut" aria-label="Zoom out">−</button>
-        <span id="zoomModLabel">Nav 1 · Free 3</span>
+        <span id="zoomModLabel">Nav 1 · Free 4</span>
         <button type="button" id="zoomModIn" aria-label="Zoom in">+</button>
       </div>
       <button id="gpsBtn" type="button">Start GPS</button>
@@ -726,12 +738,12 @@
   // Keep a constant on-screen size, wide enough to fill the lane.
   const CAR_WIDTH_M = 1.80;
   const CAR_TARGET_WIDTH_M = 3.4;
-  const CAR_MAX_WORLD_WIDTH_M = 6.2;
+  const CAR_MAX_WORLD_WIDTH_M = 11.5;
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
-  const FREE_REF_TILT = 84;   // free follow: lower orbit, looking along the road
-  const FREE_REF_RANGE = 68;  // shorter orbit than nav so the camera sits closer to the ground
+  const FREE_REF_TILT = 86;   // free follow: a little lower, looking along the road
+  const FREE_REF_RANGE = 56;  // free follow base orbit, tighter than before
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
   const MODEL_ALTITUDE_MODE = "CLAMP_TO_GROUND";
   const USE_HEADING_ARROW = false;
@@ -774,7 +786,7 @@
   // ---------------------------------------------------------------------------
   const FOLLOW = {
     CAR_SCREEN_Y: 0.60,     // heading-up: car sits above the ETA pill (0 = top, 1 = bottom)
-    FREE_CAR_SCREEN_Y: 0.84, // free follow: car lower in frame, more road/horizon ahead
+    FREE_CAR_SCREEN_Y: 0.91, // free follow: car lower, camera further behind
     POS_TAU: 0.25,          // camera position ease time-constant (s)
     BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
     BRG_TAU_TURN: 0.35,     // ...and through a genuine turn
@@ -807,7 +819,7 @@
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
-    MIN_FREE_RANGE: 300,    // moving free: 84° at the speed-band range puts the camera in the houses
+    MIN_FREE_RANGE: 220,    // moving free floor; still above the roof, closer than the old wide orbit
     STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked, frame the block instead of the bumper
     STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again, back to the speed-band zoom
     STILL_RANGE_NAV: 460,   // kept for free-follow callers; nav stays on the low-speed band when stopped
@@ -850,7 +862,7 @@
   const ZOOM_PLUS_FACTOR = 1.25;
   const ZOOM_PLUS_STEP = Math.log(ZOOM_PLUS_FACTOR) / Math.log(2);
   const FOLLOW_ZOOM_IN_CLICKS_NAV = 1;   // nav follow (e.g. 50 km/h) a step closer than the band table
-  const FOLLOW_ZOOM_IN_CLICKS_FREE = 3;  // free follow: same extra step, still tighter than nav
+  const FOLLOW_ZOOM_IN_CLICKS_FREE = 4;  // free follow sits a step closer than before
   let sessionZoomClicks = 0;             // debug +/- on top of both; lasts this page load only
   const SESSION_ZOOM_MIN = -6;
   const SESSION_ZOOM_MAX = 6;
@@ -1414,6 +1426,7 @@
   }
 
   function syncCarLod(){
+    syncRouteStroke();
     if (syncCarLod.busy) return;
     syncCarLod.busy = true;
     try {
@@ -1746,15 +1759,19 @@
     placeAutocomplete = new PlaceAutocompleteElement();
     placeAutocomplete.placeholder = "Search destination...";
     placeAutocomplete.includedRegionCodes = ["nz"];
-    placeAutocomplete.locationBias = { radius: 50000, center: AUCKLAND };
+    placeAutocomplete.locationBias = { radius: 25000, center: AUCKLAND };
+    try { placeAutocomplete.origin = AUCKLAND; } catch (err) {}
     document.getElementById("searchHost").append(placeAutocomplete);
     document.getElementById("searchHost").addEventListener("click", event => {
-      if (event.target && event.target.closest && event.target.closest("#searchResults, #searchClear")) return;
+      if (event.target && event.target.closest && event.target.closest("#searchResults, #searchClear, #startPlaceBtn")) return;
       const value = (placeAutocomplete && placeAutocomplete.value != null) ? String(placeAutocomplete.value) : "";
       try { if (window.Car && typeof Car.onInputFocused === "function") Car.onInputFocused(value); } catch (err) {}
       if (!String(value || "").trim()) previewSearchSuggestions("");
     });
-    placeAutocomplete.addEventListener("input", syncSearchClear);
+    placeAutocomplete.addEventListener("input", event => {
+      syncSearchClear();
+      if (event && event.isTrusted) scheduleSearchSuggestions(searchQueryValue());
+    });
     placeAutocomplete.addEventListener("change", syncSearchClear);
     syncSearchClear();
 
@@ -1936,6 +1953,182 @@
     closeAaSearchBar();
   }
 
+  const START_PLACE_KEY = "aaStartSuburb";
+  let nearbyNames = [];
+  let areaLookup = null;
+  let startLookupAt = 0;
+  let startLookupBusy = false;
+  let startButtonSynced = false;
+
+  function startDayKey(now){
+    const d = new Date(now || Date.now());
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + month + "-" + day;
+  }
+
+  function readStartPlace(){
+    try {
+      const raw = localStorage.getItem(START_PLACE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      const fresh = data && data.day === startDayKey() && data.name
+        && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lng));
+      if (!fresh) {
+        if (data && data.day) localStorage.removeItem(START_PLACE_KEY);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function rememberNearbyNames(names){
+    const next = [];
+    (names || []).forEach(name => {
+      const text = String(name || "").trim().toLowerCase();
+      if (text && text.length > 1 && next.indexOf(text) < 0) next.push(text);
+    });
+    if (next.length) nearbyNames = next;
+  }
+
+  function syncStartPlaceButton(place){
+    const saved = place || readStartPlace();
+    const row = document.getElementById("searchRow");
+    const btn = document.getElementById("startPlaceBtn");
+    const show = !!(saved && saved.name);
+    if (row) row.classList.toggle("has-start", show);
+    if (btn) {
+      btn.hidden = !show;
+      btn.style.display = show ? "flex" : "none";
+      btn.setAttribute("aria-label", show ? "Navigate back to " + saved.name : "Navigate back to where you started");
+      btn.title = show ? saved.name : "";
+    }
+    if (saved && saved.names) rememberNearbyNames(saved.names);
+  }
+
+  function componentText(comp){
+    return String((comp && (comp.long_name || comp.longText || comp.longName)) || "").trim();
+  }
+
+  function componentList(result){
+    return (result && (result.address_components || result.addressComponents)) || [];
+  }
+
+  function resultTypes(result){
+    return (result && result.types) || [];
+  }
+
+  function resultPoint(result){
+    const loc = result && result.geometry && result.geometry.location;
+    if (!loc) return null;
+    const lat = typeof loc.lat === "function" ? loc.lat() : Number(loc.lat);
+    const lng = typeof loc.lng === "function" ? loc.lng() : Number(loc.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }
+
+  function suburbFromGeocode(results){
+    const list = results || [];
+    const wanted = ["sublocality_level_1", "sublocality", "neighborhood", "locality"];
+    for (const type of wanted) {
+      const hit = list.find(result => resultTypes(result).indexOf(type) >= 0);
+      if (!hit) continue;
+      const comps = componentList(hit);
+      let name = "";
+      for (const prefer of ["sublocality_level_1", "sublocality", "neighborhood"]) {
+        const comp = comps.find(item => (item.types || []).indexOf(prefer) >= 0);
+        if (comp && componentText(comp)) { name = componentText(comp); break; }
+      }
+      if (!name) {
+        const city = comps.find(item => (item.types || []).indexOf("locality") >= 0);
+        name = componentText(city);
+      }
+      const point = resultPoint(hit);
+      if (!name || !point) continue;
+      const names = [];
+      comps.forEach(comp => {
+        const types = comp.types || [];
+        if (types.some(t => t === "sublocality_level_1" || t === "sublocality" || t === "neighborhood" || t === "locality")) {
+          names.push(componentText(comp));
+        }
+      });
+      if (names.indexOf(name) < 0) names.unshift(name);
+      return { name, lat: point.lat, lng: point.lng, names };
+    }
+    return null;
+  }
+
+  async function lookupArea(lat, lng){
+    if (areaLookup && distanceMetres(areaLookup, { lat, lng }) < 1500) return areaLookup;
+    const { Geocoder } = await google.maps.importLibrary("geocoding");
+    const geocoder = new Geocoder();
+    const result = await geocoder.geocode({ location: { lat, lng } });
+    const suburb = suburbFromGeocode(result && result.results);
+    if (!suburb) return null;
+    areaLookup = { lat, lng, suburb };
+    rememberNearbyNames(suburb.names);
+    return areaLookup;
+  }
+
+  function noteTripStart(lat, lng, speed, accuracy){
+    if (isDemoRunning()) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (Number.isFinite(accuracy) && accuracy > 80) return;
+    const saved = readStartPlace();
+    if (saved) {
+      if (!startButtonSynced) {
+        syncStartPlaceButton(saved);
+        startButtonSynced = true;
+      }
+      return;
+    }
+    const moving = (Number(speed) || 0) >= 2.2;
+    if (startLookupBusy) return;
+    if (!moving && (areaLookup || Date.now() - startLookupAt < 20000)) return;
+    startLookupAt = Date.now();
+    startLookupBusy = true;
+    lookupArea(lat, lng).then(area => {
+      if (!area || !area.suburb) return;
+      if (!moving || readStartPlace()) return;
+      const suburb = area.suburb;
+      const data = {
+        day: startDayKey(),
+        name: suburb.name,
+        lat: suburb.lat,
+        lng: suburb.lng,
+        names: suburb.names || [suburb.name]
+      };
+      try { localStorage.setItem(START_PLACE_KEY, JSON.stringify(data)); } catch (err) {}
+      startButtonSynced = true;
+      syncStartPlaceButton(data);
+    }).catch(err => {
+      console.warn("Start suburb lookup failed", err);
+      startLookupAt = 0;
+    }).finally(() => {
+      startLookupBusy = false;
+    });
+  }
+
+  async function goToStartPlace(){
+    const saved = readStartPlace();
+    if (!saved) {
+      syncStartPlaceButton(null);
+      return;
+    }
+    hideSearchDropdown();
+    closeAaSearchBar();
+    await calculateRoute(getRouteOrigin(), {
+      lat: saved.lat,
+      lng: saved.lng,
+      name: saved.name
+    }, saved.name);
+  }
+
+  syncStartPlaceButton();
+
   async function previewSearchSuggestions(query){
     const q = String(query || "").trim();
     if (!q) {
@@ -1945,28 +2138,58 @@
     try {
       const { AutocompleteSuggestion } = await google.maps.importLibrary("places");
       const center = currentGpsPoint || AUCKLAND;
-      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+      const request = {
         input: q,
         includedRegionCodes: ["nz"],
-        locationBias: { radius: 50000, center }
-      });
-      const items = (suggestions || []).slice(0, 6).map(entry => {
+        origin: center,
+        locationBias: { radius: 25000, center }
+      };
+      let suggestions;
+      try {
+        ({ suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request));
+      } catch (err) {
+        delete request.origin;
+        ({ suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request));
+      }
+      const items = (suggestions || []).map((entry, order) => {
         const prediction = entry.placePrediction || {};
         const structured = prediction.structuredFormat || {};
         const place = (typeof prediction.toPlace === "function") ? prediction.toPlace() : null;
         const title = predictionText(structured.mainText || prediction.mainText) || predictionText(prediction.text);
         const subtitle = predictionText(structured.secondaryText || prediction.secondaryText);
+        const distanceM = Number(prediction.distanceMeters);
         return {
           placeId: prediction.placeId || (place && (place.id || place.placeId)) || "",
           title: title || q,
-          subtitle
+          subtitle,
+          distanceM: Number.isFinite(distanceM) ? distanceM : NaN,
+          order
         };
       }).filter(item => item.placeId || item.title);
+      items.sort((a, b) => suggestionRank(b, q) - suggestionRank(a, q) || a.order - b.order);
       const wantMaps = /^maps?$/i.test(q) || q.toLowerCase().includes("map");
-      pushSearchSuggestions(q, wantMaps ? mapsCatalogItems() : items);
+      pushSearchSuggestions(q, wantMaps ? mapsCatalogItems() : items.slice(0, 6));
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function suggestionRank(item, query){
+    const q = String(query || "").trim().toLowerCase();
+    const title = String(item.title || "").trim().toLowerCase();
+    const sub = String(item.subtitle || "").trim().toLowerCase();
+    let score = 0;
+    if (q) {
+      if (title === q) score += 90;
+      else if (title.startsWith(q)) score += 56;
+      else if (title.includes(q)) score += 28;
+      const words = q.split(/\s+/).filter(Boolean);
+      if (words.length && words.every(word => title.includes(word) || sub.includes(word))) score += 18;
+    }
+    const local = nearbyNames.filter(Boolean);
+    if (local.some(name => sub.includes(name) || title.includes(name))) score += 74;
+    if (Number.isFinite(item.distanceM)) score += Math.max(0, 90 - item.distanceM / 800);
+    return score;
   }
 
   async function searchDestinationFromQuery(query){
@@ -5145,12 +5368,31 @@
     return out;
   }
 
+  function routeStrokeWidth(range){
+    const r = Math.max(40, Number(range) || CAR_REF_RANGE);
+    return clamp(9 * Math.max(1, r / 170), 9, 28);
+  }
+
+  let routeStrokeApplied = 0;
+  function syncRouteStroke(){
+    if (!routeLines.length && !routeDoneLine) return;
+    const stroke = routeStrokeWidth(cameraRange());
+    if (Math.abs(stroke - routeStrokeApplied) < 0.6) return;
+    routeStrokeApplied = stroke;
+    const apply = line => {
+      if (!line) return;
+      try { line.strokeWidth = stroke; } catch (err) {}
+    };
+    routeLines.forEach(apply);
+    apply(routeDoneLine);
+  }
+
   function makeRouteLine(path, color, zIndex){
     return new Polyline3DElement({
       path,
       strokeColor: color,
       outerColor: "#FFFFFF",
-      strokeWidth: 9,
+      strokeWidth: routeStrokeWidth(cameraRange()),
       outerWidth: 0.35,
       altitudeMode: MODEL_ALTITUDE_MODE,
       drawsOccludedSegments: true,
@@ -5168,6 +5410,8 @@
       routeLines.push(line);
     }
     routeDoneUpdatedM = -Infinity;
+    routeStrokeApplied = 0;
+    syncRouteStroke();
     drawParkingApproach(path);
   }
 
@@ -7327,7 +7571,8 @@
     currentGpsPoint = { lat: pos.lat, lng: pos.lng, heading: h };
     previousFix = currentGpsPoint;
     if (placeAutocomplete) {
-      placeAutocomplete.locationBias = { radius: 50000, center: pos };
+      placeAutocomplete.locationBias = { radius: 25000, center: pos };
+      try { placeAutocomplete.origin = pos; } catch (err) {}
     }
     updateCar(pos, h, extra || {});
   }
@@ -7358,12 +7603,15 @@
     currentGpsPoint = { lat: fix.lat, lng: fix.lng, heading };
     previousFix = currentGpsPoint;
     if (!map3d) return;
+    const speed = Number.isFinite(c.speed) && c.speed >= 0 ? c.speed : null;
+    const accuracy = Number.isFinite(c.accuracy) ? c.accuracy : null;
     applyGpsFix(fix, heading, {
-      speed: Number.isFinite(c.speed) && c.speed >= 0 ? c.speed : null,
-      accuracy: Number.isFinite(c.accuracy) ? c.accuracy : null,
+      speed,
+      accuracy,
       bearingAccuracy: Number.isFinite(c.bearingAccuracy) ? c.bearingAccuracy : null,
       headingMeasured
     });
+    noteTripStart(fix.lat, fix.lng, speed, accuracy);
     setMessage(`Live GPS · accuracy about ${Math.round(c.accuracy || 0)} m`);
   }
 
@@ -11109,6 +11357,14 @@
     }
     enterNavigation();
   });
+  const startPlaceBtn = document.getElementById("startPlaceBtn");
+  if (startPlaceBtn) {
+    startPlaceBtn.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      goToStartPlace();
+    });
+  }
   const mapsBrowseBtn = document.getElementById("mapsBrowseBtn");
   if (mapsBrowseBtn) {
     mapsBrowseBtn.addEventListener("click", event => {
@@ -11232,7 +11488,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
