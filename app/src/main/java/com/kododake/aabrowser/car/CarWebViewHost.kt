@@ -256,12 +256,6 @@ class CarWebViewHost(
 
     override fun onClick(x: Float, y: Float) {
         onMain {
-            // A still press in the extreme bottom-left corner. The head unit never
-            // delivers this as a click on the invisible page button, so the surface handles it.
-            if (isDebugCorner(x, y) && SystemClock.uptimeMillis() - lastMapScrollAt > 450L) {
-                armDebugHold()
-                return@onMain
-            }
             cancelDebugHold()
             dispatchClick(x, y)
         }
@@ -740,8 +734,8 @@ class CarWebViewHost(
             colors = intArrayOf(
                 0xFF8EBCF2.toInt(),
                 0xFF3F74B8.toInt(),
-                0xFF1C3F6E.toInt(),
-                0xFF10192B.toInt()
+                0xFF2A5C9A.toInt(),
+                0xFF24548F.toInt()
             )
         }
     }

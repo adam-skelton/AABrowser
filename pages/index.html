@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Immersive Navigation</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
-    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); background-origin:content-box; background-clip:border-box; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .2s ease, visibility .2s ease; pointer-events:none}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#24548f; background-image:radial-gradient(circle farthest-corner at 50% 50%, #8ebcf2 0%, #3f74b8 42%, #24548f 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
+    #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#24548f}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#24548f; background-image:radial-gradient(circle farthest-corner at 50% 50%, #8ebcf2 0%, #3f74b8 42%, #24548f 100%); padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .2s ease, visibility .2s ease; pointer-events:none}
     html.native-boot #mapLoader .gmaps-pin, html.native-boot #mapLoader .gmaps-shadow {visibility:hidden}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     #mapLoader.map-failed .gmaps-pin,#mapLoader.map-failed .gmaps-shadow,#mapLoader.map-failed .gmaps-pin::after {animation:none}
@@ -238,8 +238,7 @@
     html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
     html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
     html.aa-car #chromeWake,body.aa-car #chromeWake {display:none; pointer-events:none}
-    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:flex; top:auto; bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); pointer-events:auto}
-    html.aa-car:not(.debug-cog-visible) #carDebugBtn,body.aa-car:not(.debug-cog-visible) #carDebugBtn {opacity:0; background:transparent; box-shadow:none}
+    html.aa-car #carDebugBtn,body.aa-car #carDebugBtn {display:none}
     html.aa-car #buttonRow,body.aa-car #buttonRow {position:fixed; left:calc(var(--aa-inset-left) + max(140px,env(safe-area-inset-left) + 128px)); right:calc(var(--aa-inset-right) + 148px); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); top:auto; z-index:30; overflow:visible}
     html.aa-car #buttonRow button,html.aa-car #buttonRow select,
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
@@ -1876,7 +1875,8 @@
     pharmacy: "M21 5h-2.64l1.14-3.14L17.15 1l-1.46 4H3v2l2 6-2 6v2h18v-2l-2-6 2-6V5zm-5 9h-3v3h-2v-3H8v-2h3V9h2v3h3v2z",
     atm: "M11 17h2v-1h1c.55 0 1-.45 1-1v-3c0-.55-.45-1-1-1h-3v-1h4V8h-2V7h-2v1h-1c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1h3v1H9v2h2v1zm9-13H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4V6h16v12z",
     hospital: "M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z",
-    lodging: "M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"
+    lodging: "M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z",
+    debug: "M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5s-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"
   };
 
   function catalogIconFor(placeId){
@@ -2207,6 +2207,12 @@
   async function pickSearchResult(placeId, fallbackName){
     const id = String(placeId || "").trim();
     const label = String(fallbackName || "").trim();
+    if (id === "__map:debug") {
+      hideSearchDropdown();
+      closeAaSearchBar();
+      window.__aaSetDebugOverlay(true);
+      return;
+    }
     if (id.startsWith("__map")) {
       hideSearchDropdown();
       await openExploreMap(id);
@@ -2291,6 +2297,7 @@
     EXPLORE_POI_MAPS.forEach(entry => {
       items.push({ placeId: "__map:" + entry.id, title: entry.title, subtitle: entry.subtitle, color: entry.color });
     });
+    items.push({ placeId: "__map:debug", title: "Debug", subtitle: "Tools", color: "#5F6368" });
     return items;
   }
 
@@ -4241,10 +4248,24 @@
   }
 
   function clearExploreMarkers(){
-    for (const marker of explore.markers) {
-      try { marker.remove(); } catch (err) {}
-    }
-    explore.markers = [];
+    const doomed = explore.markers.splice(0, explore.markers.length);
+    doomed.forEach(detachMapMarker);
+    if (!map3d) return;
+    const kids = map3d.children ? Array.from(map3d.children) : [];
+    kids.forEach(node => {
+      if (node && (node._explorePlace || node._exploreCluster)) detachMapMarker(node);
+    });
+  }
+
+  function detachMapMarker(marker){
+    if (!marker) return;
+    try { marker.hidden = true; } catch (err) {}
+    try { marker.style.display = "none"; } catch (err) {}
+    try { marker.remove(); } catch (err) {}
+    try {
+      const parent = marker.parentNode || marker.parentElement;
+      if (parent && typeof parent.removeChild === "function") parent.removeChild(marker);
+    } catch (err) {}
   }
 
   function setExploreMode(on){
@@ -4621,13 +4642,39 @@
     return groups.map(group => group.map(place => place.id || (place.lat.toFixed(5) + "," + place.lng.toFixed(5))).sort().join("+")).sort().join("|");
   }
 
+  let explorePickAt = 0;
+  function acceptExplorePick(){
+    const now = performance.now();
+    if (now - explorePickAt < 350) return false;
+    if (now < mapPointer.pinchUntil) return false;
+    if (mapPointer.pointers > 1) return false;
+    if (mapDragStart && mapDragStart.panned) return false;
+    explorePickAt = now;
+    return true;
+  }
+
+  function exploreClusterIconUrl(count){
+    const n = Math.max(2, count | 0);
+    const label = n > 99 ? "99+" : String(n);
+    const size = n >= 10 ? 56 : 48;
+    const font = n > 99 ? 16 : 20;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
+      '<circle cx="' + (size / 2) + '" cy="' + (size / 2) + '" r="' + (size / 2 - 2) + '" fill="#1A73E8" stroke="#fff" stroke-width="3"/>' +
+      '<text x="50%" y="54%" text-anchor="middle" fill="#fff" font-size="' + font + '" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + label + '</text></svg>';
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+
   function exploreClusterNode(count){
     const n = Math.max(2, count | 0);
-    const el = document.createElement("div");
-    el.textContent = n > 99 ? "99+" : String(n);
-    const size = n >= 10 ? 52 : 46;
-    el.style.cssText = "width:" + size + "px;height:" + size + "px;border-radius:50%;background:#1A73E8;color:#fff;display:flex;align-items:center;justify-content:center;font:700 " + (n > 99 ? 14 : 16) + "px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border:3px solid #fff;box-sizing:border-box";
-    return el;
+    const size = n >= 10 ? 56 : 48;
+    const img = document.createElement("img");
+    img.alt = n + " places";
+    img.src = exploreClusterIconUrl(n);
+    img.width = size;
+    img.height = size;
+    img.draggable = false;
+    img.style.cssText = "width:" + size + "px;height:" + size + "px;display:block";
+    return img;
   }
 
   function focusExploreCluster(places){
@@ -4670,10 +4717,8 @@
     marker.append(template);
     const onPick = event => {
       try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-      window.setTimeout(() => {
-        if (!gestureWasTap()) return;
-        focusExploreCluster(places);
-      }, 50);
+      if (!acceptExplorePick()) return;
+      focusExploreCluster(places);
     };
     marker.addEventListener("gmp-click", onPick);
     marker.addEventListener("click", onPick);
@@ -4685,17 +4730,26 @@
     const groups = exploreGroups(explore.places);
     const key = exploreClusterKey(groups);
     if (!force && key === explore.clusterKey && explore.markers.length) return;
-    explore.clusterKey = key;
-    clearExploreMarkers();
+    const next = [];
     groups.forEach(group => {
       try {
-        const marker = group.length > 1 ? makeExploreCluster(group) : makeExploreMarker(group[0]);
-        map3d.append(marker);
-        explore.markers.push(marker);
+        next.push(group.length > 1 ? makeExploreCluster(group) : makeExploreMarker(group[0]));
       } catch (err) {
         console.warn("explore marker failed", err);
       }
     });
+    if (!next.length) return;
+    clearExploreMarkers();
+    next.forEach(marker => {
+      try {
+        map3d.append(marker);
+        explore.markers.push(marker);
+      } catch (err) {
+        console.warn("explore marker failed", err);
+        detachMapMarker(marker);
+      }
+    });
+    explore.clusterKey = key;
     explore.labelBucket = null;
     applyExploreLabelMode(true);
   }
@@ -4719,10 +4773,8 @@
     marker.append(template);
     const onPick = event => {
       try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
-      window.setTimeout(() => {
-        if (!gestureWasTap()) return;
-        selectExplorePlace(place);
-      }, 50);
+      if (!acceptExplorePick()) return;
+      selectExplorePlace(place);
     };
     marker.addEventListener("gmp-click", onPick);
     marker.addEventListener("click", onPick);
@@ -10840,10 +10892,6 @@
   window.__aaMapClick = function(x, y){
     const rawX = Number(x), rawY = Number(y);
     if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return;
-    if (hitsDebugCorner(rawX, rawY)) {
-      noteDebugTap();
-      return;
-    }
     const primary = carSurfacePoint(rawX, rawY) || { x: rawX, y: rawY };
     const dpr = window.devicePixelRatio || 1;
     const alt = { x: rawX / dpr, y: rawY / dpr };
@@ -11639,7 +11687,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
@@ -11823,6 +11871,11 @@
       return;
     }
     if (start.panned) {
+      scheduleRestoreRouteCard();
+      return;
+    }
+    if (document.body.classList.contains("debug-open") && !(event.target && event.target.closest && event.target.closest("button, a, input, select, textarea, #buttonRow, #viewSpecPanel, #viewPicker, #carApiHud, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #routeCard, #topPanel, #searchResults"))) {
+      window.__aaSetDebugOverlay(false);
       scheduleRestoreRouteCard();
       return;
     }
