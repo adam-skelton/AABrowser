@@ -256,8 +256,8 @@ class CarWebViewHost(
 
     override fun onClick(x: Float, y: Float) {
         onMain {
-            // A still press in the bottom-left. The head unit never delivers this
-            // as a click on the invisible page button, so the surface handles it.
+            // A still press in the extreme bottom-left corner. The head unit never
+            // delivers this as a click on the invisible page button, so the surface handles it.
             if (isDebugCorner(x, y) && SystemClock.uptimeMillis() - lastMapScrollAt > 450L) {
                 armDebugHold()
                 return@onMain
@@ -643,7 +643,11 @@ class CarWebViewHost(
         val normalized = x in 0f..1.5f && y in 0f..1.5f
         val px = if (normalized) x * w else x
         val py = if (normalized) y * h else y
-        return px <= w * 0.36f && py >= h * 0.58f
+        val vis = visibleArea
+        val left = if (vis != null && vis.width() >= 48) vis.left.toFloat() else 0f
+        val bottom = if (vis != null && vis.height() >= 48) vis.bottom.toFloat() else h
+        val zone = 36f * carContext.resources.displayMetrics.density
+        return px >= left - 8f && px <= left + zone && py >= bottom - zone && py <= bottom + 8f
     }
 
     private fun dispatchClick(x: Float, y: Float) {
