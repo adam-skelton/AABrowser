@@ -25,8 +25,10 @@
     h1 { margin: 0 0 8px; font-size: 26px; font-weight: 750; letter-spacing: -.3px; }
     p { margin: 0; font-size: 16px; line-height: 1.4; color: rgba(232,234,237,.78); }
     button {
+      position: relative;
       margin-top: 22px;
       min-height: 48px;
+      min-width: 148px;
       padding: 0 22px;
       border: 0;
       border-radius: 24px;
@@ -36,6 +38,22 @@
       font-weight: 700;
       font-size: 16px;
     }
+    button:active { background: #185abc; }
+    button.loading { color: transparent; pointer-events: none; }
+    button.loading::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 22px;
+      height: 22px;
+      margin: -11px 0 0 -11px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      animation: retry-spin .7s linear infinite;
+    }
+    @keyframes retry-spin { to { transform: rotate(360deg); } }
     .detail { margin-top: 16px; font-size: 12px; color: rgba(232,234,237,.45); word-break: break-word; }
   </style>
 </head>
@@ -62,9 +80,65 @@
       detail.hidden = false;
       detail.textContent = (message && message.indexOf("__ERROR") !== 0 ? message : "Couldn't reach the map") + (code ? " (" + code + ")" : "");
     }
-    document.getElementById("retry").addEventListener("click", function () {
-      if (failed && failed.indexOf("__FAILED") !== 0) location.href = failed;
-      else location.reload();
+    var retryBtn = document.getElementById("retry");
+    function targetUrl() {
+      return (failed && failed.indexOf("__FAILED") !== 0) ? failed : "";
+    }
+    function probe(timeoutMs) {
+      return new Promise(function (resolve) {
+        var done = false;
+        function finish(ok) {
+          if (done) return;
+          done = true;
+          resolve(!!ok);
+        }
+        var url = targetUrl();
+        if (!url) { finish(false); return; }
+        var timer = setTimeout(function () { finish(false); }, timeoutMs);
+        try {
+          fetch(url, { method: "GET", cache: "no-store", mode: "no-cors" }).then(function () {
+            clearTimeout(timer);
+            finish(true);
+          }, function () {
+            clearTimeout(timer);
+            finish(false);
+          });
+        } catch (e) {
+          clearTimeout(timer);
+          finish(false);
+        }
+      });
+    }
+    function restoreRetry() {
+      retryBtn.classList.remove("loading");
+      retryBtn.removeAttribute("aria-busy");
+    }
+    function beginRetry() {
+      if (retryBtn.classList.contains("loading")) return;
+      retryBtn.classList.add("loading");
+      retryBtn.setAttribute("aria-busy", "true");
+      var started = Date.now();
+      probe(1600).then(function (ok) {
+        if (ok) {
+          location.replace(targetUrl());
+          return;
+        }
+        var wait = Math.max(400, 3000 - (Date.now() - started));
+        setTimeout(function () {
+          probe(1600).then(function (ok2) {
+            if (ok2) location.replace(targetUrl());
+            else restoreRetry();
+          });
+        }, wait);
+      });
+    }
+    retryBtn.addEventListener("pointerup", function (event) {
+      event.preventDefault();
+      beginRetry();
+    });
+    retryBtn.addEventListener("click", function (event) {
+      event.preventDefault();
+      beginRetry();
     });
   </script>
 </body>

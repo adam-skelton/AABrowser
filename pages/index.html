@@ -7,7 +7,7 @@
   <style>
     html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#1a2332}
-    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); background-origin:content-box; background-clip:border-box; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .45s ease, visibility .45s ease; pointer-events:none}
+    #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#10192b; background-image:radial-gradient(ellipse 80% 62% at 50% 50%, #8ebcf2 0%, #3f74b8 18%, #1c3f6e 46%, #10192b 100%); background-origin:content-box; background-clip:border-box; padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .2s ease, visibility .2s ease; pointer-events:none}
     html.native-boot #mapLoader .gmaps-pin, html.native-boot #mapLoader .gmaps-shadow {visibility:hidden}
     body.map-ready #mapLoader {opacity:0; visibility:hidden; pointer-events:none}
     #mapLoader.map-failed .gmaps-pin,#mapLoader.map-failed .gmaps-shadow,#mapLoader.map-failed .gmaps-pin::after {animation:none}
@@ -124,7 +124,7 @@
     #infoBtn.visible {display:flex}
     #infoBtn svg {width:34px; height:34px; display:block}
     body.has-info #recenterBtn,html.has-info #recenterBtn {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
-    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)) + 88px); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:none; display:flex; align-items:center; justify-content:center; gap:12px; pointer-events:none}
+    #navBottomCluster {position:absolute; z-index:34; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)) + 88px); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); transform:none; display:flex; align-items:center; justify-content:flex-end; gap:12px; pointer-events:none; transition:right .2s ease}
     html.has-recenter #navBottomCluster,body.has-recenter #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 168px)}
     html.has-info #navBottomCluster,body.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
     html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
@@ -183,14 +183,14 @@
     #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:96px; padding:10px 32px 10px 22px; border-radius:48px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:22px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:0; padding:5px 16px 5px 8px; border-radius:28px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:10px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
-    #navExit {width:68px; height:68px; min-height:68px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
+    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
-    #navExit svg {width:34px; height:34px; display:block}
-    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center}
-    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:26px; font-weight:800; letter-spacing:-.3px; line-height:1.1; color:#81C995; font-variant-numeric:tabular-nums}
-    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; overflow:hidden; font-size:18px; font-weight:650; line-height:1.2; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
+    #navExit svg {width:22px; height:22px; display:block}
+    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; text-align:center}
+    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:22px; font-weight:800; letter-spacing:-.3px; line-height:1.05; color:#81C995; font-variant-numeric:tabular-nums}
+    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; overflow:hidden; font-size:15px; font-weight:650; line-height:1.1; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
     #navEtaSep {display:none; flex:0 0 auto; opacity:.55; font-weight:700; line-height:1}
     #navEtaSep.visible {display:inline}
     #navEtaDist,#navEtaClock {flex:0 0 auto}
@@ -11534,8 +11534,8 @@
   let mapRevealDone = false;
   let mapRevealTimer = 0;
   const MAP_REVEAL_KEY = "aaMapRevealed";
-  const MAP_REVEAL_MIN_MS = 900;
-  const MAP_REVEAL_MAX_MS = 2000;
+  const MAP_REVEAL_MIN_MS = 1000;
+  const MAP_REVEAL_MAX_MS = 1000;
   function revealMap(){
     if (mapRevealDone) return;
     mapRevealDone = true;

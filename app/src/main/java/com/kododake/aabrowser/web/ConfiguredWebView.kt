@@ -100,6 +100,13 @@ fun configureWebView(
         //setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         var showingLocalError = false
+        var connectionRechecked = false
+        var connectionRecheckPosted = false
+        var loadFailed = false
+        var navigationGeneration = 0
+        var recheckGeneration = -1
+        var recheckRunnable: Runnable? = null
+
         fun showLocalErrorPage(view: WebView, failedUrl: String, code: Int, message: String) {
             if (showingLocalError) return
             if (failedUrl.startsWith("https://local.aabrowser/")) return
@@ -123,6 +130,33 @@ fun configureWebView(
                 } catch (_: Exception) {
                 }
             }
+        }
+
+        // A brief drop should not replace the map. The failed load is the first check;
+        // one more load a few seconds later is the second. The offline screen appears
+        // only when that second check also fails.
+        fun considerMainFrameError(view: WebView, failedUrl: String, code: Int, message: String) {
+            if (connectionRecheckPosted) return
+            if (isConnectivityError(code, message) && !connectionRechecked && failedUrl.isNotBlank()) {
+                connectionRecheckPosted = true
+                connectionRechecked = true
+                view.stopLoading()
+                val generation = navigationGeneration
+                val retry = Runnable {
+                    connectionRecheckPosted = false
+                    if (generation != navigationGeneration || !view.isAttachedToWindow) return@Runnable
+                    recheckGeneration = generation
+                    try {
+                        view.loadUrl(failedUrl)
+                    } catch (_: Exception) {
+                        showLocalErrorPage(view, failedUrl, code, message)
+                    }
+                }
+                recheckRunnable = retry
+                view.postDelayed(retry, CONNECTION_RECHECK_MS)
+                return
+            }
+            showLocalErrorPage(view, failedUrl, code, message)
         }
 
         webViewClient = object : WebViewClient() {
@@ -152,7 +186,15 @@ fun configureWebView(
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 callbacks.onPageStarted()
+                loadFailed = false
                 val stringUrl = url ?: return
+                if (navigationGeneration == recheckGeneration) {
+                    recheckGeneration = -1
+                } else if (!stringUrl.startsWith("https://local.aabrowser/")) {
+                    navigationGeneration++
+                    connectionRecheckPosted = false
+                    recheckRunnable?.let { view.removeCallbacks(it) }
+                }
                 if (!stringUrl.startsWith("https://local.aabrowser/")) showingLocalError = false
                 val uri = Uri.parse(stringUrl)
                 val scheme = uri.scheme?.lowercase()
@@ -169,6 +211,10 @@ fun configureWebView(
 
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
+                if (!loadFailed && url != null && !url.startsWith("https://local.aabrowser/")) {
+                    connectionRechecked = false
+                    connectionRecheckPosted = false
+                }
                 view.evaluateJavascript(SpeechRecognitionBridge.POLYFILL_JS, null)
                 callbacks.onPageFinished(url)
                 url?.let(callbacks.onUrlChange)
@@ -180,7 +226,8 @@ fun configureWebView(
                 error: WebResourceError
             ) {
                 if (!request.isForMainFrame) return
-                showLocalErrorPage(
+                loadFailed = true
+                considerMainFrameError(
                     view,
                     request.url?.toString().orEmpty(),
                     error.errorCode,
@@ -196,6 +243,7 @@ fun configureWebView(
                 if (!request.isForMainFrame) return
                 val code = errorResponse.statusCode
                 if (code in 400..599 && code != 429) {
+                    loadFailed = true
                     showLocalErrorPage(
                         view,
                         request.url?.toString().orEmpty(),
@@ -208,6 +256,7 @@ fun configureWebView(
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 val primary = try { error.primaryError } catch (_: Exception) { -1 }
                 handler.cancel()
+                loadFailed = true
                 showLocalErrorPage(view, error.url ?: "", primary, "SSL error: $primary")
             }
         }
@@ -362,7 +411,31 @@ private fun buildUserAgent(profile: UserAgentProfile, desktop: Boolean): String 
     }
 }
 
+private const val CONNECTION_RECHECK_MS = 3000L
 private const val CHROME_VERSION = "144.0.0.0"
+
+private fun isConnectivityError(code: Int, message: String): Boolean {
+    val text = message.lowercase()
+    if (text.contains("err_cert") || text.contains("ssl")) return false
+    if (text.contains("err_internet_disconnected") ||
+        text.contains("err_name_not_resolved") ||
+        text.contains("err_name_resolution") ||
+        text.contains("err_connection_") ||
+        text.contains("err_address_unreachable") ||
+        text.contains("err_network_changed") ||
+        text.contains("err_network_access_denied") ||
+        text.contains("err_timed_out") ||
+        text.contains("err_timeout") ||
+        text.contains("err_proxy") ||
+        text.contains("net::err_")
+    ) {
+        return true
+    }
+    return code == WebViewClient.ERROR_HOST_LOOKUP ||
+        code == WebViewClient.ERROR_CONNECT ||
+        code == WebViewClient.ERROR_IO ||
+        code == WebViewClient.ERROR_TIMEOUT
+}
 private const val MOBILE_CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Mobile Safari/537.36"
 private const val WINDOWS_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36"
 private const val SAFARI_MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
