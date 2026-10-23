@@ -67,7 +67,7 @@
       <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
     </svg>
     <h1>No connection</h1>
-    <p id="lead">This page needs a network connection. Check the signal, then try again.</p>
+    <p id="lead">The map will open when the connection is back.</p>
     <button id="retry" type="button">Try again</button>
     <p class="detail" id="detail" hidden></p>
   </div>
@@ -109,28 +109,59 @@
         }
       });
     }
+    var lead = document.getElementById("lead");
+    var leadIdle = lead.textContent;
+    var autoTimer = 0;
+    function connectionProblem() {
+      var text = String(message || "").toLowerCase();
+      if (text.indexOf("__ERROR") === 0) return false;
+      if (text.indexOf("err_cert") >= 0 || text.indexOf("ssl") >= 0) return false;
+      if (text.indexOf("err_") >= 0 || text.indexOf("net::") >= 0) return true;
+      var n = parseInt(code, 10);
+      return n === -2 || n === -6 || n === -7 || n === -8;
+    }
+    function scheduleAuto() {
+      if (!connectionProblem() || !targetUrl()) return;
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(runAuto, 4000);
+    }
     function restoreRetry() {
       retryBtn.classList.remove("loading");
       retryBtn.removeAttribute("aria-busy");
+      if (lead) lead.textContent = leadIdle;
     }
     function beginRetry() {
       if (retryBtn.classList.contains("loading")) return;
+      clearTimeout(autoTimer);
+      autoTimer = 0;
       retryBtn.classList.add("loading");
       retryBtn.setAttribute("aria-busy", "true");
+      if (lead) lead.textContent = "Checking the connection…";
       var started = Date.now();
       probe(1600).then(function (ok) {
-        if (ok) {
+        if (ok && targetUrl()) {
           location.replace(targetUrl());
           return;
         }
         var wait = Math.max(400, 3000 - (Date.now() - started));
         setTimeout(function () {
           probe(1600).then(function (ok2) {
-            if (ok2) location.replace(targetUrl());
-            else restoreRetry();
+            if (ok2 && targetUrl()) location.replace(targetUrl());
+            else {
+              restoreRetry();
+              scheduleAuto();
+            }
           });
         }, wait);
       });
+    }
+    function runAuto() {
+      autoTimer = 0;
+      if (retryBtn.classList.contains("loading")) {
+        scheduleAuto();
+        return;
+      }
+      beginRetry();
     }
     retryBtn.addEventListener("pointerup", function (event) {
       event.preventDefault();
@@ -140,6 +171,7 @@
       event.preventDefault();
       beginRetry();
     });
+    scheduleAuto();
   </script>
 </body>
 </html>

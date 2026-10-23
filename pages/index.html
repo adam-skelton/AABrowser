@@ -1166,6 +1166,7 @@
         map3d.addEventListener(name, () => {
           if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
           if (name === "gmp-rangechange") {
+            syncExploreClusters();
             applyExploreLabelMode();
             syncFreeZoomDot();
           }
@@ -4258,6 +4259,7 @@
       explore.mapId = "";
       explore.youFitted = false;
       explore.labelBucket = null;
+      explore.clusterKey = "";
       exploreFly = null;
       clearExploreMarkers();
       clearExploreYou();
@@ -4545,8 +4547,9 @@
     if (!force && bucket === explore.labelBucket) return;
     explore.labelBucket = bucket;
     const ids = labeledExploreIds(explore.places, range);
-    explore.markers.forEach((marker, i) => {
-      const place = (marker._explorePlace) || explore.places[i];
+    explore.markers.forEach(marker => {
+      if (marker._exploreCluster) return;
+      const place = marker._explorePlace;
       if (!place) return;
       const show = !!(ids[place.id] && place.name);
       const href = rewriteIconHref(place.iconHref);
@@ -4555,6 +4558,146 @@
       if (custom) return;
       applyExplorePinImage(marker._pinImg, place, show);
     });
+  }
+
+  const EXPLORE_CLUSTER_PX = 64;
+  function clusterMetresPerRange(){
+    const fov = Number(map3d && map3d.fov) || 40;
+    const h = Math.max(320, window.innerHeight || 800);
+    return (EXPLORE_CLUSTER_PX / h) * 2 * Math.tan((fov * Math.PI / 180) / 2);
+  }
+
+  function clusterThreshMetres(){
+    const range = Math.max(40, Number(map3d && map3d.range) || 4000);
+    return clamp(range * clusterMetresPerRange(), 12, 24000);
+  }
+
+  function exploreGroupCenter(places){
+    let lat = 0, lng = 0;
+    places.forEach(place => { lat += place.lat; lng += place.lng; });
+    const n = places.length || 1;
+    return { lat: lat / n, lng: lng / n };
+  }
+
+  function clusterByDistance(places, thresh){
+    const groups = [];
+    (places || []).forEach(place => {
+      if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return;
+      let best = null;
+      let bestD = thresh;
+      groups.forEach(group => {
+        const d = distanceMetres(group.center, place);
+        if (d < bestD) { best = group; bestD = d; }
+      });
+      if (!best) {
+        groups.push({ center: { lat: place.lat, lng: place.lng }, places: [place] });
+        return;
+      }
+      best.places.push(place);
+      const n = best.places.length;
+      best.center = {
+        lat: best.center.lat + (place.lat - best.center.lat) / n,
+        lng: best.center.lng + (place.lng - best.center.lng) / n
+      };
+    });
+    return groups.map(group => group.places);
+  }
+
+  function exploreGroups(places){
+    const selectedId = explore.selected && explore.selected.id;
+    const pool = [];
+    let pinned = null;
+    (places || []).forEach(place => {
+      if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return;
+      if (selectedId && place.id === selectedId) pinned = place;
+      else pool.push(place);
+    });
+    const groups = clusterByDistance(pool, clusterThreshMetres());
+    if (pinned) groups.push([pinned]);
+    return groups;
+  }
+
+  function exploreClusterKey(groups){
+    return groups.map(group => group.map(place => place.id || (place.lat.toFixed(5) + "," + place.lng.toFixed(5))).sort().join("+")).sort().join("|");
+  }
+
+  function exploreClusterNode(count){
+    const n = Math.max(2, count | 0);
+    const el = document.createElement("div");
+    el.textContent = n > 99 ? "99+" : String(n);
+    const size = n >= 10 ? 52 : 46;
+    el.style.cssText = "width:" + size + "px;height:" + size + "px;border-radius:50%;background:#1A73E8;color:#fff;display:flex;align-items:center;justify-content:center;font:700 " + (n > 99 ? 14 : 16) + "px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border:3px solid #fff;box-sizing:border-box";
+    return el;
+  }
+
+  function focusExploreCluster(places){
+    if (!map3d || !places || places.length < 2) return;
+    let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+    places.forEach(place => {
+      minLat = Math.min(minLat, place.lat);
+      maxLat = Math.max(maxLat, place.lat);
+      minLng = Math.min(minLng, place.lng);
+      maxLng = Math.max(maxLng, place.lng);
+    });
+    const center = exploreGroupCenter(places);
+    const span = Math.max(distanceMetres({ lat: minLat, lng: minLng }, { lat: maxLat, lng: maxLng }), 20);
+    const current = Math.max(80, Number(map3d.range) || 4000);
+    const k = Math.max(0.01, clusterMetresPerRange());
+    let range = Math.min(span * 1.45, (span * 0.42) / k, current * 0.62);
+    range = clamp(range, 70, current * 0.85);
+    if (explore.selected || document.body.classList.contains("has-route")) exploreShowOverview("stay");
+    startExploreOverviewFly({
+      center,
+      range,
+      tilt: 42,
+      heading: numOr(map3d.heading, 0)
+    });
+  }
+
+  function makeExploreCluster(places){
+    const Ctor = Marker3DInteractiveElement || Marker3DElement;
+    const center = exploreGroupCenter(places);
+    const marker = new Ctor({
+      position: { lat: center.lat, lng: center.lng },
+      altitudeMode: "CLAMP_TO_GROUND",
+      sizePreserved: true,
+      drawsWhenOccluded: true
+    });
+    marker._exploreCluster = places;
+    try { marker.anchorLeft = "-50%"; marker.anchorTop = "-50%"; } catch (err) {}
+    const template = document.createElement("template");
+    template.content.append(exploreClusterNode(places.length));
+    marker.append(template);
+    const onPick = event => {
+      try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
+      window.setTimeout(() => {
+        if (!gestureWasTap()) return;
+        focusExploreCluster(places);
+      }, 50);
+    };
+    marker.addEventListener("gmp-click", onPick);
+    marker.addEventListener("click", onPick);
+    return marker;
+  }
+
+  function syncExploreClusters(force){
+    if (!explore.mode || !map3d || !explore.places.length) return;
+    const groups = exploreGroups(explore.places);
+    const key = exploreClusterKey(groups);
+    if (!force && key === explore.clusterKey && explore.markers.length) return;
+    explore.clusterKey = key;
+    clearExploreMarkers();
+    groups.forEach(group => {
+      try {
+        const marker = group.length > 1 ? makeExploreCluster(group) : makeExploreMarker(group[0]);
+        map3d.append(marker);
+        explore.markers.push(marker);
+      } catch (err) {
+        console.warn("explore marker failed", err);
+      }
+    });
+    explore.labelBucket = null;
+    applyExploreLabelMode(true);
   }
 
   function makeExploreMarker(place){
@@ -4587,19 +4730,11 @@
   }
 
   function drawExplorePlaces(places){
-    clearExploreMarkers();
-    if (!map3d) return;
-    explore.places = places;
+    explore.places = places || [];
+    explore.clusterKey = "";
     explore.labelBucket = null;
-    places.forEach(place => {
-      try {
-        const marker = makeExploreMarker(place);
-        map3d.append(marker);
-        explore.markers.push(marker);
-      } catch (err) {
-        console.warn("explore marker failed", err);
-      }
-    });
+    if (!map3d) return;
+    syncExploreClusters(true);
   }
 
   function showExploreSnippet(place){
@@ -4694,7 +4829,7 @@
     startDestPreview(place);
     if (destPreview) destPreview.noSpin = true;
     updateRecenterButton();
-    applyExploreLabelMode(true);
+    syncExploreClusters(true);
     setMessage(dest.name);
     calculateRoute(getRouteOrigin(), dest, dest.name, { preview: false }).catch(err => {
       console.warn("Explore place route failed", err);
@@ -4719,11 +4854,13 @@
     showExploreSnippet(activeDestination);
   }
 
-  function exploreShowOverview(){
+  function exploreShowOverview(mode){
     if (!explore.mode) return;
+    const place = explore.selected || activeDestination;
+    routeGen += 1;
     explore.selected = null;
     stopDestPreview();
-    cancelStartCountdown();
+    holdStartCountdown();
     closeDescriptionDialog();
     clearParkingOverlay();
     activeRoute = null;
@@ -4734,11 +4871,22 @@
     try { removeRouteLines(); } catch (err) {}
     document.body.classList.remove("has-route", "navigating", "nav-browsing");
     document.documentElement.classList.remove("has-route", "navigating", "nav-browsing");
-    const overview = explore.overview || computeExploreOverview(explore.places);
-    explore.overview = overview;
-    if (overview && map3d) startExploreOverviewFly(overview);
-    else fitExploreCamera(explore.places);
-    applyExploreLabelMode(true);
+    if (mode === "locality" && place && Number.isFinite(place.lat) && map3d) {
+      const current = numOr(map3d.range, 320);
+      startExploreOverviewFly({
+        center: { lat: place.lat, lng: place.lng },
+        range: clamp(Math.max(current * 4.2, 1600), 1400, 5200),
+        tilt: 46,
+        heading: numOr(map3d.heading, 0)
+      });
+    } else if (mode !== "stay") {
+      const overview = explore.overview || computeExploreOverview(explore.places);
+      explore.overview = overview;
+      if (overview && map3d) startExploreOverviewFly(overview);
+      else fitExploreCamera(explore.places);
+    }
+    syncExploreClusters(true);
+    updateRecenterButton();
     setMessage(explore.title || customMapTitle());
   }
 
@@ -4797,6 +4945,7 @@
     explore.selected = null;
     drawExplorePlaces(places);
     fitExploreCamera(places);
+    syncExploreClusters(true);
     syncExploreYou();
     applyExploreLabelMode(true);
     setMapLabels(true);
@@ -8842,7 +8991,7 @@
   }
 
   function startStartCountdown(){
-    if (!routeGoEl || explore.mode || startHeldByUser) return;
+    if (!routeGoEl || startHeldByUser) return;
     if (isNavigating()) return;
     startCountdown = {
       startMs: performance.now() + START_COUNTDOWN_IGNORE_MS,
@@ -8854,7 +9003,7 @@
   }
 
   function maybeStartRouteCountdown(){
-    if (startHeldByUser || explore.mode || isNavigating()) return;
+    if (startHeldByUser || isNavigating()) return;
     if (document.body.classList.contains("suppress-route-card")) return;
     if (!document.body.classList.contains("has-route")) return;
     if (!activeRoutePath || activeRoutePath.length < 2) return;
@@ -8892,12 +9041,18 @@
     setGoProgress(p);
     if (p >= 1) {
       startCountdown = null;
-      if (explore.mode) {
-        cancelStartCountdown();
-        return;
-      }
-      enterNavigation();
+      setGoProgress(1);
+      pressRouteGo();
     }
+  }
+
+  async function pressRouteGo(){
+    if (explore.mode && activeDestination && !(activeRoutePath && activeRoutePath.length >= 2)) {
+      await calculateRoute(getRouteOrigin(), activeDestination, activeDestination.name, { preview: false });
+      if (startHeldByUser || isNavigating()) return;
+      if (!(activeRoutePath && activeRoutePath.length >= 2)) return;
+    }
+    enterNavigation();
   }
 
   // ---- Route-start fly-over ----
@@ -11328,7 +11483,7 @@
     event.preventDefault();
     event.stopPropagation();
     if (explore.mode) {
-      exploreShowOverview();
+      exploreShowOverview("locality");
       return;
     }
     clearNavigation();
@@ -11337,7 +11492,7 @@
     event.preventDefault();
     event.stopPropagation();
     if (explore.mode) {
-      exploreShowOverview();
+      exploreShowOverview("locality");
       return;
     }
     clearNavigation();
@@ -11351,11 +11506,7 @@
     event.preventDefault();
     event.stopPropagation();
     cancelStartCountdown();
-    if (explore.mode && activeDestination && !(activeRoutePath && activeRoutePath.length >= 2)) {
-      await calculateRoute(getRouteOrigin(), activeDestination, activeDestination.name, { preview: false });
-      if (!(activeRoutePath && activeRoutePath.length >= 2)) return;
-    }
-    enterNavigation();
+    await pressRouteGo();
   });
   const startPlaceBtn = document.getElementById("startPlaceBtn");
   if (startPlaceBtn) {
