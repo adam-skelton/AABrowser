@@ -741,8 +741,9 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
-  const FREE_REF_TILT = 86;   // free follow: a little lower, looking along the road
+  const FREE_REF_TILT = 80;   // free follow: raised and tipped down so more of the street is in frame
   const FREE_REF_RANGE = 56;  // free follow base orbit, tighter than before
+  const FREE_REF_FOV = 47;    // free follow: a little wider than the nav chase view
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
   const MODEL_ALTITUDE_MODE = "CLAMP_TO_GROUND";
   const USE_HEADING_ARROW = false;
@@ -785,7 +786,7 @@
   // ---------------------------------------------------------------------------
   const FOLLOW = {
     CAR_SCREEN_Y: 0.60,     // heading-up: car sits above the ETA pill (0 = top, 1 = bottom)
-    FREE_CAR_SCREEN_Y: 0.91, // free follow: car lower, camera further behind
+    FREE_CAR_SCREEN_Y: 0.84, // free follow: car higher than the old low chase, so the aim is not so far up the road
     POS_TAU: 0.25,          // camera position ease time-constant (s)
     BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
     BRG_TAU_TURN: 0.35,     // ...and through a genuine turn
@@ -818,11 +819,9 @@
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
-    MIN_FREE_RANGE: 220,    // moving free floor; still above the roof, closer than the old wide orbit
-    STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked, frame the block instead of the bumper
-    STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again, back to the speed-band zoom
-    STILL_RANGE_NAV: 460,   // kept for free-follow callers; nav stays on the low-speed band when stopped
-    STILL_RANGE_FREE: 420,  // stopped free: the steep tilt otherwise sits on the roof
+    MIN_FREE_RANGE: 255,    // free follow distance; held while stopped so a red light does not zoom
+    STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked (blue-dot framing only; the camera range stays put)
+    STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
     HOLD_MPS: 2.0,          // ...and the course keeps updating while latched only above this
     REJOIN_CLOSE_M: 800,    // a few streets/blocks: fly straight back, no city hop
@@ -4306,17 +4305,12 @@
     return followStill;
   }
 
-  function stillFollowRange(){
-    return isNavigating() ? FOLLOW.STILL_RANGE_NAV : FOLLOW.STILL_RANGE_FREE;
-  }
-
   function freeFollowRange(){
     const view = viewTargets();
     const speed = speedKalman.speed || 0;
     const zoom = zoomBandForSpeed(speed);
     let range = view.range * (view.breathe ? rangeFactorForZoom(zoom) : 1);
-    if (view.breathe && followStill && !isNavigating()) range = Math.max(range, stillFollowRange());
-    else if (view.breathe && isNavigating()) range = Math.max(range, FOLLOW.MIN_DRIVE_RANGE);
+    if (view.breathe && isNavigating()) range = Math.max(range, FOLLOW.MIN_DRIVE_RANGE);
     else if (view.breathe) range = Math.max(range, FOLLOW.MIN_FREE_RANGE);
     return range;
   }
@@ -8568,7 +8562,7 @@
     let v;
     if (currentView === "high") v = { tilt: 62, range: 650, fov: 40, headingUp: true, breathe: false };
     else if (currentView === "top") v = { tilt: 0, range: 1300, fov: 35, headingUp: false, breathe: false };
-    else if (!isNavigating()) v = { tilt: FREE_REF_TILT, range: FREE_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
+    else if (!isNavigating()) v = { tilt: FREE_REF_TILT, range: FREE_REF_RANGE, fov: FREE_REF_FOV, headingUp: true, breathe: true };
     else v = { tilt: CAR_REF_TILT, range: CAR_REF_RANGE, fov: CAR_REF_FOV, headingUp: true, breathe: true };
     if (northUp && v.headingUp) {
       // North-up: fixed heading with the car centred, a little flatter and wider so the
@@ -9337,9 +9331,10 @@
     cam.zoom += (zoomBandForSpeed(cam.speedLP) - cam.zoom) * easeK(dtEase, FOLLOW.ZOOM_TAU);
     let tgtRange = cam.userRange != null ? cam.userRange
       : view.range * (view.breathe ? rangeFactorForZoom(cam.zoom) : 1);
-    const still = noteFollowStill(cam.speedLP);
-    if (cam.userRange == null && view.breathe && still && !isNavigating()) tgtRange = Math.max(tgtRange, stillFollowRange());
-    else if (cam.userRange == null && view.breathe && isNavigating()) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
+    noteFollowStill(cam.speedLP);
+    // Free follow keeps one range when the car stops. Pulling out to a "parked"
+    // orbit and back in on the next creep made the view zoom at traffic lights.
+    if (cam.userRange == null && view.breathe && isNavigating()) tgtRange = Math.max(tgtRange, FOLLOW.MIN_DRIVE_RANGE);
     else if (cam.userRange == null && view.breathe) tgtRange = Math.max(tgtRange, FOLLOW.MIN_FREE_RANGE);
     let tiltTarget = view.tilt;
     // Heading-up latch (Vela): the camera takes the car's course only once the car is
