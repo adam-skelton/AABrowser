@@ -744,7 +744,7 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
-  const FREE_REF_TILT = 80;   // free follow: raised and tipped down so more of the street is in frame
+  const FREE_REF_TILT = 83;   // free follow: halfway back down from the raised chase
   const FREE_REF_RANGE = 56;  // free follow base orbit, tighter than before
   const FREE_REF_FOV = 47;    // free follow: a little wider than the nav chase view
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
@@ -822,7 +822,7 @@
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
-    MIN_FREE_RANGE: 255,    // free follow distance; held while stopped so a red light does not zoom
+    MIN_FREE_RANGE: 238,    // free follow distance, halfway back from the higher orbit
     STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked (blue-dot framing only; the camera range stays put)
     STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
