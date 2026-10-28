@@ -791,8 +791,8 @@
     CAR_SCREEN_Y: 0.60,     // heading-up: car sits above the ETA pill (0 = top, 1 = bottom)
     FREE_CAR_SCREEN_Y: 0.84, // free follow: car higher than the old low chase, so the aim is not so far up the road
     POS_TAU: 0.25,          // camera position ease time-constant (s)
-    BRG_TAU_STILL: 1.6,     // camera heading damping while tracking a straight road
-    BRG_TAU_TURN: 0.35,     // ...and through a genuine turn
+    BRG_TAU_STILL: 0.35,    // camera heading. The orbit is far behind the car, so a slower lag sits the eye beside the road
+    BRG_TAU_TURN: 0.28,    // ...and through a genuine turn
     BRG_TURN_DEG: 25,       // heading error at which the damping is fully in "turn" mode
     BRG_MAX_RATE: 150,      // camera heading rate cap (deg/s); corners peak ~60-120, view switches would exceed it
     TILT_TAU: 0.55,
@@ -802,7 +802,7 @@
     FREE_RECKON_S: 2.5,     // free-follow dead-reckon cap (a dropped signal can't run the car away)
     FREE_GENTLE_M: 8,       // free-follow residual treated as GPS noise (gentle correction)...
     FREE_FULL_M: 30,        // ...and where the correction reaches full catch-up rate
-    FREE_HDG_TAU: 1.25,     // straight free-follow course (a raw GPS bearing chatters a few degrees)
+    FREE_HDG_TAU: 0.55,     // straight free-follow course. Slower than this holds the long look-ahead beside the lane
     FREE_HDG_TURN_DEG: 16,  // past a small deadband, this much error is a real turn
     FREE_CROSS_TAU: 3.6,    // sideways GPS error must not be eaten at half the car's speed
     FREE_CROSS_QUIET_M: 9,  // under this, the offset looks like fix noise, not a new lane
@@ -8674,7 +8674,7 @@
         // quickly swings the look-ahead point, and the swing gets wider as speed
         // zooms the camera out. A real turn is still allowed through.
         const errDeg = Number.isFinite(puck.heading) ? angleDelta(puck.heading, puck.freeHeading) : 0;
-        const turn = clamp((errDeg - 6) / FOLLOW.FREE_HDG_TURN_DEG, 0, 1);
+        const turn = clamp((errDeg - 2) / FOLLOW.FREE_HDG_TURN_DEG, 0, 1);
         const hdgTau = FOLLOW.FREE_HDG_TAU + (FOLLOW.CAR_BRG_TAU - FOLLOW.FREE_HDG_TAU) * turn;
         puck.heading = Number.isFinite(puck.heading) ? smoothBearing(puck.heading, puck.freeHeading, dtEase, hdgTau) : puck.freeHeading;
       }
@@ -9562,19 +9562,20 @@
       extra = 0.22;
       extraZoom = 0.12;
     }
-    // Aim along the CAMERA heading (not the car's), so the car stays on the screen's
-    // vertical centre line even while the camera's heading is still catching up in a turn.
-    // The look-ahead comes from the LIVE framing (exact car placement every frame) but
-    // blends toward the TARGET framing while in flight: from a 2 km overview the live
-    // value would aim a kilometre up the road and drop the car off the bottom edge.
+    // Aim along the road (the car's course), not the camera's own heading. The
+    // camera heading lags on purpose; aiming the long look-ahead along that lag
+    // puts the view beside the lane instead of over it.
     let lookM = 0;
     const fracY = carScreenY();
+    const travelHeading = view.headingUp && (cam.latched || puck.engaged) && Number.isFinite(puck.heading)
+      ? puck.heading
+      : cam.heading;
     if (view.headingUp && !fly && !(info && info.overhead) && !(cam.rejoinLift && cam.rejoinPhase !== "descend")) {
       const lookLive = lookAheadForFraction(cam.range, cam.tilt, cam.fov, fracY);
       const lookTarget = lookAheadForFraction(tgtRange, tiltTarget, view.fov, fracY);
       lookM = lerp(lookLive, lookTarget, flight);
     }
-    let aim = fly ? fly.point : (info && info.aim ? info.aim : (lookM > 0 ? lookAhead(car, cam.heading, lookM) : car));
+    let aim = fly ? fly.point : (info && info.aim ? info.aim : (lookM > 0 ? lookAhead(car, travelHeading, lookM) : car));
     if (!fly && cam.rejoinLift && cam.rejoinPhase === "rise" && cam.rejoinFrom) {
       aim = cam.rejoinFrom;
       lookM = 0;
@@ -9590,8 +9591,10 @@
         const groundToAim = Math.max(cam.range, 40) * Math.cos(toRad(clamp(cam.tilt, 5, 85)));
         const distToCar = Math.max(16, groundToAim - Math.max(0, lookM));
         const halfWAtCar = distToCar * Math.tan(hFovRad / 2);
-        const shift = clamp(dx * 2 * halfWAtCar, -0.32 * distToCar, 0.32 * distToCar);
-        aim = lookAhead(aim, cam.heading - 90, shift);
+        // A wide inset used to walk the aim off the left side of the road. A couple
+        // of metres still clears a thin rail without leaving the lane.
+        const shift = clamp(dx * 2 * halfWAtCar, -2.5, 2.5);
+        aim = lookAhead(aim, travelHeading - 90, shift);
       }
     }
 
@@ -9604,19 +9607,23 @@
       cam.lat += (aim.lat - cam.lat) * kPos;
       cam.lng += (aim.lng - cam.lng) * kPos;
     } else {
-      const off = trackOffset({ lat: cam.lat, lng: cam.lng }, aim, cam.heading);
-      const kCross = easeK(dtEase, FOLLOW.POS_TAU + extra + FOLLOW.CAM_CROSS_EXTRA);
+      const off = trackOffset({ lat: cam.lat, lng: cam.lng }, aim, travelHeading);
+      // A metre or two of sideways error is GPS chatter and should ease slowly.
+      // Anything wider is the camera sitting off the lane, and it has to come back.
+      const crossTau = Math.abs(off.cross) <= 2.5
+        ? FOLLOW.POS_TAU + extra + FOLLOW.CAM_CROSS_EXTRA
+        : FOLLOW.POS_TAU + extra;
+      const kCross = easeK(dtEase, crossTau);
       const alongStep = off.along * kPos;
       const crossStep = off.cross * kCross;
       let pos = { lat: cam.lat, lng: cam.lng };
-      if (alongStep) pos = lookAhead(pos, cam.heading, alongStep);
-      if (crossStep) pos = lookAhead(pos, cam.heading + 90, crossStep);
+      if (alongStep) pos = lookAhead(pos, travelHeading, alongStep);
+      if (crossStep) pos = lookAhead(pos, travelHeading + 90, crossStep);
       cam.lat = pos.lat;
       cam.lng = pos.lng;
     }
-    // Camera heading is adaptively damped: heavy while the error is a few degrees of
-    // road-geometry wiggle, quick once it's turn-sized. Google's grammar: a crisp car
-    // under a heavy camera.
+    // Camera heading tracks the road closely. The chase orbit sits a long way behind
+    // the look point, so a few degrees of lag puts the camera beside the lane.
     const db = ((headingTarget - cam.heading + 540) % 360) - 180;
     const brgTau = FOLLOW.BRG_TAU_STILL + (FOLLOW.BRG_TAU_TURN - FOLLOW.BRG_TAU_STILL) * Math.min(Math.abs(db) / FOLLOW.BRG_TURN_DEG, 1);
     // Rate cap: real corners peak well under it; it tames the half-circle swings of a
