@@ -1164,7 +1164,7 @@
         map3d.addEventListener(name, () => {
           if (name === "gmp-rangechange" || name === "gmp-fovchange" || name === "gmp-headingchange") syncCarLod();
           if (name === "gmp-rangechange") {
-            syncExploreClusters();
+            scheduleExploreClusters();
             applyExploreLabelMode();
             syncFreeZoomDot();
           }
@@ -4247,19 +4247,65 @@
   }
 
   function clearExploreMarkers(){
-    const doomed = explore.markers.splice(0, explore.markers.length);
+    if (exploreClusterTimer) {
+      window.clearTimeout(exploreClusterTimer);
+      exploreClusterTimer = 0;
+    }
+    exploreClusterRerun = false;
+    const doomed = [];
+    const seen = new Set();
+    const add = marker => {
+      if (!marker || seen.has(marker)) return;
+      seen.add(marker);
+      doomed.push(marker);
+    };
+    explore.markers.forEach(add);
+    if (explore.pinById) explore.pinById.forEach(add);
+    if (explore.clusterPool) explore.clusterPool.forEach(add);
+    if (map3d && map3d.querySelectorAll) map3d.querySelectorAll("[data-explore-marker]").forEach(add);
+    explore.markers.splice(0, explore.markers.length);
+    explore.pinById = null;
+    explore.clusterPool = null;
     doomed.forEach(detachMapMarker);
-    if (!map3d) return;
-    const kids = map3d.children ? Array.from(map3d.children) : [];
-    kids.forEach(node => {
-      if (node && (node._explorePlace || node._exploreCluster)) detachMapMarker(node);
+    if (!doomed.length) return;
+    // The 3D map can keep a pin through the same frame the camera jumps back
+    // to the car. Drop the same elements again once that frame has passed.
+    requestAnimationFrame(() => doomed.forEach(detachMapMarker));
+    window.setTimeout(() => doomed.forEach(detachMapMarker), 160);
+  }
+
+  const EXPLORE_BLANK_ICON = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+  function blankExploreIcons(marker){
+    const icons = [];
+    if (marker._pinImg) icons.push(marker._pinImg);
+    if (marker._iconImg) icons.push(marker._iconImg);
+    try {
+      marker.querySelectorAll("template").forEach(tpl => {
+        if (tpl.content) tpl.content.querySelectorAll("img").forEach(img => icons.push(img));
+      });
+    } catch (err) {}
+    icons.forEach(img => {
+      try {
+        img.src = EXPLORE_BLANK_ICON;
+        img.width = 1;
+        img.height = 1;
+        img.style.cssText = "width:1px;height:1px;display:block";
+      } catch (err) {}
     });
   }
 
   function detachMapMarker(marker){
     if (!marker) return;
-    try { marker.hidden = true; } catch (err) {}
-    try { marker.style.display = "none"; } catch (err) {}
+    // Clear the picture while the marker still has a position. Nulling the
+    // position first made the 3D map keep the last pin on screen.
+    blankExploreIcons(marker);
+    try {
+      const pos = marker.position;
+      const lat = pos && Number(pos.lat);
+      const lng = pos && Number(pos.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) marker.position = { lat: lat, lng: lng };
+    } catch (err) {}
     try { marker.remove(); } catch (err) {}
     try {
       const parent = marker.parentNode || marker.parentElement;
@@ -4582,9 +4628,13 @@
     return (EXPLORE_CLUSTER_PX / h) * 2 * Math.tan((fov * Math.PI / 180) / 2);
   }
 
+  function exploreCameraRange(){
+    if (exploreFly && exploreFly.to && Number.isFinite(exploreFly.to.range)) return Math.max(40, exploreFly.to.range);
+    return Math.max(40, Number(map3d && map3d.range) || 4000);
+  }
+
   function clusterThreshMetres(){
-    const range = Math.max(40, Number(map3d && map3d.range) || 4000);
-    return clamp(range * clusterMetresPerRange(), 12, 24000);
+    return clamp(exploreCameraRange() * clusterMetresPerRange(), 12, 24000);
   }
 
   function exploreGroupCenter(places){
@@ -4619,17 +4669,12 @@
   }
 
   function exploreGroups(places){
-    const selectedId = explore.selected && explore.selected.id;
     const pool = [];
-    let pinned = null;
     (places || []).forEach(place => {
       if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return;
-      if (selectedId && place.id === selectedId) pinned = place;
-      else pool.push(place);
+      pool.push(place);
     });
-    const groups = clusterByDistance(pool, clusterThreshMetres());
-    if (pinned) groups.push([pinned]);
-    return groups;
+    return clusterByDistance(pool, clusterThreshMetres());
   }
 
   function exploreClusterKey(groups){
@@ -4693,6 +4738,7 @@
       tilt: 42,
       heading: numOr(map3d.heading, 0)
     });
+    syncExploreClusters(true);
   }
 
   function makeExploreCluster(places){
@@ -4705,47 +4751,151 @@
       drawsWhenOccluded: true
     });
     marker._exploreCluster = places;
+    marker.setAttribute("data-explore-marker", "1");
     try { marker.anchorLeft = "-50%"; marker.anchorTop = "-50%"; } catch (err) {}
     const template = document.createElement("template");
-    template.content.append(exploreClusterNode(places.length));
+    const icon = exploreClusterNode(places.length);
+    marker._iconImg = icon;
+    template.content.append(icon);
     marker.append(template);
     const onPick = event => {
       try { event.preventDefault(); event.stopPropagation(); } catch (err) {}
       if (!acceptExplorePick()) return;
-      focusExploreCluster(places);
+      const current = marker._exploreCluster;
+      if (!current || current.length < 2) return;
+      focusExploreCluster(current);
     };
     marker.addEventListener("gmp-click", onPick);
     marker.addEventListener("click", onPick);
     return marker;
   }
 
+  let exploreClusterBusy = false;
+  let exploreClusterRerun = false;
+  let exploreClusterTicks = 0;
+  let exploreClusterTimer = 0;
+
+  function scheduleExploreClusters(){
+    if (!explore.mode) return;
+    if (exploreClusterTimer) window.clearTimeout(exploreClusterTimer);
+    exploreClusterTimer = window.setTimeout(() => {
+      exploreClusterTimer = 0;
+      syncExploreClusters(false);
+    }, 80);
+  }
+
+  function explorePlaceKey(place){
+    return place && (place.id || (Number(place.lat).toFixed(5) + "," + Number(place.lng).toFixed(5)));
+  }
+
+  function hideExploreMarker(marker){
+    if (!marker || marker._exploreHidden) return;
+    marker._exploreHidden = true;
+    try { marker.remove(); } catch (err) {}
+    try {
+      const parent = marker.parentNode || marker.parentElement;
+      if (parent && typeof parent.removeChild === "function") parent.removeChild(marker);
+    } catch (err) {}
+  }
+
+  function showExploreMarker(marker, lat, lng){
+    if (!marker) return;
+    marker._exploreHidden = false;
+    try { marker.position = { lat: lat, lng: lng }; } catch (err) {}
+    if (map3d && !marker.parentElement) {
+      try { map3d.append(marker); } catch (err) {}
+    }
+  }
+
+  function claimExplorePin(place){
+    if (!explore.pinById) explore.pinById = new Map();
+    const key = explorePlaceKey(place);
+    let marker = explore.pinById.get(key);
+    if (marker) return marker;
+    marker = makeExploreMarker(place);
+    explore.pinById.set(key, marker);
+    explore.markers.push(marker);
+    if (map3d) {
+      try { map3d.append(marker); } catch (err) {}
+    }
+    return marker;
+  }
+
+  function claimExploreCluster(places){
+    if (!explore.clusterPool) explore.clusterPool = [];
+    const count = places.length;
+    let marker = null;
+    for (let i = 0; i < explore.clusterPool.length; i++) {
+      const item = explore.clusterPool[i];
+      if (item._exploreHidden && item._exploreCount === count) {
+        marker = item;
+        break;
+      }
+    }
+    if (!marker) {
+      marker = makeExploreCluster(places);
+      marker._exploreCount = count;
+      explore.clusterPool.push(marker);
+      explore.markers.push(marker);
+      if (map3d) {
+        try { map3d.append(marker); } catch (err) {}
+      }
+    }
+    marker._exploreCluster = places;
+    return marker;
+  }
+
   function syncExploreClusters(force){
+    if (exploreClusterBusy) {
+      exploreClusterRerun = true;
+      return;
+    }
     if (!explore.mode || !map3d || !explore.places.length) return;
-    const groups = exploreGroups(explore.places);
-    const key = exploreClusterKey(groups);
-    if (!force && key === explore.clusterKey && explore.markers.length) return;
-    const next = [];
-    groups.forEach(group => {
-      try {
-        next.push(group.length > 1 ? makeExploreCluster(group) : makeExploreMarker(group[0]));
-      } catch (err) {
-        console.warn("explore marker failed", err);
+    if (exploreClusterTicks > 4) return;
+    if (exploreClusterTimer) {
+      window.clearTimeout(exploreClusterTimer);
+      exploreClusterTimer = 0;
+    }
+    exploreClusterTicks += 1;
+    exploreClusterBusy = true;
+    try {
+      const groups = exploreGroups(explore.places);
+      const key = exploreClusterKey(groups);
+      if (force || key !== explore.clusterKey || !explore.markers.length) {
+        const used = new Set();
+        groups.forEach(group => {
+          try {
+            if (group.length > 1) {
+              const marker = claimExploreCluster(group);
+              const center = exploreGroupCenter(group);
+              showExploreMarker(marker, center.lat, center.lng);
+              used.add(marker);
+            } else {
+              const marker = claimExplorePin(group[0]);
+              showExploreMarker(marker, group[0].lat, group[0].lng);
+              used.add(marker);
+            }
+          } catch (err) {
+            console.warn("explore marker failed", err);
+          }
+        });
+        if (used.size) {
+          explore.markers.forEach(marker => {
+            if (!used.has(marker)) hideExploreMarker(marker);
+          });
+          explore.clusterKey = key;
+          explore.labelBucket = null;
+          applyExploreLabelMode(true);
+        }
       }
-    });
-    if (!next.length) return;
-    clearExploreMarkers();
-    next.forEach(marker => {
-      try {
-        map3d.append(marker);
-        explore.markers.push(marker);
-      } catch (err) {
-        console.warn("explore marker failed", err);
-        detachMapMarker(marker);
-      }
-    });
-    explore.clusterKey = key;
-    explore.labelBucket = null;
-    applyExploreLabelMode(true);
+    } finally {
+      exploreClusterBusy = false;
+      exploreClusterTicks -= 1;
+    }
+    if (exploreClusterRerun) {
+      exploreClusterRerun = false;
+      syncExploreClusters(true);
+    }
   }
 
   function makeExploreMarker(place){
@@ -4758,6 +4908,7 @@
     };
     const marker = new Ctor(opts);
     marker._explorePlace = place;
+    marker.setAttribute("data-explore-marker", "1");
     try { marker.label = null; } catch (err) {}
     const template = document.createElement("template");
     const ids = labeledExploreIds(explore.places, Number(map3d && map3d.range));
@@ -4934,6 +5085,15 @@
     syncExploreClusters(true);
     updateRecenterButton();
     setMessage(explore.title || customMapTitle());
+  }
+
+  function exploreAtFullMap(){
+    if (!map3d || !explore.mode) return true;
+    const ov = explore.overview || computeExploreOverview(explore.places);
+    if (!ov || !(ov.range > 0)) return true;
+    if (exploreFly && exploreFly.to && Number.isFinite(exploreFly.to.range) && exploreFly.to.range < ov.range * 0.85) return false;
+    const range = numOr(map3d.range, 0);
+    return !(range > 0) || range >= ov.range * 0.85;
   }
 
   function exitExploreMode(){
@@ -11585,6 +11745,10 @@
     exploreBackBtn.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
+      if (!document.body.classList.contains("has-route") && !exploreAtFullMap()) {
+        exploreShowOverview();
+        return;
+      }
       exitExploreMode();
       clearNavigation();
       recenterToCar();

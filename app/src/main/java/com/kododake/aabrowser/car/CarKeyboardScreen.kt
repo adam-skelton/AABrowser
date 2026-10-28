@@ -376,6 +376,16 @@ class CarKeyboardScreen(
         return value.replace(Regex("\\s+"), " ").trim().take(80)
     }
 
+    // The head unit only shows a handful of rows. Debug is the last catalog
+    // entry, so it has to take the final visible row instead of being cut off.
+    private fun suggestionsThatFit(room: Int): List<SearchSuggestion> {
+        if (room <= 0) return emptyList()
+        if (suggestions.size <= room) return suggestions
+        val debug = suggestions.firstOrNull { it.placeId == "__map:debug" } ?: return suggestions.take(room)
+        val rest = suggestions.filter { it.placeId != "__map:debug" }
+        return rest.take(room - 1) + debug
+    }
+
     private fun suggestionList(): ItemList {
         val builder = ItemList.Builder()
         var room = listLimit()
@@ -401,7 +411,7 @@ class CarKeyboardScreen(
             builder.setNoItemsMessage(carContext.getString(R.string.car_keyboard_empty))
             return builder.build()
         }
-        suggestions.take(room).forEach { hit ->
+        suggestionsThatFit(room).forEach { hit ->
             val title = clipRowText(hit.title).ifBlank { return@forEach }
             val row = Row.Builder().setTitle(title)
             val subtitle = clipRowText(hit.subtitle)
@@ -433,6 +443,7 @@ class CarKeyboardScreen(
             "atm" -> R.drawable.ic_cat_atm to 0xFF188038
             "hospital" -> R.drawable.ic_cat_hospital to 0xFFD93025
             "lodging" -> R.drawable.ic_cat_hotel to 0xFF5F6368
+            "debug" -> R.drawable.ic_cat_debug to 0xFF5F6368
             else -> R.drawable.ic_cat_place to 0L
         }
         val builder = CarIcon.Builder(IconCompat.createWithResource(carContext, res))
