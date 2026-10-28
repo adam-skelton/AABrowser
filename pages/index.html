@@ -244,6 +244,8 @@
     body.aa-car #buttonRow button,body.aa-car #buttonRow select {background:#2E3134; color:#fff}
     html.aa-car:not(.debug-open) #buttonRow,body.aa-car:not(.debug-open) #buttonRow {opacity:0; pointer-events:none}
     html.aa-car.debug-open #buttonRow,body.aa-car.debug-open #buttonRow {opacity:1; pointer-events:auto; transform:none}
+    #debugClose {display:none; width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; align-items:center; justify-content:center; font-size:26px; line-height:1}
+    html.aa-car.debug-open #debugClose,body.aa-car.debug-open #debugClose {display:inline-flex}
     html:not(.aa-car) #carApiBtn,body:not(.aa-car) #carApiBtn {display:none}
     #viewPicker {position:relative; display:inline-flex}
     #viewSelectBtn {white-space:nowrap}
@@ -444,23 +446,24 @@
     </div>
     <div id="searchResults" hidden></div>
     <div id="buttonRow">
+      <button id="debugClose" type="button" aria-label="Close debug">&times;</button>
       <div id="zoomMod">
         <button type="button" id="zoomModOut" aria-label="Zoom out">−</button>
         <span id="zoomModLabel">Nav 1 · Free 4</span>
         <button type="button" id="zoomModIn" aria-label="Zoom in">+</button>
       </div>
-      <button id="gpsBtn" type="button">Start GPS</button>
-      <button id="followBtn" type="button">Following: ON</button>
+      <button id="gpsBtn" type="button" data-debug-dismiss>Start GPS</button>
+      <button id="followBtn" type="button" data-debug-dismiss>Following: ON</button>
       <button id="labelsBtn" type="button">Labels: OFF</button>
-      <button id="demoBtn" type="button">Drive route demo</button>
-      <button id="turnCueTestBtn" type="button">Turn cue test</button>
-      <button id="playTurnCueBtn" type="button">Play turn audio</button>
-      <button id="fenceWalkTestBtn" type="button">Fence walk test</button>
-      <button id="bumpRoadTestBtn" type="button">Bump road test</button>
-      <button id="privateTailTestBtn" type="button">Private tail test</button>
-      <button id="freeFollowBtn" type="button">Free follow</button>
-      <button id="randomBtn" type="button">Random route</button>
-      <button id="navCardTestBtn" type="button">Nav card</button>
+      <button id="demoBtn" type="button" data-debug-dismiss>Drive route demo</button>
+      <button id="turnCueTestBtn" type="button" data-debug-dismiss>Turn cue test</button>
+      <button id="playTurnCueBtn" type="button" data-debug-dismiss>Play turn audio</button>
+      <button id="fenceWalkTestBtn" type="button" data-debug-dismiss>Fence walk test</button>
+      <button id="bumpRoadTestBtn" type="button" data-debug-dismiss>Bump road test</button>
+      <button id="privateTailTestBtn" type="button" data-debug-dismiss>Private tail test</button>
+      <button id="freeFollowBtn" type="button" data-debug-dismiss>Free follow</button>
+      <button id="randomBtn" type="button" data-debug-dismiss>Random route</button>
+      <button id="navCardTestBtn" type="button" data-debug-dismiss>Nav card</button>
       <button id="viewSpecBtn" type="button">View controls</button>
       <button id="carApiBtn" type="button">API level</button>
       <button id="hostProbeBtn" type="button">Car host</button>
@@ -11520,6 +11523,18 @@
   }
 
   document.getElementById("gpsBtn").addEventListener("click",toggleGps);
+  document.getElementById("buttonRow").addEventListener("click", event => {
+    if (!event.target.closest("[data-debug-dismiss]")) return;
+    if (window.__aaSetDebugOverlay) window.__aaSetDebugOverlay(false);
+  }, true);
+  const debugCloseBtn = document.getElementById("debugClose");
+  if (debugCloseBtn) {
+    debugCloseBtn.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (window.__aaSetDebugOverlay) window.__aaSetDebugOverlay(false);
+    });
+  }
   document.getElementById("followBtn").addEventListener("click",toggleFollow);
   document.getElementById("labelsBtn").addEventListener("click",toggleLabels);
   document.getElementById("demoBtn").addEventListener("click",startRouteDemo);
