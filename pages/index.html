@@ -186,22 +186,22 @@
     #navPrimary {height:auto; overflow:visible}
     #navBanner {height:auto; overflow:visible}
     #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:normal; overflow:visible}
-    #navThen {display:none; flex-direction:column; align-items:flex-start; gap:2px; width:max-content; padding:6px 14px 7px 12px; border-radius:14px; background:#1E8E3E; color:#fff; font-size:16px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
+    #navThen {display:none; flex-direction:column; align-items:flex-start; gap:3px; width:max-content; padding:8px 16px 9px 14px; border-radius:16px; background:#1E8E3E; color:#fff; font-size:18px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
-    #navThenTop {display:flex; align-items:center; gap:8px}
-    #navThenDist {font-size:14px; font-weight:750; letter-spacing:-.2px; line-height:1.1; font-variant-numeric:tabular-nums; opacity:.94}
-    #navThenIcon {width:28px; height:28px; display:flex}
-    #navThenIcon svg {width:28px; height:28px; display:block; overflow:visible; color:#fff}
+    #navThenTop {display:flex; align-items:center; gap:10px}
+    #navThenDist {font-size:18px; font-weight:750; letter-spacing:-.2px; line-height:1.1; font-variant-numeric:tabular-nums; opacity:.94}
+    #navThenIcon {width:34px; height:34px; display:flex}
+    #navThenIcon svg {width:34px; height:34px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
-    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:0; padding:5px 16px 5px 8px; border-radius:28px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:10px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
+    #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:48px; padding:8px 24px 8px 15px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:16px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
     #navEtaBar.visible {display:flex !important}
-    #navExit {width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
+    #navExit {width:56px; height:56px; min-height:56px; padding:0; border-radius:50%; background:rgba(255,255,255,.10); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .15s ease}
     #navExit:active {background:rgba(255,255,255,.18); transform:none}
-    #navExit svg {width:22px; height:22px; display:block}
-    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; text-align:center}
-    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:22px; font-weight:800; letter-spacing:-.3px; line-height:1.05; color:#81C995; font-variant-numeric:tabular-nums}
-    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; overflow:hidden; font-size:15px; font-weight:650; line-height:1.1; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
+    #navExit svg {width:28px; height:28px; display:block}
+    #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; text-align:center}
+    #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:24px; font-weight:800; letter-spacing:-.3px; line-height:1.08; color:#81C995; font-variant-numeric:tabular-nums}
+    #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; overflow:hidden; font-size:17px; font-weight:650; line-height:1.15; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
     #navEtaSep {display:none; flex:0 0 auto; opacity:.55; font-weight:700; line-height:1}
     #navEtaSep.visible {display:inline}
     #navEtaDist,#navEtaClock {flex:0 0 auto}
@@ -3057,10 +3057,10 @@
     parkingApproachLines = [];
   }
 
-  // The drive route ends on the road. When that leaves a gap to the parking pin,
-  // close it with a straight segment. The exact aisle path is not known.
-  // Held back while a route to the parking lot is still being calculated, because
-  // that recalculation can move the path a long way.
+  // The drive often ends on the road outside a lot or building. Close a short gap
+  // to that pin with a straight segment. Street parking sits on the drive end, so
+  // it never needs this, and a line to the destination would cut across houses.
+  // Held back while a route to the parking lot is still being calculated.
   function drawParkingApproach(path){
     clearParkingApproach();
     if (suppressParkingApproach) return;
@@ -3071,18 +3071,35 @@
     if (!end || !Number.isFinite(end.lat) || !Number.isFinite(end.lng)) return;
     const lot = parkingNear.selected;
     const dest = activeDestination;
-    let target = null;
-    if (lot && Number.isFinite(lot.lat) && Number.isFinite(lot.lng) && !(dest && destIsSamePlace(dest, lot))) target = lot;
-    else if (dest && Number.isFinite(dest.lat) && Number.isFinite(dest.lng)) target = dest;
-    if (!target || distanceMetres(end, target) < 8) return;
+    if (!keepDriveToParkingLot(lot)) return;
+    if (!Number.isFinite(lot.lat) || !Number.isFinite(lot.lng)) return;
+    if (dest && destIsSamePlace(dest, lot)) return;
+    const gap = distanceMetres(end, lot);
+    if (gap < 8 || gap > 120) return;
     try {
       const line = makeRouteLine([
         { lat: end.lat, lng: end.lng },
-        { lat: target.lat, lng: target.lng }
+        { lat: lot.lat, lng: lot.lng }
       ], ROUTE_COLOURS.NORMAL, 21);
       map3d.append(line);
       parkingApproachLines.push(line);
     } catch (err) {}
+  }
+
+  // Street parking can be shortened so the drive stops at the front. Keep that pin
+  // on the new end so a second parking mark and a cross-block approach do not appear.
+  function snapStreetParkingToDriveEnd(end, dest){
+    const lot = parkingNear.selected;
+    if (!lot || keepDriveToParkingLot(lot) || !end || !Number.isFinite(end.lat)) return;
+    if (distanceMetres(lot, end) <= 28) return;
+    lot.lat = end.lat;
+    lot.lng = end.lng;
+    lot.dragged = false;
+    if (dest && Number.isFinite(dest.lat)) lot.walkM = distanceMetres(dest, lot);
+    if (!lot.parkKind) lot.parkKind = "street";
+    clearParkingApproach();
+    drawParkingMarker(lot, dest || activeDestination);
+    updateParkingRow();
   }
 
   function walkNodeKey(lat, lng){
@@ -3610,8 +3627,9 @@
       if (id !== parkingNear.walkId) return;
       clearParkingWalk();
     }
-    const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : [from, to];
-    if (to && drawn.length && distanceMetres(drawn[drawn.length - 1], to) > 6) {
+    const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : null;
+    if (!drawn || drawn.length < 2) return;
+    if (to && distanceMetres(drawn[drawn.length - 1], to) > 6 && distanceMetres(drawn[drawn.length - 1], to) < 40) {
       drawn.push({ lat: to.lat, lng: to.lng });
     }
     drawDottedWalk(drawn);
@@ -3970,9 +3988,27 @@
         releaseParkingApproach();
         return;
       }
+      let walked = null;
+      try {
+        const w = await walkAccessFrom(path[path.length - 1], dest);
+        walked = w && w.path;
+      } catch (err) {}
+      if (id !== routeGen || isNavigating()) {
+        releaseParkingApproach();
+        return;
+      }
+      const overlap = keepDriveToParkingLot(lot)
+        ? { path: path, walk: walked, trimmedM: 0 }
+        : trimDriveWalkOverlap(path, walked);
+      let usePath = overlap.path || path;
+      const useWalk = overlap.walk || walked;
+      let useIntervals = intervals;
+      if (overlap.trimmedM > 0) {
+        useIntervals = routeTrafficIntervals(route, usePath);
+        snapStreetParkingToDriveEnd(usePath[usePath.length - 1], dest);
+      }
       suppressParkingApproach = false;
-      adoptRoute(route, path, intervals, dest, false, null);
-      drawParkingWalk(lot, dest);
+      adoptRoute(route, usePath, useIntervals, dest, false, useWalk);
     } catch (err) {
       console.warn("Parking reroute failed", err);
       releaseParkingApproach();
@@ -4671,13 +4707,31 @@
     return groups.map(group => group.places);
   }
 
+  function explorePinType(place){
+    const color = String((place && (place.color || place.iconBg)) || "").toLowerCase();
+    const glyph = String((place && place.glyph) || "");
+    return color + "|" + glyph;
+  }
+
+  function exploreGroupColor(places){
+    const raw = places && places[0] && (places[0].color || places[0].iconBg);
+    const s = String(raw || "#1A73E8");
+    return /^#[0-9a-fA-F]{6}$/.test(s) ? s : "#1A73E8";
+  }
+
   function exploreGroups(places){
-    const pool = [];
+    const pools = new Map();
     (places || []).forEach(place => {
       if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return;
-      pool.push(place);
+      const key = explorePinType(place);
+      if (!pools.has(key)) pools.set(key, []);
+      pools.get(key).push(place);
     });
-    return clusterByDistance(pool, clusterThreshMetres());
+    const groups = [];
+    pools.forEach(pool => {
+      clusterByDistance(pool, clusterThreshMetres()).forEach(group => groups.push(group));
+    });
+    return groups;
   }
 
   function exploreClusterKey(groups){
@@ -4695,28 +4749,44 @@
     return true;
   }
 
-  function exploreClusterIconUrl(count){
+  function exploreClusterIconUrl(count, color){
     const n = Math.max(2, count | 0);
+    const fill = /^#[0-9a-fA-F]{6}$/.test(String(color || "")) ? color : "#1A73E8";
     const label = n > 99 ? "99+" : String(n);
     const size = n >= 10 ? 56 : 48;
     const font = n > 99 ? 16 : 20;
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
-      '<circle cx="' + (size / 2) + '" cy="' + (size / 2) + '" r="' + (size / 2 - 2) + '" fill="#1A73E8" stroke="#fff" stroke-width="3"/>' +
+      '<circle cx="' + (size / 2) + '" cy="' + (size / 2) + '" r="' + (size / 2 - 2) + '" fill="' + fill + '" stroke="#fff" stroke-width="3"/>' +
       '<text x="50%" y="54%" text-anchor="middle" fill="#fff" font-size="' + font + '" font-weight="700" font-family="system-ui,Segoe UI,sans-serif">' + label + '</text></svg>';
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
 
-  function exploreClusterNode(count){
+  function exploreClusterNode(count, color){
     const n = Math.max(2, count | 0);
     const size = n >= 10 ? 56 : 48;
     const img = document.createElement("img");
     img.alt = n + " places";
-    img.src = exploreClusterIconUrl(n);
+    img.src = exploreClusterIconUrl(n, color);
     img.width = size;
     img.height = size;
     img.draggable = false;
     img.style.cssText = "width:" + size + "px;height:" + size + "px;display:block";
     return img;
+  }
+
+  function paintExploreCluster(marker, places){
+    if (!marker) return;
+    const count = places.length;
+    const color = exploreGroupColor(places);
+    marker._exploreCount = count;
+    marker._exploreColor = color;
+    if (!marker._iconImg) return;
+    const size = count >= 10 ? 56 : 48;
+    marker._iconImg.src = exploreClusterIconUrl(count, color);
+    marker._iconImg.width = size;
+    marker._iconImg.height = size;
+    marker._iconImg.alt = count + " places";
+    marker._iconImg.style.cssText = "width:" + size + "px;height:" + size + "px;display:block";
   }
 
   function focusExploreCluster(places){
@@ -4757,7 +4827,7 @@
     marker.setAttribute("data-explore-marker", "1");
     try { marker.anchorLeft = "-50%"; marker.anchorTop = "-50%"; } catch (err) {}
     const template = document.createElement("template");
-    const icon = exploreClusterNode(places.length);
+    const icon = exploreClusterNode(places.length, exploreGroupColor(places));
     marker._iconImg = icon;
     template.content.append(icon);
     marker.append(template);
@@ -4837,7 +4907,6 @@
     }
     if (!marker) {
       marker = makeExploreCluster(places);
-      marker._exploreCount = count;
       explore.clusterPool.push(marker);
       explore.markers.push(marker);
       if (map3d) {
@@ -4845,6 +4914,7 @@
       }
     }
     marker._exploreCluster = places;
+    paintExploreCluster(marker, places);
     return marker;
   }
 
@@ -5441,24 +5511,52 @@
     if (!drivePath || drivePath.length < 4 || !walkPath || walkPath.length < 2) {
       return { path: drivePath, walk: walkPath, trimmedM: 0 };
     }
-    const nearM = 22;
-    let firstOverlap = drivePath.length;
-    for (let i = drivePath.length - 1; i >= 2; i--) {
-      if (distPointToWay(drivePath[i], walkPath) <= nearM) firstOverlap = i;
-      else break;
-    }
-    if (firstOverlap >= drivePath.length - 1) return { path: drivePath, walk: walkPath, trimmedM: 0 };
     const cum = cumulativeLengths(drivePath);
-    const trimmedM = (cum[cum.length - 1] || 0) - (cum[firstOverlap] || 0);
+    const total = cum[cum.length - 1] || 0;
+    if (total < 40) return { path: drivePath, walk: walkPath, trimmedM: 0 };
+    // The walk often starts at a side lot, leaves the road, then comes back to the
+    // entrance further along the drive. A continuous suffix misses that gap, so
+    // the car parks past the front and the dotted line walks back down the road.
+    const nearM = 28;
+    const minM = Math.max(0, total - 700);
+    let cutM = total;
+    for (let i = 0; i < walkPath.length; i++) {
+      const p = walkPath[i];
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) continue;
+      for (let j = 1; j < drivePath.length; j++) {
+        if (cum[j] < minM || cum[j - 1] > total - 8) continue;
+        const pr = projectOnSegment(p, drivePath[j - 1], drivePath[j]);
+        if (distanceMetres(p, pr.point) > nearM) continue;
+        const along = cum[j - 1] + pr.t * (cum[j] - cum[j - 1]);
+        if (along < cutM) cutM = along;
+      }
+    }
+    const trimmedM = total - cutM;
     if (trimmedM < 40) return { path: drivePath, walk: walkPath, trimmedM: 0 };
-    const path = drivePath.slice(0, firstOverlap + 1);
-    const end = path[path.length - 1];
+    let idx = 1;
+    while (idx < drivePath.length && cum[idx] < cutM) idx++;
+    if (idx >= drivePath.length) idx = drivePath.length - 1;
+    const prev = Math.max(0, idx - 1);
+    const seg = Math.max(1, cum[idx] - cum[prev]);
+    const t = clamp((cutM - cum[prev]) / seg, 0, 1);
+    const end = {
+      lat: lerp(drivePath[prev].lat, drivePath[idx].lat, t),
+      lng: lerp(drivePath[prev].lng, drivePath[idx].lng, t)
+    };
+    const path = drivePath.slice(0, idx);
+    if (!path.length || distanceMetres(path[path.length - 1], end) > 1) path.push(end);
+    if (path.length < 2) return { path: drivePath, walk: walkPath, trimmedM: 0 };
     let bestI = 0, bestD = Infinity;
     for (let i = 0; i < walkPath.length; i++) {
       const d = distanceMetres(end, walkPath[i]);
       if (d < bestD) { bestD = d; bestI = i; }
     }
     return { path: path, walk: snapWalkToDriveEnd(end, walkPath.slice(bestI)), trimmedM: trimmedM };
+  }
+
+  function keepDriveToParkingLot(lot){
+    const kind = lot && lot.parkKind;
+    return kind === "lot" || kind === "building";
   }
 
   function bucklandsEndsOnFencedDriveway(end, dest){
@@ -5563,9 +5661,12 @@
     }
     const visualEnd = (driven && driven.length) ? driven[driven.length - 1] : driveEnd;
     const lot = parkingNear.selected;
-    const walkFrom = (lot && Number.isFinite(lot.lat) && destination && !destIsSamePlace(destination, lot))
+    let walkFrom = (lot && Number.isFinite(lot.lat) && destination && !destIsSamePlace(destination, lot))
       ? lot
       : visualEnd;
+    if (walkPath && walkPath.length >= 2 && visualEnd && distanceMetres(walkPath[0], visualEnd) < 35) {
+      walkFrom = { lat: visualEnd.lat, lng: visualEnd.lng };
+    }
     if (destination && walkFrom && !destIsSamePlace(destination, walkFrom)) {
       drawParkingWalk(walkFrom, destination, walkPath);
     } else {
@@ -5672,11 +5773,16 @@
             useWalk = w && w.path;
           } catch (err) {}
         }
-        const overlap = trimDriveWalkOverlap(usePath, useWalk);
+        const overlap = keepDriveToParkingLot(parkingNear.selected)
+          ? { path: usePath, walk: useWalk, trimmedM: 0 }
+          : trimDriveWalkOverlap(usePath, useWalk);
         usePath = overlap.path || usePath;
         useWalk = overlap.walk || useWalk;
+        if (overlap.trimmedM > 0) {
+          useIntervals = routeTrafficIntervals(useRoute, usePath);
+          snapStreetParkingToDriveEnd(usePath[usePath.length - 1], dest);
+        }
         if ((refined && refined.drive && refined.drive.path) || overlap.trimmedM > 0) {
-          if (overlap.trimmedM > 0) useIntervals = routeTrafficIntervals(useRoute, usePath);
           if (gen !== routeGen) return;
           adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
         } else if (useWalk) {
@@ -7069,7 +7175,7 @@
         thenEl.classList.add("visible");
         if (thenIcon.dataset.maneuver !== nextTurn) {
           thenIcon.dataset.maneuver = nextTurn;
-          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 28);
+          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 34);
         }
         const thenDist = document.getElementById("navThenDist");
         const nextLabel = formatTurnDistance(Math.max(0, next.m - progressM)).replace(" ", "");
@@ -8451,6 +8557,43 @@
     if (show) el.textContent = String(speedLimit.current);
   }
 
+  // The drawn car dead-reckons along the route, so it will drive around a corner the
+  // driver has not taken, then snap back once GPS is clearly still on the old road.
+  // Hold at that corner while a trustworthy course still matches the road behind and
+  // not the road ahead. At 50 km/h and over, look further and treat a milder bend as
+  // a turn. Unknown or stopped headings are left alone.
+  function missedTurnHoldM(path, cum, alongM, gpsHeading, speedMps){
+    if (!Number.isFinite(gpsHeading) || !Number.isFinite(alongM) || !path || path.length < 2) return null;
+    if (!(speedMps >= 2)) return null;
+    const total = cum[cum.length - 1] || 0;
+    if (alongM >= total - 12) return null;
+    const fast = speedMps >= 50 / 3.6;
+    const look = fast ? 90 : 55;
+    const back = fast ? 100 : 50;
+    const turnMin = fast ? 32 : 45;
+    const agreeIn = fast ? 28 : 38;
+    const leaveOut = fast ? 42 : 55;
+    const past = fast ? 35 : 55;
+    const from = Math.max(0, alongM - back);
+    const to = Math.min(total, alongM + look);
+    const incoming = pointAtMetres(path, cum, from).bearing;
+    if (!Number.isFinite(incoming)) return null;
+    let corner = null;
+    for (let m = from; m <= to; m += 6) {
+      const seg = pointAtMetres(path, cum, m);
+      if (Number.isFinite(seg.bearing) && angleDelta(incoming, seg.bearing) >= turnMin) {
+        corner = m;
+        break;
+      }
+    }
+    if (corner == null || alongM > corner + past) return null;
+    const out = pointAtMetres(path, cum, Math.min(total, corner + 12)).bearing;
+    if (!Number.isFinite(out)) return null;
+    if (angleDelta(gpsHeading, incoming) > agreeIn) return null;
+    if (angleDelta(gpsHeading, out) < leaveOut) return null;
+    return corner;
+  }
+
   // Port of Vela's nav fix block: forward-only map matching with a plausibility gate,
   // then the along-route position filter takes the fix as a MEASUREMENT.
   function ingestRouteFix(fix, now){
@@ -8474,7 +8617,18 @@
       // Not yet engaged (nav start / new route): one global acquisition, then forward-only.
       snap = snapToRouteWindowed(me, fix.bearingOk ? fix.heading : null, path, cum, -Infinity, Infinity, FOLLOW.SNAP_MAX_M + 13);
     }
-    if (snap) {
+    const hold = puck.engaged
+      ? missedTurnHoldM(path, cum, puck.progressM, (kSpeed >= 2 && fix.bearingOk) ? fix.heading : null, kSpeed)
+      : null;
+    let heldCorner = false;
+    if (snap && hold != null && snap.metres > hold + 12) {
+      // Still on the road, just not through the corner. Don't advance, and don't
+      // treat the rejected match as a miss or the car re-acquires past the turn.
+      puck.missCount = 0;
+      puck.fwdRejects = 0;
+      heldCorner = true;
+    }
+    if (snap && !heldCorner) {
       const m = snap.metres;
       let accepted = false, reanchor = false;
       if (!puck.engaged) {
@@ -8516,7 +8670,7 @@
         else alongFilter.update(m, fix.accuracy);
         puck.speedAtAccept = speedKalman.speed;
       }
-    } else if (puck.engaged) {
+    } else if (puck.engaged && !heldCorner) {
       // Nothing ahead within tolerance: a spike or we've left the route. Hold and keep
       // dead-reckoning; a short run of misses disengages to re-acquire globally.
       puck.missCount += 1;
@@ -8631,7 +8785,14 @@
       const maxCatchUp = speed * 1.5 + 2;
       const maxHoldBack = speed * 0.25 + 0.5;
       const corr = clamp(err / FOLLOW.CORRECT_TIME_S, -maxHoldBack, maxCatchUp);
+      const before = puck.progressM;
       puck.progressM = clamp(puck.progressM + Math.max(0, (speed + corr) * dtRaw), 0, total);
+      const gpsH = (speed >= 2 && fix.bearingOk) ? fix.heading : null;
+      const hold = missedTurnHoldM(path, cum, before, gpsH, speed);
+      if (hold != null) {
+        puck.progressM = Math.min(puck.progressM, hold);
+        if (alongFilter.seeded && alongFilter.alongM > hold) alongFilter.alongM = hold;
+      }
       // Lateral de-jitter: boxcar average across a speed-scaled along-route window, so
       // lane-level kinks in the polyline cancel instead of wobbling the whole view. The
       // window WIDTH eases slowly (it tracks town vs motorway, not per-fix speed noise).
@@ -12568,7 +12729,7 @@
     if (thenEl && thenIcon) {
       thenEl.hidden = false;
       thenEl.classList.add("visible");
-      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 28);
+      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 34);
       const thenDist = document.getElementById("navThenDist");
       if (thenDist) thenDist.textContent = "180m";
     }
