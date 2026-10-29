@@ -3003,6 +3003,14 @@
     return /\b(petrol|gas station|fuel station|service station)\b/i.test(String(dest.name || ""));
   }
 
+  function sameDriveTarget(a, b){
+    if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) return false;
+    const idA = usablePlaceId(a.placeId);
+    const idB = usablePlaceId(b.placeId);
+    if (idA && idA === idB) return true;
+    return distanceMetres(a, b) < 28;
+  }
+
   async function pickDriveDestination(dest, opts){
     if (!dest || !Number.isFinite(dest.lat)) return dest;
     if (isFuelStop(dest)) return dest;
@@ -3486,6 +3494,17 @@
     return spreadAccessByBearing(clustered, dest, 2, 8).sort((a, b) => a.d - b.d).slice(0, 12);
   }
 
+  function hasPlausibleParkingStop(dest){
+    return (parkingNear.options || []).some(lot => {
+      if (!lot || !Number.isFinite(lot.lat)) return false;
+      if (dest && destIsSamePlace(dest, lot)) return false;
+      const walk = Number.isFinite(lot.walkM) ? lot.walkM : (dest ? distanceMetres(dest, lot) : Infinity);
+      if (lot.parkKind === "street") return !lot.busyRoad && walk < 220;
+      if (lot.parkKind === "building") return walk < (dest && destIsBusyCentre(dest) ? 400 : 80);
+      return walk < 220;
+    });
+  }
+
   async function refineDriveByWalk(origin, dest, drivePath){
     if (!dest || !drivePath || drivePath.length < 2) return null;
     const driveEnd = drivePath[drivePath.length - 1];
@@ -3497,18 +3516,22 @@
       if (!Number.isFinite(lot.lat) || destIsSamePlace(dest, lot)) return;
       if (distanceMetres(driveEnd, lot) < 28) return;
       if (lot.parkKind === "building" && !destIsBusyCentre(dest) && !(Number(lot.walkM) < 80)) return;
-      candidates.push({ kind: "parking", lot: lot, lat: lot.lat, lng: lot.lng, name: lot.name, placeId: lot.placeId });
+      candidates.push({ kind: "parking", lot: lot, lat: lot.lat, lng: lot.lng, name: lot.name, placeId: lot.placeId, walkM: lot.walkM });
     });
-    try {
-      const roads = await nearbyPublicAccessPoints(dest, 320);
-      roads.forEach(p => {
-        if (distanceMetres(driveEnd, p) < 32) return;
-        if (candidates.some(c => distanceMetres(c, p) < 36)) return;
-        candidates.push({ kind: "street", lat: p.lat, lng: p.lng, name: "Street access" });
-      });
-    } catch (err) {}
-    const parkingC = candidates.filter(c => c.kind === "parking").slice(0, 3);
-    const streets = candidates.filter(c => c.kind === "street");
+    // A real parking stop is already in hand. Skip the extra road search and only
+    // fully walk the closest contenders. The winner still has to beat this end.
+    const streets = [];
+    if (!hasPlausibleParkingStop(dest)) {
+      try {
+        const roads = await nearbyPublicAccessPoints(dest, 320);
+        roads.forEach(p => {
+          if (distanceMetres(driveEnd, p) < 32) return;
+          if (candidates.some(c => distanceMetres(c, p) < 36)) return;
+          streets.push({ kind: "street", lat: p.lat, lng: p.lng, name: "Street access", walkM: p.d });
+        });
+      } catch (err) {}
+    }
+    const parkingC = candidates.filter(c => c.kind === "parking").sort((a, b) => (a.walkM || 0) - (b.walkM || 0));
     const opp = Math.atan2(driveEnd.lat - dest.lat, driveEnd.lng - dest.lng) + Math.PI;
     streets.sort((a, b) => {
       const ang = p => {
@@ -3517,7 +3540,11 @@
       };
       return ang(a) - ang(b);
     });
-    const toScore = parkingC.concat(streets.slice(0, 4)).slice(0, 7);
+    const toScore = [];
+    if (parkingC[0]) toScore.push(parkingC[0]);
+    if (streets[0]) toScore.push(streets[0]);
+    if (toScore.length < 2 && parkingC[1]) toScore.push(parkingC[1]);
+    if (toScore.length < 2 && streets[1]) toScore.push(streets[1]);
     const scored = await Promise.all(toScore.map(async c => {
       const w = await walkAccessFrom(c, dest, { skipGoogle: true });
       return Object.assign({}, c, w);
@@ -4225,7 +4252,7 @@
     return lots.slice().sort(byWalk)[0];
   }
 
-  async function fetchParkingNear(dest){
+  async function fetchParkingNear(dest, opts){
     if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) {
       clearParkingOverlay();
       return;
@@ -4233,7 +4260,8 @@
     const key = dest.lat.toFixed(5) + "," + dest.lng.toFixed(5);
     const id = ++parkingNear.requestId;
     parkingNear.destKey = key;
-    if (dest.kind === "parking") setSelectedParking(dest, dest);
+    const selectOpts = (opts && opts.skipReroute) ? { skipReroute: true } : null;
+    if (dest.kind === "parking") setSelectedParking(dest, dest, selectOpts);
     else hideParkingRow();
     const googleP = queryGoogleParking(dest, PARKING_NEAR_FALLBACK_M).catch(() => []);
     // The working Overpass server often takes around eight seconds. A short race
@@ -4286,7 +4314,7 @@
         });
       } catch (err) {}
       if (!lots.length) {
-        if (dest.kind === "parking") setSelectedParking(dest, dest);
+        if (dest.kind === "parking") setSelectedParking(dest, dest, selectOpts);
         return;
       }
       try {
@@ -4311,11 +4339,11 @@
       }
       parkingNear.options = lots;
       const pick = chooseParking(lots, dest);
-      setSelectedParking(pick, dest);
+      setSelectedParking(pick, dest, selectOpts);
     } catch (err) {
       if (id !== parkingNear.requestId) return;
       console.warn("Parking lookup unavailable", err);
-      if (dest.kind === "parking") setSelectedParking(dest, dest);
+      if (dest.kind === "parking") setSelectedParking(dest, dest, selectOpts);
     }
   }
 
@@ -5750,15 +5778,31 @@
       const gen = ++routeGen;
       const fuelStop = isFuelStop(dest);
       if (fuelStop) clearParkingOverlay();
-      const parkingP = fuelStop ? Promise.resolve() : fetchParkingNear(destination);
       const fast = !!(opts && opts.refineWalk === false);
-      if (!fuelStop && !fast) {
-        try {
-          await Promise.race([
-            parkingP,
-            new Promise(resolve => setTimeout(resolve, 900))
-          ]);
-        } catch (err) {}
+      const settle = !fuelStop && !fast;
+      const parkingP = fuelStop ? Promise.resolve() : fetchParkingNear(destination, settle ? { skipReroute: true } : null);
+      const originPt = { lat: origin.lat, lng: origin.lng };
+      const specDest = {
+        lat: destination.lat,
+        lng: destination.lng,
+        name: destination.name,
+        placeId: usablePlaceId(destination.placeId)
+      };
+      // The drive to the place runs while parking is looked up. It is drawn only
+      // when that place is still the stop. A moved stop gets one later request.
+      const speculativeP = settle
+        ? requestRoute(originPt, specDest, true).catch(err => {
+          console.warn("Early drive failed", err);
+          return null;
+        })
+        : null;
+      if (settle) {
+        try { removeRouteLines(); } catch (err) {}
+        try { await parkingP; } catch (err) {}
+      }
+      if (gen !== routeGen) {
+        if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
+        return;
       }
       const driveTo = fuelStop ? dest : await pickDriveDestination(destination, { skipOsm: fast });
       if (gen !== routeGen) {
@@ -5766,33 +5810,32 @@
         return;
       }
       activeDriveTo = driveTo;
-      let { route, path, intervals } = await requestRoute({ lat: origin.lat, lng: origin.lng }, driveTo, true, { skipTrim: fast });
+      let routeP = (speculativeP && sameDriveTarget(specDest, driveTo)) ? speculativeP : null;
+      if (!routeP) routeP = requestRoute(originPt, driveTo, true, { skipTrim: fast });
+      // Compare other stops while this drive is still being calculated.
+      const stop = { lat: driveTo.lat, lng: driveTo.lng };
+      const refineP = settle
+        ? refineDriveByWalk(originPt, destination, [stop, { lat: stop.lat + 0.00002, lng: stop.lng }])
+        : null;
+      let routed = await routeP;
+      if (!routed || !routed.path || routed.path.length < 2) {
+        routed = await requestRoute(originPt, driveTo, true, { skipTrim: fast });
+      }
       if (gen !== routeGen) {
         if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
         return;
       }
-      const lotNow = parkingNear.selected;
-      const parkReroute = !fuelStop && lotNow && Number.isFinite(lotNow.lat) && !destIsSamePlace(dest, lotNow) && distanceMetres(driveTo, lotNow) > 28;
-      if (parkReroute) {
-        suppressParkingApproach = true;
-        clearParkingApproach();
-      }
-      adoptRoute(route, path, intervals, dest, false, null);
-      if (parkReroute) rerouteDriveToParking(lotNow, dest);
-      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, route.distanceMeters, { keepPreview: true });
-      else if (!noCard) maybeStartRouteCountdown();
-      if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
-      if (fuelStop) return;
-
-      const applyRefine = async () => {
-        try { await parkingP; } catch (err) {}
+      let useRoute = routed.route;
+      let usePath = routed.path;
+      let useIntervals = routed.intervals;
+      let useWalk = null;
+      if (settle) {
+        let refined = await refineP;
+        const arrived = usePath[usePath.length - 1];
+        if (arrived && distanceMetres(arrived, stop) > 35) {
+          refined = await refineDriveByWalk(originPt, destination, usePath);
+        }
         if (gen !== routeGen) return;
-        const refined = await refineDriveByWalk({ lat: origin.lat, lng: origin.lng }, destination, path);
-        if (gen !== routeGen) return;
-        let useRoute = route;
-        let usePath = path;
-        let useIntervals = intervals;
-        let useWalk = null;
         if (refined && refined.drive && refined.drive.path) {
           useRoute = refined.drive.route;
           usePath = refined.drive.path;
@@ -5808,6 +5851,7 @@
             useWalk = w && w.path;
           } catch (err) {}
         }
+        if (gen !== routeGen) return;
         const overlap = keepDriveToParkingLot(parkingNear.selected)
           ? { path: usePath, walk: useWalk, trimmedM: 0 }
           : trimDriveWalkOverlap(usePath, useWalk);
@@ -5817,21 +5861,12 @@
           useIntervals = routeTrafficIntervals(useRoute, usePath);
           snapStreetParkingToDriveEnd(usePath[usePath.length - 1], dest);
         }
-        if ((refined && refined.drive && refined.drive.path) || overlap.trimmedM > 0) {
-          if (gen !== routeGen) return;
-          adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
-        } else if (useWalk) {
-          const lot = parkingNear.selected;
-          const end = (lot && Number.isFinite(lot.lat)) ? lot : usePath[usePath.length - 1];
-          drawParkingWalk(end, dest, useWalk);
-        }
-      };
-      if (opts && opts.refineWalk === false) {
-        parkingP.catch(() => {});
-        return;
       }
-      if (opts && opts.waitRefine) await applyRefine();
-      else applyRefine().catch(err => console.warn("Walk access refine failed", err));
+      adoptRoute(useRoute, usePath, useIntervals, dest, false, useWalk);
+      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, useRoute && useRoute.distanceMeters, { keepPreview: true });
+      else if (!noCard) maybeStartRouteCountdown();
+      if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
+      if (fast) parkingP.catch(() => {});
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
