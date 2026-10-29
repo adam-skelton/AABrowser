@@ -4224,60 +4224,20 @@
     return rest[0] || null;
   }
 
-  function drawFaintDashed(pts, color, onM, offM){
+  function drawFaintDrive(pts){
     if (!map3d || typeof Polyline3DElement === "undefined" || !pts || pts.length < 2) return;
-    let drawing = true, acc = 0;
-    let seg = [{ lat: pts[0].lat, lng: pts[0].lng }];
-    const flush = () => {
-      if (seg.length >= 2) {
-        try {
-          const line = new Polyline3DElement({
-            path: seg.map(p => ({ lat: p.lat, lng: p.lng })),
-            strokeColor: color,
-            strokeWidth: 3.2,
-            altitudeMode: MODEL_ALTITUDE_MODE,
-            drawsOccludedSegments: true,
-            zIndex: 5
-          });
-          map3d.append(line);
-          parkingAltLines.push(line);
-        } catch (err) {}
-      }
-      seg = seg.length ? [seg[seg.length - 1]] : [];
-    };
-    for (let i = 1; i < pts.length; i++) {
-      let a = seg.length ? seg[seg.length - 1] : pts[i - 1];
-      const b = pts[i];
-      let left = distanceMetres(a, b);
-      if (!(left > 0.4)) continue;
-      while (left > 0.4) {
-        const room = (drawing ? onM : offM) - acc;
-        if (room < 0.5) {
-          if (drawing) flush();
-          drawing = !drawing;
-          acc = 0;
-          continue;
-        }
-        if (left <= room + 0.2) {
-          if (drawing) seg.push({ lat: b.lat, lng: b.lng });
-          else seg = [{ lat: b.lat, lng: b.lng }];
-          acc += left;
-          left = 0;
-        } else {
-          const t = Math.max(0.02, Math.min(0.98, room / left));
-          const mid = { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
-          if (drawing) {
-            seg.push(mid);
-            flush();
-          } else seg = [mid];
-          drawing = !drawing;
-          acc = 0;
-          a = mid;
-          left = distanceMetres(a, b);
-        }
-      }
-    }
-    if (drawing) flush();
+    try {
+      const line = new Polyline3DElement({
+        path: pts.map(p => ({ lat: p.lat, lng: p.lng })),
+        strokeColor: "#8AB4F8",
+        strokeWidth: 3.4,
+        altitudeMode: MODEL_ALTITUDE_MODE,
+        drawsOccludedSegments: true,
+        zIndex: 4
+      });
+      map3d.append(line);
+      parkingAltLines.push(line);
+    } catch (err) {}
   }
 
   function drawAlternateMarker(lot){
@@ -4349,7 +4309,7 @@
     const cached = alt.drivePath;
     const sameOrigin = alt.driveFrom && distanceMetres(alt.driveFrom, origin) < 160;
     if (cached && cached.length >= 2 && sameOrigin) {
-      drawFaintDashed(cached, "#8AB4F8", 80, 54);
+      drawFaintDrive(cached);
       return;
     }
     if (parkingNear.holdAltDrive) {
@@ -4362,7 +4322,7 @@
       if (!path || path.length < 2) return;
       alt.drivePath = path;
       alt.driveFrom = { lat: origin.lat, lng: origin.lng };
-      drawFaintDashed(path, "#8AB4F8", 80, 54);
+      drawFaintDrive(path);
       try { rememberTrip(null, null, null, null); } catch (err) {}
     }).catch(() => {});
   }
