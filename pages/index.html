@@ -468,6 +468,7 @@
       <button id="randomBtn" type="button" data-debug-dismiss>Random route</button>
       <button id="navCardTestBtn" type="button" data-debug-dismiss>Nav card</button>
       <button id="flyPreviewBtn" type="button" data-debug-dismiss>Fly preview</button>
+      <button id="clearTripCacheBtn" type="button">Clear route cache</button>
       <button id="viewSpecBtn" type="button">View controls</button>
       <button id="carApiBtn" type="button">API level</button>
       <button id="hostProbeBtn" type="button">Car host</button>
@@ -2607,7 +2608,7 @@
 
   const PARKING_NEAR_M = 420;
   const PARKING_NEAR_FALLBACK_M = 850;
-  const parkingNear = { requestId: 0, walkId: 0, destKey: "", options: [], selected: null };
+  const parkingNear = { requestId: 0, walkId: 0, destKey: "", options: [], selected: null, holdAltDrive: false, altDrivePending: false };
   let routeGen = 0;
 
   function osmCoord(el){
@@ -2952,119 +2953,158 @@
     }
   }
 
-  async function quietStreetParking(dest){
-    if (!dest || !Number.isFinite(dest.lat)) return null;
-    const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
-    const around = "(around:170," + lat + "," + lng + ")";
-    const query = "[out:json][timeout:8];(" +
-      'way["highway"~"^(residential|unclassified|living_street|tertiary)$"]["access"!="private"]["service"!="driveway"]' + around + ";" +
-      'way["highway"~"^(footway|path|steps|pedestrian)$"]["access"!="private"]["foot"!="no"]' + around + ";" +
-      ");out geom tags;";
-    try {
-      const json = await overpassJson(query, 12000, OVERPASS_MIRRORS.slice(0, 2));
-      const pathPts = [];
-      const byRoad = new Map();
-      (json.elements || []).forEach(el => {
-        const hw = String((el.tags || {}).highway || "");
-        if (!/^(footway|path|steps|pedestrian)$/.test(hw)) return;
-        (el.geometry || []).forEach(g => {
-          if (g && Number.isFinite(g.lat) && Number.isFinite(g.lon)) pathPts.push({ lat: g.lat, lng: g.lon });
+  function streetLotFromGate(s){
+    const walkM = s.walkM;
+    return {
+      id: "street-near-" + s.point.lat.toFixed(5) + "," + s.point.lng.toFixed(5),
+      name: s.name ? s.name + " street parking" : "Street parking",
+      roadName: s.name || "",
+      named: !!s.name,
+      lat: s.point.lat,
+      lng: s.point.lng,
+      approach: { lat: s.point.lat, lng: s.point.lng },
+      color: "#1A73E8",
+      iconHref: "",
+      kind: "parking",
+      parkKind: "street",
+      busyRoad: false,
+      walkM,
+      walkPath: s.path,
+      score: 500 - walkM,
+      parking: { fee: "", capacity: 0, access: "", type: "street", line: formatDistance(walkM) + " walk · Street" },
+      description: "Street parking",
+      snippet: "Street parking"
+    };
+  }
+
+  // Resolves with the closest real street entrance as soon as it is proven.
+  // A second entrance is reported through onUpdate and does not delay the first.
+  function quietStreetParking(dest, onUpdate){
+    let resolveFirst;
+    const firstP = new Promise(resolve => { resolveFirst = resolve; });
+    (async () => {
+      let announced = false;
+      const finish = list => {
+        if (announced) return;
+        announced = true;
+        resolveFirst(list || []);
+      };
+      if (!dest || !Number.isFinite(dest.lat)) { finish([]); return; }
+      const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
+      const around = "(around:170," + lat + "," + lng + ")";
+      const query = "[out:json][timeout:8];(" +
+        'way["highway"~"^(residential|unclassified|living_street|tertiary)$"]["access"!="private"]["service"!="driveway"]' + around + ";" +
+        'way["highway"~"^(footway|path|steps|pedestrian)$"]["access"!="private"]["foot"!="no"]' + around + ";" +
+        ");out geom tags;";
+      try {
+        const json = await overpassJson(query, 12000, OVERPASS_MIRRORS.slice(0, 2));
+        const roads = [];
+        const pathEnds = [];
+        const pathWays = [];
+        (json.elements || []).forEach(el => {
+          const tags = el.tags || {};
+          const hw = String(tags.highway || "");
+          const geom = el.geometry || [];
+          if (geom.length < 2) return;
+          if (/^(footway|path|steps|pedestrian)$/.test(hw)) {
+            const pts = [];
+            geom.forEach(g => {
+              if (g && Number.isFinite(g.lat)) pts.push({ lat: g.lat, lng: g.lon });
+            });
+            if (pts.length >= 2) {
+              pathEnds.push(pts[0], pts[pts.length - 1]);
+              pathWays.push(pts);
+            }
+            return;
+          }
+          if (isNoParkingLane(tags)) return;
+          const segs = [];
+          for (let i = 1; i < geom.length; i++) {
+            const a = geom[i - 1], b = geom[i];
+            if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
+            segs.push([{ lat: a.lat, lng: a.lon }, { lat: b.lat, lng: b.lon }]);
+          }
+          if (!segs.length) return;
+          const name = String(tags.name || "").trim();
+          roads.push({ key: name || ("way-" + el.id), name: name, segs: segs });
         });
-      });
-      const nearPath = p => {
-        for (let i = 0; i < pathPts.length; i++) {
-          if (distanceMetres(p, pathPts[i]) <= 18) return true;
-        }
-        return false;
-      };
-      (json.elements || []).forEach(el => {
-        const tags = el.tags || {};
-        const hw = String(tags.highway || "");
-        const geom = el.geometry || [];
-        if (/^(footway|path|steps|pedestrian)$/.test(hw)) return;
-        if (isNoParkingLane(tags)) return;
-        const name = String(tags.name || "").trim();
-        const key = name || ("way-" + el.id);
-        let point = null, bestD = Infinity, gate = null, gateD = Infinity;
-        for (let i = 1; i < geom.length; i++) {
-          const a = geom[i - 1], b = geom[i];
-          if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
-          const pr = projectOnSegment(dest, { lat: a.lat, lng: a.lon }, { lat: b.lat, lng: b.lon });
-          const d = distanceMetres(dest, pr.point);
-          if (d < bestD) { bestD = d; point = pr.point; }
-          if (d < gateD && nearPath(pr.point)) { gateD = d; gate = pr.point; }
-        }
-        if (gate) { point = gate; bestD = gateD; }
-        if (!point || bestD > 170) return;
-        const prev = byRoad.get(key);
-        if (!prev || bestD < prev.d) byRoad.set(key, { point: point, d: bestD, name: name, entrance: !!gate });
-      });
-      const roads = Array.from(byRoad.values());
-      const entrances = roads.filter(r => r.entrance);
-      // Rank the kerb where a walkway meets the road. A routed walk can zigzag
-      // through broken path fragments and hide the opposite entrance.
-      const candidates = (entrances.length ? entrances : roads).sort((a, b) => a.d - b.d).slice(0, 4);
-      if (!candidates.length) return [];
-      let barriers = [];
-      try { barriers = await fetchBarrierSegs(dest, 180); } catch (err) {}
-      const shortcut = point => {
-        let near = null, nearD = Infinity;
-        for (let i = 0; i < pathPts.length; i++) {
-          const d = distanceMetres(dest, pathPts[i]);
-          if (d < nearD) { nearD = d; near = pathPts[i]; }
-        }
-        const path = [{ lat: point.lat, lng: point.lng }];
-        if (near && distanceMetres(point, near) > 8) path.push(near);
-        path.push({ lat: dest.lat, lng: dest.lng });
-        if (barriers.length && pathCrossesBarriers(path, barriers, 4)) return null;
-        return { path: path, walkM: walkPathLengthM(path) };
-      };
-      const scored = [];
-      for (let i = 0; i < candidates.length; i++) {
-        const c = candidates[i];
-        let walked = null;
-        try { walked = await walkAccessFrom(c.point, dest, { skipGoogle: true }); } catch (err) {}
-        let walkM = walked && Number.isFinite(walked.walkM) ? walked.walkM : c.d;
-        let path = walked && walked.path && walked.path.length >= 2 ? walked.path : null;
-        if (c.entrance && walkM > c.d * 1.65) {
-          const alt = shortcut(c.point);
-          if (alt && alt.walkM + 15 < walkM) { walkM = alt.walkM; path = alt.path; }
-        }
-        scored.push({ point: c.point, name: c.name, walkM: walkM, path: path });
-      }
-      scored.sort((a, b) => a.walkM - b.walkM);
-      const keep = [];
-      for (let i = 0; i < scored.length && keep.length < 2; i++) {
-        const s = scored[i];
-        if (s.walkM > 220) break;
-        if (keep.length && s.walkM > keep[0].walkM + 90 && s.walkM > 180) break;
-        keep.push(s);
-      }
-      return keep.map(s => {
-        const walkM = s.walkM;
-        return {
-          id: "street-near-" + s.point.lat.toFixed(5) + "," + s.point.lng.toFixed(5),
-          name: s.name ? s.name + " street parking" : "Street parking",
-          named: !!s.name,
-          lat: s.point.lat,
-          lng: s.point.lng,
-          approach: { lat: s.point.lat, lng: s.point.lng },
-          color: "#1A73E8",
-          iconHref: "",
-          kind: "parking",
-          parkKind: "street",
-          busyRoad: false,
-          walkM,
-          walkPath: s.path,
-          score: 500 - walkM,
-          parking: { fee: "", capacity: 0, access: "", type: "street", line: formatDistance(walkM) + " walk · Street" },
-          description: "Street parking",
-          snippet: "Street parking"
+        const snapRoad = p => {
+          let best = null;
+          for (let r = 0; r < roads.length; r++) {
+            const road = roads[r];
+            for (let s = 0; s < road.segs.length; s++) {
+              const pr = projectOnSegment(p, road.segs[s][0], road.segs[s][1]);
+              const gap = distanceMetres(p, pr.point);
+              if (gap > 24) continue;
+              const crow = distanceMetres(dest, pr.point);
+              if (crow > 170) continue;
+              if (!best || gap < best.gap) best = { key: road.key, name: road.name, point: pr.point, gap: gap, crow: crow };
+            }
+          }
+          return best;
         };
-      });
-    } catch (err) {
-      return null;
-    }
+        const gates = [];
+        const addGate = hit => {
+          if (!hit) return;
+          if (gates.some(g => g.key === hit.key && distanceMetres(g.point, hit.point) < 32)) return;
+          gates.push(hit);
+        };
+        pathEnds.forEach(end => addGate(snapRoad(end)));
+        pathWays.forEach(pts => {
+          let best = null;
+          for (let i = 0; i < pts.length; i++) {
+            const hit = snapRoad(pts[i]);
+            if (!hit || hit.gap > 12) continue;
+            if (!best || hit.gap + 1 < best.gap || (hit.gap <= best.gap + 1 && hit.crow < best.crow)) best = hit;
+          }
+          addGate(best);
+        });
+        gates.sort((a, b) => a.crow - b.crow);
+        const ranked = gates.slice(0, 10);
+        const byRoad = new Map();
+        let sentKey = "";
+        const rowsNow = () => Array.from(byRoad.values()).sort((a, b) => a.walkM - b.walkM);
+        const publish = () => {
+          const rows = rowsNow().filter(s => s.walkM <= 320).slice(0, 2);
+          if (!rows.length) return;
+          const list = rows.map(streetLotFromGate);
+          const key = list.map(s => s.id).join("|");
+          if (!announced) {
+            announced = true;
+            sentKey = list[0].id;
+            resolveFirst(list.slice(0, 1));
+          }
+          if (list.length > 1 && key !== sentKey && typeof onUpdate === "function") {
+            sentKey = key;
+            onUpdate(list);
+          }
+        };
+        for (let i = 0; i < ranked.length; i++) {
+          const g = ranked[i];
+          const rows = rowsNow();
+          const best = rows[0];
+          const second = rows[1];
+          if (announced && second && g.crow > second.walkM) break;
+          if (!announced && best && g.crow > best.walkM) publish();
+          let walked = null;
+          try { walked = await walkAccessFrom(g.point, dest, { skipGoogle: true }); } catch (err) {}
+          if (!walked || walked.blocked || !walked.path || walked.path.length < 2) continue;
+          if (walkPathLooksStraightFake(walked.path, g.point, dest)) continue;
+          const walkM = walked.walkM;
+          if (!(walkM > 0) || walkM > 400) continue;
+          const prev = byRoad.get(g.key);
+          if (!prev || walkM + 8 < prev.walkM) {
+            byRoad.set(g.key, { point: g.point, name: g.name, walkM: walkM, path: walked.path });
+            if (announced) publish();
+          }
+        }
+        publish();
+        finish(rowsNow().filter(s => s.walkM <= 320).slice(0, 1).map(streetLotFromGate));
+      } catch (err) {
+        finish([]);
+      }
+    })();
+    return firstP;
   }
 
   function usablePlaceId(value){
@@ -3175,11 +3215,15 @@
   function snapStreetParkingToDriveEnd(end, dest){
     const lot = parkingNear.selected;
     if (!lot || keepDriveToParkingLot(lot) || !end || !Number.isFinite(end.lat)) return;
-    if (distanceMetres(lot, end) <= 28) return;
+    const shift = distanceMetres(lot, end);
+    if (shift <= 28 || shift > 50) return;
     lot.lat = end.lat;
     lot.lng = end.lng;
     lot.dragged = false;
-    if (dest && Number.isFinite(dest.lat)) lot.walkM = distanceMetres(dest, lot);
+    if (lot.walkPath && lot.walkPath.length >= 2) {
+      lot.walkPath = snapWalkToDriveEnd(end, lot.walkPath.map(p => ({ lat: p.lat, lng: p.lng })));
+      lot.walkM = walkPathLengthM(lot.walkPath);
+    }
     if (!lot.parkKind) lot.parkKind = "street";
     clearParkingApproach();
     drawParkingMarker(lot, dest || activeDestination);
@@ -3537,7 +3581,7 @@
     if (!walkPathLooksUsable(path, from, to)) {
       try { path = await fetchOsmWalkPathGraph(from, to); } catch (err) { console.warn("OSM walk graph failed", err); }
     }
-    if (!walkPathLooksUsable(path, from, to)) return [from, to];
+    if (!walkPathLooksUsable(path, from, to)) return null;
     walkPathCache[key] = { at: Date.now(), path: path };
     return path.slice();
   }
@@ -3727,39 +3771,47 @@
     return out;
   }
 
-  function drawDottedWalk(pts){
+  function drawDottedWalk(pts, opts){
     if (!map3d || !Polyline3DElement || !pts || pts.length < 2) return;
+    const bucket = (opts && opts.bucket) || parkingWalkLines;
+    const color = (opts && opts.color) || "#4CA3FF";
+    const haloColor = (opts && opts.halo) || "#FFFFFF";
+    const z = (opts && opts.z) || 9;
+    const width = (opts && opts.width) || 4.5;
+    const haloWidth = (opts && opts.haloWidth) || 7;
     const flat = densifyWalkPath(pts, 2);
-    const on = 3;
-    const off = 2;
+    const on = (opts && opts.on) || 3;
+    const off = (opts && opts.off) || 2;
     let i = 0;
     while (i < flat.length - 1) {
       const end = Math.min(flat.length - 1, i + on);
       if (end > i) {
         const seg = flat.slice(i, end + 1);
-        try {
-          const halo = new Polyline3DElement({
-            path: seg,
-            strokeColor: "#FFFFFF",
-            strokeWidth: 7,
-            altitudeMode: MODEL_ALTITUDE_MODE,
-            drawsOccludedSegments: true,
-            zIndex: 8
-          });
-          map3d.append(halo);
-          parkingWalkLines.push(halo);
-        } catch (err) {}
+        if (haloWidth > 0) {
+          try {
+            const halo = new Polyline3DElement({
+              path: seg,
+              strokeColor: haloColor,
+              strokeWidth: haloWidth,
+              altitudeMode: MODEL_ALTITUDE_MODE,
+              drawsOccludedSegments: true,
+              zIndex: z - 1
+            });
+            map3d.append(halo);
+            bucket.push(halo);
+          } catch (err) {}
+        }
         try {
           const line = new Polyline3DElement({
             path: seg,
-            strokeColor: "#4CA3FF",
-            strokeWidth: 4.5,
+            strokeColor: color,
+            strokeWidth: width,
             altitudeMode: MODEL_ALTITUDE_MODE,
             drawsOccludedSegments: true,
-            zIndex: 9
+            zIndex: z
           });
           map3d.append(line);
-          parkingWalkLines.push(line);
+          bucket.push(line);
         } catch (err) {}
       }
       i = end + off;
@@ -3797,10 +3849,18 @@
     }
     const drawn = path && path.length >= 2 ? snapWalkToDriveEnd(from, path) : null;
     if (!drawn || drawn.length < 2) return;
+    if (walkPathLooksStraightFake(drawn, from, to)) return;
     if (to && distanceMetres(drawn[drawn.length - 1], to) > 6 && distanceMetres(drawn[drawn.length - 1], to) < 40) {
       drawn.push({ lat: to.lat, lng: to.lng });
     }
     drawDottedWalk(drawn);
+    const lot = parkingNear.selected;
+    if (lot && from && distanceMetres(from, lot) < 35) {
+      lot.walkPath = drawn;
+      lot.walkM = walkPathLengthM(drawn);
+      updateParkingRow();
+      try { rememberTrip(null, null, null, null); } catch (err) {}
+    }
   }
 
   function attachPreviewParking(lot, dest){
@@ -4149,13 +4209,19 @@
 
   function parkingAlternateLot(selected){
     const sel = selected || parkingNear.selected;
-    let best = null;
+    const rest = [];
     (parkingNear.options || []).forEach(lot => {
       if (!lot || !Number.isFinite(lot.lat) || !Number.isFinite(lot.walkM)) return;
       if (sel && (lot === sel || (lot.id && lot.id === sel.id))) return;
-      if (!best || lot.walkM < best.walkM) best = lot;
+      rest.push(lot);
     });
-    return best;
+    const byWalk = (a, b) => a.walkM - b.walkM;
+    const walked = rest.filter(l => l.parkKind === "street" && !l.busyRoad && l.walkM < 320 && l.walkPath && l.walkPath.length >= 2);
+    if (walked.length) return walked.sort(byWalk)[0];
+    const streets = rest.filter(l => l.parkKind === "street" && !l.busyRoad && l.walkM < 320);
+    if (streets.length) return streets.sort(byWalk)[0];
+    rest.sort(byWalk);
+    return rest[0] || null;
   }
 
   function drawFaintDashed(pts, color, onM, offM){
@@ -4263,21 +4329,31 @@
   }
 
   let altParkingGen = 0;
-  function syncParkingAlternate(){
-    const gen = ++altParkingGen;
-    clearParkingAlternate();
-    const alt = parkingAlternateLot(parkingNear.selected);
-    if (!alt || !activeDestination) return;
-    parkingNear.alternate = alt;
-    const from = alt.approach && Number.isFinite(alt.approach.lat) ? alt.approach : alt;
-    drawAlternateMarker(alt);
-    if (alt.walkPath && alt.walkPath.length >= 2) drawFaintDashed(alt.walkPath, "#A8C7FA", 8, 7);
+  function paintAltWalk(alt){
+    if (!alt || !alt.walkPath || alt.walkPath.length < 2) return;
+    drawDottedWalk(alt.walkPath, {
+      bucket: parkingAltLines,
+      color: "#C5D7F2",
+      halo: "#F7F9FC",
+      z: 6,
+      width: 2.2,
+      haloWidth: 3,
+      on: 2,
+      off: 5
+    });
+  }
+  function requestAltDrive(alt, gen){
     const origin = getRouteOrigin();
-    if (!origin || !Number.isFinite(origin.lat) || isNavigating() || !RouteClass) return;
+    if (!alt || !origin || !Number.isFinite(origin.lat) || isNavigating() || !RouteClass) return;
+    const from = alt.approach && Number.isFinite(alt.approach.lat) ? alt.approach : alt;
     const cached = alt.drivePath;
-    const sameOrigin = alt.driveFrom && distanceMetres(alt.driveFrom, origin) < 40;
+    const sameOrigin = alt.driveFrom && distanceMetres(alt.driveFrom, origin) < 160;
     if (cached && cached.length >= 2 && sameOrigin) {
       drawFaintDashed(cached, "#8AB4F8", 80, 54);
+      return;
+    }
+    if (parkingNear.holdAltDrive) {
+      parkingNear.altDrivePending = true;
       return;
     }
     requestRoute({ lat: origin.lat, lng: origin.lng }, { lat: from.lat, lng: from.lng, name: alt.name }, false).then(result => {
@@ -4287,7 +4363,36 @@
       alt.drivePath = path;
       alt.driveFrom = { lat: origin.lat, lng: origin.lng };
       drawFaintDashed(path, "#8AB4F8", 80, 54);
+      try { rememberTrip(null, null, null, null); } catch (err) {}
     }).catch(() => {});
+  }
+  function releaseAltDrive(){
+    if (!parkingNear.altDrivePending) return;
+    parkingNear.altDrivePending = false;
+    const alt = parkingNear.alternate;
+    if (!alt) return;
+    requestAltDrive(alt, altParkingGen);
+  }
+  function syncParkingAlternate(){
+    const gen = ++altParkingGen;
+    clearParkingAlternate();
+    const alt = parkingAlternateLot(parkingNear.selected);
+    if (!alt || !activeDestination) return;
+    parkingNear.alternate = alt;
+    drawAlternateMarker(alt);
+    paintAltWalk(alt);
+    const from = alt.approach && Number.isFinite(alt.approach.lat) ? alt.approach : alt;
+    if (!(alt.walkPath && alt.walkPath.length >= 2)) {
+      walkAccessFrom(from, activeDestination, { skipGoogle: true }).then(w => {
+        if (gen !== altParkingGen || parkingNear.alternate !== alt) return;
+        if (!w || w.blocked || !w.path || w.path.length < 2) return;
+        if (walkPathLooksStraightFake(w.path, from, activeDestination)) return;
+        alt.walkPath = w.path;
+        if (Number.isFinite(w.walkM)) alt.walkM = w.walkM;
+        paintAltWalk(alt);
+      }).catch(() => {});
+    }
+    requestAltDrive(alt, gen);
   }
 
   function setSelectedParking(lot, dest, opts){
@@ -4519,16 +4624,16 @@
   function parkingChoices(lots, dest){
     const byWalk = (a, b) => (a.walkM || 0) - (b.walkM || 0);
     const near = (lot, cap) => !dest || !Number.isFinite(dest.lat) || lot.walkM <= cap;
-    const streets = lots.filter(l => l.parkKind === "street" && !l.busyRoad && near(l, 250)).sort(byWalk).slice(0, 4);
+    const streets = lots.filter(l => l.parkKind === "street" && !l.busyRoad && near(l, 320)).sort(byWalk).slice(0, 4);
     const surfaces = lots.filter(l => l.parkKind === "lot" && near(l, 800)).sort(byWalk).slice(0, 5);
     const buildings = lots.filter(l => l.parkKind === "building" && near(l, destIsBusyCentre(dest) ? 1000 : 800)).sort(byWalk).slice(0, 6);
     const out = [];
-    const roadKey = lot => String(lot.name || "").replace(/\s+street parking$/i, "").replace(/\s+\(street\)$/i, "").trim().toLowerCase();
+    const roadKey = lot => String(lot.roadName || lot.name || "").replace(/\s+street parking$/i, "").replace(/\s+\(street\)$/i, "").trim().toLowerCase();
     const push = lot => {
       if (!lot || !Number.isFinite(lot.lat)) return;
       if (lot.parkKind === "street") {
         const key = roadKey(lot);
-        if (key && out.some(k => k.parkKind === "street" && roadKey(k) === key)) return;
+        if (key && out.some(k => k.parkKind === "street" && roadKey(k) === key && distanceMetres(k, lot) < 80)) return;
         if (out.some(k => k.parkKind === "street" && distanceMetres(k, lot) < 22)) return;
       } else if (out.some(k => k.parkKind === lot.parkKind && distanceMetres(k, lot) < 40)) return;
       out.push(lot);
@@ -4582,7 +4687,36 @@
       console.warn("OSM parking lookup failed", err);
       return [];
     });
-    const streetP = dest.kind === "parking" ? Promise.resolve(null) : quietStreetParking(dest).catch(() => null);
+    let lateStreets = null;
+    let streetsApplied = false;
+    const mergeLateStreets = list => {
+      if (id !== parkingNear.requestId || !list || !list.length) return;
+      const base = (parkingNear.options || []).slice();
+      let added = false;
+      list.forEach(one => {
+        if (!one || !Number.isFinite(one.lat)) return;
+        if (base.some(l => l.id === one.id)) return;
+        if (base.some(l => l.parkKind === "street" && one.roadName && l.roadName === one.roadName && distanceMetres(l, one) < 80)) return;
+        if (base.some(l => l.parkKind === "street" && distanceMetres(l, one) < 18)) return;
+        base.push(one);
+        added = true;
+      });
+      if (!added) return;
+      const next = parkingChoices(base, dest);
+      nameParkingLots(next, dest);
+      parkingNear.options = next;
+      const pick = chooseParking(next, dest);
+      const selected = parkingNear.selected;
+      const same = selected && pick && (selected.id === pick.id || distanceMetres(selected, pick) < 22);
+      if (!same) setSelectedParking(pick, dest, selectOpts);
+      else syncParkingAlternate();
+      try { rememberTrip(null, null, null, null); } catch (err) {}
+    };
+    const streetP = dest.kind === "parking" ? Promise.resolve([]) : quietStreetParking(dest, list => {
+      if (id !== parkingNear.requestId) return;
+      if (!streetsApplied) lateStreets = list;
+      else mergeLateStreets(list);
+    }).catch(() => []);
     try {
       let lots = [];
       let googleLots = [];
@@ -4613,7 +4747,9 @@
           const streets = Array.isArray(street) ? street : (street ? [street] : []);
           streets.forEach(one => {
             if (!one || !Number.isFinite(one.lat)) return;
-            if (lots.some(l => l.parkKind === "street" && distanceMetres(l, one) < 30)) return;
+            if (lots.some(l => l.id === one.id)) return;
+            if (lots.some(l => l.parkKind === "street" && one.roadName && l.roadName === one.roadName && distanceMetres(l, one) < 80)) return;
+            if (lots.some(l => l.parkKind === "street" && distanceMetres(l, one) < 18)) return;
             lots.push(one);
           });
         } catch (err) {}
@@ -4657,6 +4793,8 @@
       parkingNear.options = lots;
       const pick = chooseParking(lots, dest);
       setSelectedParking(pick, dest, selectOpts);
+      streetsApplied = true;
+      if (lateStreets) mergeLateStreets(lateStreets);
     } catch (err) {
       if (id !== parkingNear.requestId) return;
       console.warn("Parking lookup unavailable", err);
@@ -6063,13 +6201,196 @@
     offRoute.hits = 0;
     if (keepNav) traceRec.dest = { name: destination.name, lat: destination.lat, lng: destination.lng };
     if (!keepNav) maybeStartRouteCountdown();
+    parkingNear.holdAltDrive = false;
+    releaseAltDrive();
+    try { rememberTrip(path, intervals, route, walkPath); } catch (err) {}
   }
+
+  const TRIP_CACHE_KEY = "aaTripCache2";
+  const TRIP_CACHE_MS = 365 * 24 * 60 * 60 * 1000;
+  const TRIP_CACHE_MAX = 40;
+
+  function packPts(pts){
+    return (pts || []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lng)).map(p => [
+      Math.round(p.lat * 1e6) / 1e6,
+      Math.round(p.lng * 1e6) / 1e6
+    ]);
+  }
+
+  function unpackPts(rows){
+    return (rows || []).filter(r => r && Number.isFinite(r[0]) && Number.isFinite(r[1])).map(r => ({ lat: r[0], lng: r[1] }));
+  }
+
+  function tripDestKey(dest){
+    return Number(dest.lat).toFixed(4) + "," + Number(dest.lng).toFixed(4);
+  }
+
+  function loadTripStore(){
+    try {
+      const raw = localStorage.getItem(TRIP_CACHE_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      if (!data || !data.entries) return { entries: {} };
+      return data;
+    } catch (err) {
+      return { entries: {} };
+    }
+  }
+
+  function saveTripStore(data){
+    try { localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(data)); } catch (err) {}
+  }
+
+  function pruneTripStore(data){
+    const now = Date.now();
+    const entries = data.entries || {};
+    Object.keys(entries).forEach(key => {
+      if (!entries[key] || now - (entries[key].at || 0) > TRIP_CACHE_MS) delete entries[key];
+    });
+    const keys = Object.keys(entries).sort((a, b) => (entries[b].at || 0) - (entries[a].at || 0));
+    keys.slice(TRIP_CACHE_MAX).forEach(key => { delete entries[key]; });
+  }
+
+  function slimCachedLot(lot){
+    if (!lot || !Number.isFinite(lot.lat)) return null;
+    return {
+      id: lot.id || "",
+      name: lot.name || "",
+      roadName: lot.roadName || "",
+      named: !!lot.named,
+      lat: lot.lat,
+      lng: lot.lng,
+      approach: lot.approach && Number.isFinite(lot.approach.lat) ? { lat: lot.approach.lat, lng: lot.approach.lng } : null,
+      color: lot.color || "#1A73E8",
+      kind: lot.kind || "parking",
+      parkKind: lot.parkKind || "street",
+      busyRoad: !!lot.busyRoad,
+      walkM: lot.walkM,
+      walkPath: packPts(lot.walkPath),
+      parking: lot.parking || null,
+      description: lot.description || "",
+      snippet: lot.snippet || "",
+      placeId: usablePlaceId(lot.placeId) || ""
+    };
+  }
+
+  function unpackCachedLot(s){
+    if (!s || !Number.isFinite(s.lat)) return null;
+    return {
+      id: s.id || "",
+      name: s.name || "",
+      roadName: s.roadName || "",
+      named: !!s.named,
+      lat: s.lat,
+      lng: s.lng,
+      approach: s.approach && Number.isFinite(s.approach.lat) ? { lat: s.approach.lat, lng: s.approach.lng } : { lat: s.lat, lng: s.lng },
+      color: s.color || "#1A73E8",
+      iconHref: "",
+      kind: s.kind || "parking",
+      parkKind: s.parkKind || "street",
+      busyRoad: !!s.busyRoad,
+      walkM: s.walkM,
+      walkPath: unpackPts(s.walkPath),
+      score: Number.isFinite(s.walkM) ? 500 - s.walkM : 0,
+      parking: s.parking || { fee: "", capacity: 0, access: "", type: s.parkKind || "street", line: "" },
+      description: s.description || "",
+      snippet: s.snippet || "",
+      placeId: s.placeId || ""
+    };
+  }
+
+  function readTripCache(dest){
+    if (!dest || !Number.isFinite(dest.lat)) return null;
+    const data = loadTripStore();
+    pruneTripStore(data);
+    const entry = data.entries[tripDestKey(dest)];
+    if (!entry || Date.now() - (entry.at || 0) > TRIP_CACHE_MS) return null;
+    return entry;
+  }
+
+  function matchCachedDrive(entry, origin){
+    if (!entry || !origin || !Number.isFinite(origin.lat)) return null;
+    const drives = entry.drives || [];
+    let best = null, bestD = 160;
+    for (let i = 0; i < drives.length; i++) {
+      const d = drives[i];
+      if (!d || !d.origin || !d.path || d.path.length < 2) continue;
+      const dist = distanceMetres(d.origin, origin);
+      if (dist < bestD) { bestD = dist; best = d; }
+    }
+    return best;
+  }
+
+  function restoreCachedParking(entry, dest){
+    const options = (entry.options || []).map(unpackCachedLot).filter(Boolean);
+    if (!options.length) return;
+    parkingNear.destKey = dest.lat.toFixed(5) + "," + dest.lng.toFixed(5);
+    parkingNear.options = options;
+    const alt = options.find(o => entry.altId && o.id === entry.altId);
+    if (alt && entry.altPath && entry.altPath.length >= 2) {
+      alt.drivePath = unpackPts(entry.altPath);
+      if (entry.altFrom && Number.isFinite(entry.altFrom.lat)) alt.driveFrom = { lat: entry.altFrom.lat, lng: entry.altFrom.lng };
+    }
+    const pick = options.find(o => o.id && o.id === entry.selectedId) || chooseParking(options, dest);
+    setSelectedParking(pick, dest, { skipReroute: true });
+  }
+
+  function rememberTrip(rawPath, intervals, route, walkPath){
+    const dest = activeDestination;
+    if (!dest || !Number.isFinite(dest.lat) || isFuelStop(dest)) return;
+    const data = loadTripStore();
+    pruneTripStore(data);
+    const key = tripDestKey(dest);
+    const prev = data.entries[key] || {};
+    const drives = Array.isArray(prev.drives) ? prev.drives.slice() : [];
+    if (rawPath && rawPath.length >= 2 && !(route && route._aaFromCache)) {
+      const origin = getRouteOrigin();
+      if (origin && Number.isFinite(origin.lat)) {
+        const rec = {
+          origin: { lat: origin.lat, lng: origin.lng },
+          path: packPts(rawPath),
+          walk: packPts(walkPath),
+          intervals: intervals || null,
+          distanceMeters: Number(route && route.distanceMeters) || 0,
+          durationMillis: Number(route && route.durationMillis) || 0,
+          staticDurationMillis: Number(route && route.staticDurationMillis) || 0
+        };
+        const idx = drives.findIndex(d => d && d.origin && distanceMetres(d.origin, origin) < 80);
+        if (idx >= 0) drives[idx] = rec;
+        else drives.push(rec);
+        while (drives.length > 4) drives.shift();
+      }
+    }
+    const alt = parkingNear.alternate;
+    data.entries[key] = {
+      at: Date.now(),
+      name: dest.name || prev.name || "",
+      lat: dest.lat,
+      lng: dest.lng,
+      selectedId: (parkingNear.selected && parkingNear.selected.id) || prev.selectedId || "",
+      options: (parkingNear.options && parkingNear.options.length) ? parkingNear.options.map(slimCachedLot).filter(Boolean) : (prev.options || []),
+      altId: (alt && alt.id) || prev.altId || "",
+      altPath: (alt && alt.drivePath && alt.drivePath.length >= 2) ? packPts(alt.drivePath) : (prev.altPath || null),
+      altFrom: (alt && alt.driveFrom && Number.isFinite(alt.driveFrom.lat)) ? { lat: alt.driveFrom.lat, lng: alt.driveFrom.lng } : (prev.altFrom || null),
+      drives: drives
+    };
+    saveTripStore(data);
+  }
+
+  function clearTripCache(){
+    try {
+      localStorage.removeItem(TRIP_CACHE_KEY);
+      localStorage.removeItem("aaTripCache");
+    } catch (err) {}
+    setMessage("Route cache cleared.");
+  }
+  window.__aaClearTripCache = clearTripCache;
 
   async function calculateRoute(origin, destination, destinationName, opts){
     stopDemo();
     if (!RouteClass || !map3d) return;
     setMessage(`Calculating route to ${destinationName}...`);
 
+    let routeSettled = false;
     try {
       const noCard = !!(opts && opts.noCard);
       const noCountdown = !!(opts && opts.noCountdown);
@@ -6104,8 +6425,30 @@
       if (fuelStop) clearParkingOverlay();
       const fast = !!(opts && opts.refineWalk === false);
       const settle = !fuelStop && !fast;
-      const parkingP = fuelStop ? Promise.resolve() : fetchParkingNear(destination, settle ? { skipReroute: true } : null);
       const originPt = { lat: origin.lat, lng: origin.lng };
+      const cachedTrip = (!fuelStop && !(opts && opts.skipCache)) ? readTripCache(dest) : null;
+      const cachedDrive = cachedTrip && matchCachedDrive(cachedTrip, originPt);
+      if (cachedDrive && cachedDrive.path && cachedDrive.path.length >= 2) {
+        parkingNear.holdAltDrive = false;
+        if (cachedTrip.options && cachedTrip.options.length) restoreCachedParking(cachedTrip, dest);
+        const path = unpackPts(cachedDrive.path);
+        const stub = {
+          distanceMeters: cachedDrive.distanceMeters || 0,
+          durationMillis: cachedDrive.durationMillis || 0,
+          staticDurationMillis: cachedDrive.staticDurationMillis || 0,
+          _aaFromCache: true
+        };
+        adoptRoute(stub, path, cachedDrive.intervals, dest, false, unpackPts(cachedDrive.walk));
+        routeSettled = true;
+        if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, stub.distanceMeters, { keepPreview: true });
+        else if (!noCard) maybeStartRouteCountdown();
+        if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
+        return;
+      }
+      parkingNear.holdAltDrive = true;
+      const haveParking = !!(cachedTrip && cachedTrip.options && cachedTrip.options.length);
+      if (haveParking) restoreCachedParking(cachedTrip, dest);
+      const parkingP = (fuelStop || haveParking) ? Promise.resolve() : fetchParkingNear(destination, settle ? { skipReroute: true } : null);
       const specDest = {
         lat: destination.lat,
         lng: destination.lng,
@@ -6187,6 +6530,7 @@
         }
       }
       adoptRoute(useRoute, usePath, useIntervals, dest, false, useWalk);
+      routeSettled = true;
       if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, useRoute && useRoute.distanceMeters, { keepPreview: true });
       else if (!noCard) maybeStartRouteCountdown();
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
@@ -6194,6 +6538,11 @@
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
+    } finally {
+      if (!routeSettled) {
+        parkingNear.holdAltDrive = false;
+        parkingNear.altDrivePending = false;
+      }
     }
   }
 
@@ -7340,6 +7689,7 @@
   }
 
   async function ensureGoogleNavSteps(path, cum, destination){
+    if (activeRoute && activeRoute._aaFromCache) return;
     if (navStepsFromGoogle || !path || path.length < 2) return;
     const dest = destination || path[path.length - 1];
     const google = await stepsFromDirections(path[0], dest, path, cum);
@@ -12502,6 +12852,14 @@
     hideChrome();
     startFlyPreviewTest();
   });
+  const clearTripCacheBtn = document.getElementById("clearTripCacheBtn");
+  if (clearTripCacheBtn) {
+    clearTripCacheBtn.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearTripCache();
+    });
+  }
   document.getElementById("viewSelectBtn").addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
