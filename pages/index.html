@@ -2824,7 +2824,7 @@
       'way["highway"]["parking:lane:left"~"."]' + parkAround + ";" +
       'way["highway"]["parking:lane:right"~"."]' + parkAround + ";" +
       ");out tags center;";
-    const json = await overpassJson(query, 8000, OVERPASS_MIRRORS.slice(0, 2));
+    const json = await overpassJson(query, 14000, OVERPASS_MIRRORS.slice(0, 2));
     const seen = {};
     const out = [];
     (json.elements || []).forEach(el => {
@@ -2952,7 +2952,7 @@
     const lat = dest.lat.toFixed(5), lng = dest.lng.toFixed(5);
     const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary)$"]["access"!="private"]["service"!="driveway"](around:160,' + lat + "," + lng + ");out geom tags;";
     try {
-      const json = await overpassJson(query, 7000, OVERPASS_MIRRORS.slice(0, 2));
+      const json = await overpassJson(query, 12000, OVERPASS_MIRRORS.slice(0, 2));
       let best = null, bestD = 160, bestName = "";
       (json.elements || []).forEach(el => {
         const tags = el.tags || {};
@@ -3708,10 +3708,36 @@
   }
 
   function clearParkingMarker(){
-    if (parkingMarker) {
-      try { parkingMarker.remove(); } catch (err) {}
-      parkingMarker = null;
-    }
+    const marker = parkingMarker;
+    parkingMarker = null;
+    if (!marker) return;
+    try { marker.position = null; } catch (err) {}
+    try { marker.remove(); } catch (err) {}
+    try {
+      const parent = marker.parentNode || marker.parentElement;
+      if (parent && typeof parent.removeChild === "function") parent.removeChild(marker);
+    } catch (err) {}
+  }
+
+  // Street parking is often the point where the drive stops, so the pin lands on the
+  // blue line. Keep the P, but shift it onto the left kerb instead of hiding it.
+  function streetMarkerPosition(lot){
+    const at = { lat: lot.lat, lng: lot.lng };
+    if (keepDriveToParkingLot(lot)) return at;
+    const path = activeRoutePath;
+    if (!path || path.length < 2) return at;
+    const end = path[path.length - 1];
+    const prev = path[path.length - 2];
+    if (!end || !prev || distanceMetres(lot, end) > 12) return at;
+    return lookAhead(end, bearingDegrees(prev, end) - 90, 7);
+  }
+
+  function parkingPinLatLng(lot){
+    const pos = parkingMarker && parkingMarker.position;
+    const lat = pos && (typeof pos.lat === "function" ? pos.lat() : Number(pos.lat));
+    const lng = pos && (typeof pos.lng === "function" ? pos.lng() : Number(pos.lng));
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat: lat, lng: lng };
+    return lot && Number.isFinite(lot.lat) ? lot : null;
   }
 
   function destIsSamePlace(dest, lot){
@@ -3743,8 +3769,8 @@
     const ring = document.getElementById("parkMoveRing");
     if (!ring) return;
     if (!parkingMoveArmed) return;
-    const lot = parkingNear.selected;
-    const s = lot && Number.isFinite(lot.lat) ? screenPointForGround(lot.lat, lot.lng) : null;
+    const at = parkingPinLatLng(parkingNear.selected);
+    const s = at ? screenPointForGround(at.lat, at.lng) : null;
     if (!s) {
       ring.style.visibility = "hidden";
       return;
@@ -3844,8 +3870,9 @@
 
   function hitParkingPin(event){
     const lot = parkingMarker && parkingNear.selected;
-    if (!lot || !Number.isFinite(lot.lat) || !event) return false;
-    const s = screenPointForGround(lot.lat, lot.lng);
+    const at = lot ? parkingPinLatLng(lot) : null;
+    if (!at || !event) return false;
+    const s = screenPointForGround(at.lat, at.lng);
     if (!s) return false;
     const radius = isAndroidAuto() ? 92 : 48;
     return Math.hypot(event.clientX - s.x, event.clientY - s.y) < radius;
@@ -3889,11 +3916,14 @@
 
   function drawParkingMarker(lot, dest){
     clearParkingMarker();
-    if (!map3d || !lot || destIsSamePlace(dest, lot)) return;
+    // Only skip when the parking spot is the destination pin itself. A kerb
+    // a short walk away still needs its own P.
+    if (!map3d || !lot || (dest && distanceMetres(dest, lot) < 8)) return;
+    const at = streetMarkerPosition(lot);
     try {
       const Ctor = Marker3DElement || Marker3DInteractiveElement;
       const marker = new Ctor({
-        position: { lat: lot.lat, lng: lot.lng, altitude: 0 },
+        position: { lat: at.lat, lng: at.lng, altitude: 0 },
         altitudeMode: "CLAMP_TO_GROUND",
         sizePreserved: true,
         drawsWhenOccluded: true
@@ -4205,16 +4235,24 @@
     parkingNear.destKey = key;
     if (dest.kind === "parking") setSelectedParking(dest, dest);
     else hideParkingRow();
-    const googleP = queryGoogleParking(dest, PARKING_NEAR_FALLBACK_M);
+    const googleP = queryGoogleParking(dest, PARKING_NEAR_FALLBACK_M).catch(() => []);
+    // The working Overpass server often takes around eight seconds. A short race
+    // used to throw that away and then fire more queries, so the card stayed empty.
+    const osmP = queryOsmParking(dest, PARKING_NEAR_M).catch(err => {
+      console.warn("OSM parking lookup failed", err);
+      return [];
+    });
+    const streetP = dest.kind === "parking" ? Promise.resolve(null) : quietStreetParking(dest).catch(() => null);
     try {
       let lots = [];
       let googleLots = [];
       googleP.then(list => { googleLots = list || []; }).catch(() => {});
       try {
-        lots = await Promise.race([
-          queryOsmParking(dest, PARKING_NEAR_M),
-          new Promise(resolve => setTimeout(() => resolve([]), 4500))
+        const arrived = await Promise.race([
+          osmP.then(list => ({ list: list || [] })),
+          new Promise(resolve => setTimeout(() => resolve(null), 12000))
         ]);
+        lots = arrived ? arrived.list : await osmP;
       } catch (err) {
         console.warn("OSM parking lookup failed", err);
         lots = [];
@@ -4230,19 +4268,15 @@
       if (id !== parkingNear.requestId) return;
       if (!lots.some(l => l.parkKind === "street" && !l.busyRoad && l.walkM < 160) && dest.kind !== "parking") {
         try {
-          const street = await Promise.race([
-            quietStreetParking(dest),
-            new Promise(resolve => setTimeout(() => resolve(null), 2500))
-          ]);
+          const street = await streetP;
           if (id !== parkingNear.requestId) return;
           if (street && !lots.some(l => l.parkKind === "street" && distanceMetres(l, street) < 45)) lots.push(street);
         } catch (err) {}
       }
       try {
-        const wider = await Promise.race([
-          queryOsmParking(dest, PARKING_NEAR_FALLBACK_M),
-          new Promise(resolve => setTimeout(() => resolve([]), 3500))
-        ]);
+        const wider = lots.some(l => l.parkKind === "lot" || l.parkKind === "building")
+          ? []
+          : await queryOsmParking(dest, PARKING_NEAR_FALLBACK_M);
         if (id !== parkingNear.requestId) return;
         (wider || []).forEach(lot => {
           if (!lot || lot.parkKind === "street" || !Number.isFinite(lot.lat)) return;
@@ -5654,6 +5688,7 @@
       drawDestination(destination);
     }
     updateRouteInfo(route, destination.name, keepNav);
+    if (parkingNear.selected) drawParkingMarker(parkingNear.selected, destination);
     fetchSpeedLimits(driven);
     if (!keepNav && !isFuelStop(destination)) {
       const key = destination.lat.toFixed(5) + "," + destination.lng.toFixed(5);
