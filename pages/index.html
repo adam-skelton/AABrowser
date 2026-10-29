@@ -167,6 +167,9 @@
     body.nav-browsing #navLanes.visible,
     body.nav-flyover #navLanes,
     body.nav-flyover #navLanes.visible {display:none !important}
+    #flyStreet {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(16px, env(safe-area-inset-top))); left:50%; transform:translateX(-50%); max-width:min(560px, calc(100% - 48px)); padding:10px 18px; border-radius:16px; background:rgba(28,28,30,.78); color:#fff; font-size:20px; font-weight:700; letter-spacing:-.2px; text-align:center; pointer-events:none; box-shadow:0 4px 16px rgba(0,0,0,.28); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    body.fly-street #flyStreet {display:block}
+    body:not(.chrome-hidden) #flyStreet {top:calc(var(--aa-inset-top) + max(70px, env(safe-area-inset-top) + 60px))}
     #navPrimary {display:flex; align-items:center; gap:10px; min-height:88px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28); outline:none; -webkit-tap-highlight-color:transparent}
     #navIconWrap {position:relative; width:74px; height:74px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
@@ -464,6 +467,7 @@
       <button id="freeFollowBtn" type="button" data-debug-dismiss>Free follow</button>
       <button id="randomBtn" type="button" data-debug-dismiss>Random route</button>
       <button id="navCardTestBtn" type="button" data-debug-dismiss>Nav card</button>
+      <button id="flyPreviewBtn" type="button" data-debug-dismiss>Fly preview</button>
       <button id="viewSpecBtn" type="button">View controls</button>
       <button id="carApiBtn" type="button">API level</button>
       <button id="hostProbeBtn" type="button">Car host</button>
@@ -686,6 +690,7 @@
     </div>
     <div id="navLanes" hidden></div>
   </div>
+  <div id="flyStreet" hidden></div>
 
 <script src="host-gestures.js"></script>
 <script>
@@ -970,24 +975,22 @@
   // Route-start fly-over. Null when not running.
   let flyover = null;
   const FLYOVER_MIN_M = 800;
-  // Tweaks for the dest-then-path intro (the old overview sweep is startOverviewFlyover).
+  // Start intro: zoom well out from the destination, move onto the car, then
+  // sweep the route from the old overview height.
   const FLYOVER = {
-    DEST_START_RANGE: 540, // start above the destination
-    DEST_RANGE: 220,       // then dolly in so the pin is readable
-    DEST_START_TILT: 50,
-    DEST_TILT: 58,
-    DEST_IN_MS: 1700,
-    DEST_HOLD_MS: 1700,
-    PATH_TILT: 32,         // flatter so locality labels sit on the imagery, not behind buildings
-    PATH_MIN_RANGE: 1600,  // suburb/locality names need more altitude than the dest pin shot
+    ZOOM_OUT_MS: 1400,
+    ZOOM_IN_MS: 1550,
+    OVER_TILT: 36,
+    PATH_TILT: 54,
+    PATH_MIN_RANGE: 1600,
     PATH_MAX_RANGE: 7200,
     PATH_DUR_BASE_MS: 4200,
-    PATH_M_PER_MS: 0.85,   // metres of route per ms of sweep (lower = slower)
+    PATH_M_PER_MS: 0.85,
     PATH_DUR_MIN_MS: 5200,
     PATH_DUR_MAX_MS: 10000,
-    RISE_MS: 1400,         // zoom out from the pin to path altitude before the sweep
-    PATH_HOLD_MS: 1100,    // let HYBRID labels settle before the camera starts moving again
-    PATH_HOLD_FROM_PREVIEW_MS: 380
+    DEST_HOLD_MS: 2200,
+    BACK_MIN_MS: 900,
+    BACK_MAX_MS: 1500
   };
   // Place-selected preview: swoop onto the pin, then slowly orbit it until Start.
   const DEST_PREVIEW = {
@@ -7139,8 +7142,10 @@
     if (sepEl) { sepEl.hidden = true; sepEl.classList.remove("visible"); }
     if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
     if (wrap) wrap.classList.remove("clock");
-    document.body.classList.remove("has-lanes", "nav-flyover", "nav-arrived");
+    document.body.classList.remove("has-lanes", "nav-flyover", "nav-arrived", "fly-street");
     document.documentElement.classList.remove("has-lanes", "nav-flyover", "nav-arrived");
+    const flyStreet = document.getElementById("flyStreet");
+    if (flyStreet) { flyStreet.hidden = true; flyStreet.textContent = ""; }
     navHudKey = "";
     navPassHold = { m: null, until: 0 };
   }
@@ -7179,6 +7184,32 @@
     return Math.max(0, Number(fallbackM) || 0);
   }
 
+  function hideFlyStreet(){
+    document.body.classList.remove("fly-street");
+    const el = document.getElementById("flyStreet");
+    if (!el || el.hidden) return;
+    el.hidden = true;
+  }
+
+  function flyStreetLabel(progressM){
+    const steps = nextShownSteps(upcomingNavSteps(progressM, { hold: false }));
+    const step = steps[0];
+    if (!step) return "";
+    const turn = hudManeuver(step);
+    if (maneuverFamily(turn) === "dest") return (activeDestination && activeDestination.name) || "Destination";
+    return streetForNavStep(step, turn) || shortInstruction(step, turn);
+  }
+
+  function syncFlyStreet(progressM){
+    const el = document.getElementById("flyStreet");
+    if (!el) return;
+    const name = flyStreetLabel(progressM);
+    if (!name) { hideFlyStreet(); return; }
+    if (el.textContent !== name) el.textContent = name;
+    el.hidden = false;
+    document.body.classList.add("fly-street");
+  }
+
   function updateNavHud(){
     if (!isNavigating() || !activeRoutePath.length) {
       hideNavHud();
@@ -7213,6 +7244,8 @@
     }
     document.body.classList.toggle("nav-flyover", !!flyover);
     document.documentElement.classList.toggle("nav-flyover", !!flyover);
+    if (flyover && (flyover.phase === "preview" || flyover.phase === "face")) syncFlyStreet(flyover.streetM);
+    else hideFlyStreet();
     if (flyover) {
       const banner = document.getElementById("navBanner");
       const thenEl = document.getElementById("navThen");
@@ -7849,8 +7882,8 @@
     if (!explore.mode) maybeStartRouteCountdown();
   }
 
-  // `opts.flyover` (default true): sweep the route from the destination back to the car
-  // before diving into the drive view.
+  // `opts.flyover` (default true): zoom out from the destination, move onto the
+  // car, then sweep the route from overview height before the nav camera.
   function enterNavigation(opts){
     if (!activeRoutePath || activeRoutePath.length < 2) return;
     if (explore.mode) exitExploreMode();
@@ -8109,6 +8142,20 @@
     await calculateRoute(origin, dest, dest.name);
   }
   window.__aaStartNavCardTest = startNavCardTest;
+
+  async function startFlyPreviewTest(){
+    if (!map3d || !RouteClass) {
+      setMessage("Map is not ready.");
+      return;
+    }
+    const destination = TEST_DESTINATIONS[Math.floor(Math.random() * TEST_DESTINATIONS.length)];
+    setMessage("Fly preview to " + destination.name + "...");
+    await calculateRoute(getRouteOrigin(), destination, destination.name, { noCountdown: true });
+    if (isNavigating()) return;
+    if (!(activeRoutePath && activeRoutePath.length >= 2)) return;
+    enterNavigation();
+  }
+  window.__aaStartFlyPreview = startFlyPreviewTest;
 
   function startGps(){
     stopDemo();
@@ -9562,7 +9609,30 @@
     return { point: at.point, bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead), range: flyover.range, tilt: 55 };
   }
 
-  function startFlyover(opts){
+  function flyPreviewRange(){
+    const clicks = FOLLOW_ZOOM_IN_CLICKS_NAV + sessionZoomClicks;
+    const zoom = ZOOM_BANDS[0][1] + clicks * ZOOM_PLUS_STEP;
+    const navRange = Math.max(FOLLOW.MIN_DRIVE_RANGE, CAR_REF_RANGE * rangeFactorForZoom(zoom));
+    return navRange * ZOOM_PLUS_FACTOR;
+  }
+
+  function lerpHeading(a, b, t){
+    const d = ((b - a + 540) % 360) - 180;
+    return normaliseHeading(a + d * t);
+  }
+
+  function flyCarAim(){
+    const at = pointAtMetres(activeRoutePath, routeCum, 0);
+    return {
+      lat: at.point.lat,
+      lng: at.point.lng,
+      bearing: at.bearing,
+      range: flyover.pathRange,
+      tilt: FLYOVER.PATH_TILT
+    };
+  }
+
+  function startFlyover(){
     flyover = null;
     cam.rejoin = false;
     if (activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) return;
@@ -9570,133 +9640,184 @@
     if (total < FLYOVER_MIN_M) return;
     if (speedKalman.speed * 3.6 > 10) return;
     const dest = activeDestination || activeRoutePath[activeRoutePath.length - 1];
-    const last = activeRoutePath[activeRoutePath.length - 1];
-    const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
-    const arrivalBrg = bearingDegrees(prev, last);
-    const fromPreview = !!(opts && opts.fromPreview);
-    const here = readMapCenter();
-    const alreadyAtDest = fromPreview || (here && dest && distanceMetres(here, dest) < 140);
-    const liveRange = numOr(map3d && map3d.range, cam.range);
-    const liveTilt = numOr(map3d && map3d.tilt, cam.tilt);
-    const liveHeading = numOr(map3d && map3d.heading, cam.heading);
-    const holdRange = alreadyAtDest ? (liveRange > 0 ? liveRange : DEST_PREVIEW.RANGE) : FLYOVER.DEST_RANGE;
-    const holdTilt = alreadyAtDest ? (Number.isFinite(liveTilt) ? liveTilt : DEST_PREVIEW.TILT) : FLYOVER.DEST_TILT;
-    const holdHeading = alreadyAtDest ? liveHeading : arrivalBrg;
+    const at = pointAtMetres(activeRoutePath, routeCum, 0);
+    const previewRange = flyPreviewRange();
+    const overviewRange = clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE);
+    const pathRange = overviewRange * 0.75 * 0.75;
+    const gap = distanceMetres(dest, at.point);
+    const overRange = clamp(Math.max(gap * 1.55, overviewRange * 1.7, 4200), 4200, 9800);
+    const liveRange = numOr(map3d && map3d.range, 0);
+    const liveTilt = numOr(map3d && map3d.tilt, 58);
+    const liveHeading = numOr(map3d && map3d.heading, at.bearing);
+    const fromRange = liveRange > 80 ? Math.min(liveRange, previewRange * 2.4) : 340;
     flyover = {
       kind: "destPath",
-      phase: alreadyAtDest ? "holdDest" : "dollyIn",
+      phase: "zoomOut",
       dest: { lat: dest.lat, lng: dest.lng },
       total,
-      dollyStartMs: performance.now(),
-      riseStartMs: 0,
-      holdUntil: alreadyAtDest ? performance.now() + FLYOVER.DEST_HOLD_MS : 0,
-      pathStartMs: 0,
+      startMs: performance.now(),
+      zoomOutMs: FLYOVER.ZOOM_OUT_MS,
+      zoomInMs: FLYOVER.ZOOM_IN_MS,
+      fromRange,
+      fromTilt: Number.isFinite(liveTilt) ? liveTilt : 58,
+      fromHeading: liveHeading,
+      overRange,
+      previewRange,
+      pathRange,
       pathDurMs: clamp(FLYOVER.PATH_DUR_BASE_MS + total / FLYOVER.PATH_M_PER_MS, FLYOVER.PATH_DUR_MIN_MS, FLYOVER.PATH_DUR_MAX_MS),
-      pathRange: clamp(total * 0.55, FLYOVER.PATH_MIN_RANGE, FLYOVER.PATH_MAX_RANGE),
-      pathHoldMs: FLYOVER.PATH_HOLD_MS,
-      fromRange: holdRange,
-      fromTilt: holdTilt,
-      fromHeading: holdHeading,
-      holdRange,
-      holdTilt,
-      holdHeading
+      zoomInStartMs: 0,
+      previewStartMs: 0,
+      backStartMs: 0,
+      carAim: null,
+      streetM: NaN
     };
     cam.lat = dest.lat;
     cam.lng = dest.lng;
-    if (alreadyAtDest) {
-      if (liveRange > 0) cam.range = liveRange;
-      if (Number.isFinite(liveTilt)) cam.tilt = liveTilt;
-      if (Number.isFinite(liveHeading)) cam.heading = liveHeading;
-    } else {
-      cam.range = FLYOVER.DEST_START_RANGE;
-      cam.tilt = FLYOVER.DEST_START_TILT;
-      cam.heading = arrivalBrg;
-    }
+    cam.range = fromRange;
+    cam.tilt = flyover.fromTilt;
+    cam.heading = liveHeading;
     cam.seeded = true;
-    if (map3d && !alreadyAtDest) {
+    if (map3d) {
       map3d.center = { lat: dest.lat, lng: dest.lng };
-      map3d.range = FLYOVER.DEST_START_RANGE;
-      map3d.tilt = FLYOVER.DEST_START_TILT;
-      map3d.heading = arrivalBrg;
+      map3d.range = fromRange;
+      map3d.tilt = flyover.fromTilt;
+      map3d.heading = liveHeading;
     }
+  }
+
+  function flyPathBearing(m, now){
+    const road = pointAtMetres(activeRoutePath, routeCum, m).bearing;
+    const t = Number.isFinite(now) ? now : performance.now();
+    if (flyover.heldBearing == null) {
+      flyover.heldBearing = road;
+      flyover.heldAt = t;
+      return road;
+    }
+    const dt = Math.min(0.05, Math.max(0.001, (t - (flyover.heldAt || t)) / 1000));
+    flyover.heldAt = t;
+    const turn = ((road - flyover.heldBearing + 540) % 360) - 180;
+    // A small kink stays put. A real change of direction glides toward the road.
+    if (Math.abs(turn) >= 8) {
+      const rate = clamp(Math.abs(turn) * 0.85, 20, 62);
+      flyover.heldBearing = normaliseHeading(flyover.heldBearing + clamp(turn, -rate * dt, rate * dt));
+    }
+    return flyover.heldBearing;
+  }
+
+  function beginFlyReturn(){
+    const range = flyover.previewRange;
+    const tilt = CAR_REF_TILT;
+    const at = pointAtMetres(activeRoutePath, routeCum, 0);
+    const fov = numOr(map3d && map3d.fov, CAR_REF_FOV);
+    const look = lookAheadForFraction(range, tilt, fov >= 5 ? fov : CAR_REF_FOV, carScreenY());
+    const aim = look > 0 ? lookAhead(at.point, at.bearing, look) : at.point;
+    flyover.backFrom = {
+      lat: cam.lat,
+      lng: cam.lng,
+      bearing: cam.heading,
+      range: cam.range > 0 ? cam.range : range,
+      tilt: Number.isFinite(cam.tilt) ? cam.tilt : tilt
+    };
+    flyover.backTo = { lat: aim.lat, lng: aim.lng, bearing: at.bearing, range: range, tilt: tilt };
+    flyover.phase = "back";
+    flyover.backStartMs = performance.now();
+    flyover.streetM = NaN;
   }
 
   function destPathFlyoverFrame(now){
     if (!flyover || flyover.kind !== "destPath") return null;
     if (!isNavigating() || activeRoutePath.length < 2 || routeCum.length !== activeRoutePath.length) { flyover = null; return null; }
-    const destPt = flyover.dest;
-    const last = activeRoutePath[activeRoutePath.length - 1];
-    const prev = activeRoutePath[Math.max(0, activeRoutePath.length - 2)];
-    const arrivalBrg = bearingDegrees(prev, last);
-    if (flyover.phase === "dollyIn") {
-      const u = clamp((now - flyover.dollyStartMs) / FLYOVER.DEST_IN_MS, 0, 1);
+    if (flyover.phase === "zoomOut") {
+      const u = clamp((now - flyover.startMs) / flyover.zoomOutMs, 0, 1);
       const e = u * u * (3 - 2 * u);
+      if (u >= 1) {
+        flyover.phase = "zoomIn";
+        flyover.zoomInStartMs = now;
+        flyover.carAim = flyCarAim();
+      }
+      flyover.streetM = NaN;
+      return {
+        snap: true,
+        point: flyover.dest,
+        bearing: flyover.fromHeading,
+        range: lerp(flyover.fromRange, flyover.overRange, e),
+        tilt: lerp(flyover.fromTilt, FLYOVER.OVER_TILT, e)
+      };
+    }
+    if (flyover.phase === "zoomIn") {
+      const u = clamp((now - flyover.zoomInStartMs) / flyover.zoomInMs, 0, 1);
+      const e = 1 - Math.pow(1 - u, 3);
+      if (!flyover.carAim) flyover.carAim = flyCarAim();
+      if (u >= 1) {
+        flyover.phase = "preview";
+        flyover.previewStartMs = now;
+      }
+      const to = flyover.carAim;
+      flyover.streetM = NaN;
+      return {
+        snap: true,
+        point: { lat: lerp(flyover.dest.lat, to.lat, e), lng: lerp(flyover.dest.lng, to.lng, e) },
+        bearing: lerpHeading(flyover.fromHeading, to.bearing, e),
+        range: lerp(flyover.overRange, to.range, e),
+        tilt: lerp(FLYOVER.OVER_TILT, to.tilt, e)
+      };
+    }
+    if (flyover.phase === "preview") {
+      const u = clamp((now - flyover.previewStartMs) / flyover.pathDurMs, 0, 1);
       if (u >= 1) {
         flyover.phase = "holdDest";
         flyover.holdUntil = now + FLYOVER.DEST_HOLD_MS;
+      } else {
+        const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+        const m = lerp(0, flyover.total, e);
+        const at = pointAtMetres(activeRoutePath, routeCum, m);
+        flyover.streetM = m;
+        return {
+          lockPose: true,
+          gentle: true,
+          point: at.point,
+          bearing: flyPathBearing(m, now),
+          range: flyover.pathRange,
+          tilt: FLYOVER.PATH_TILT,
+          streetM: m
+        };
       }
-      return {
-        point: destPt,
-        bearing: arrivalBrg,
-        range: lerp(FLYOVER.DEST_START_RANGE, FLYOVER.DEST_RANGE, e),
-        tilt: lerp(FLYOVER.DEST_START_TILT, FLYOVER.DEST_TILT, e)
-      };
     }
     if (flyover.phase === "holdDest") {
       if (now >= flyover.holdUntil) {
-        flyover.phase = "risePath";
-        flyover.riseStartMs = now;
+        beginFlyReturn();
+      } else {
+        const at = pointAtMetres(activeRoutePath, routeCum, flyover.total);
+        flyover.streetM = flyover.total;
+        return {
+          lockPose: true,
+          gentle: true,
+          point: at.point,
+          bearing: flyPathBearing(flyover.total, now),
+          range: flyover.pathRange,
+          tilt: FLYOVER.PATH_TILT,
+          streetM: flyover.total
+        };
       }
-      return {
-        point: destPt,
-        bearing: Number.isFinite(flyover.holdHeading) ? flyover.holdHeading : arrivalBrg,
-        range: Number.isFinite(flyover.holdRange) ? flyover.holdRange : FLYOVER.DEST_RANGE,
-        tilt: Number.isFinite(flyover.holdTilt) ? flyover.holdTilt : FLYOVER.DEST_TILT
-      };
     }
-    if (flyover.phase === "risePath") {
-      const u = clamp((now - flyover.riseStartMs) / FLYOVER.RISE_MS, 0, 1);
+    if (flyover.phase === "back") {
+      const dist = distanceMetres(flyover.backFrom, flyover.backTo);
+      const backMs = clamp(700 + dist / 6, FLYOVER.BACK_MIN_MS, FLYOVER.BACK_MAX_MS);
+      const u = clamp((now - flyover.backStartMs) / backMs, 0, 1);
       const e = u * u * (3 - 2 * u);
-      if (u >= 1) {
-        flyover.phase = "holdPath";
-        flyover.holdUntil = now + (Number.isFinite(flyover.pathHoldMs) ? flyover.pathHoldMs : FLYOVER.PATH_HOLD_MS);
-      }
-      const fromRange = Number.isFinite(flyover.fromRange) ? flyover.fromRange : FLYOVER.DEST_RANGE;
-      const fromTilt = Number.isFinite(flyover.fromTilt) ? flyover.fromTilt : FLYOVER.DEST_TILT;
-      const fromHeading = Number.isFinite(flyover.fromHeading) ? flyover.fromHeading : arrivalBrg;
+      if (u >= 1) { flyover = null; return null; }
+      const from = flyover.backFrom, to = flyover.backTo;
+      flyover.streetM = NaN;
       return {
-        point: destPt,
-        bearing: fromHeading,
-        range: lerp(fromRange, flyover.pathRange, e),
-        tilt: lerp(fromTilt, FLYOVER.PATH_TILT, e)
+        snap: true,
+        point: { lat: lerp(from.lat, to.lat, e), lng: lerp(from.lng, to.lng, e) },
+        bearing: lerpHeading(from.bearing, to.bearing, e),
+        range: lerp(from.range, to.range, e),
+        tilt: lerp(from.tilt, to.tilt, e)
       };
     }
-    if (flyover.phase === "holdPath") {
-      if (now >= flyover.holdUntil) {
-        flyover.phase = "alongPath";
-        flyover.pathStartMs = now;
-      }
-      const fromHeading = Number.isFinite(flyover.fromHeading) ? flyover.fromHeading : arrivalBrg;
-      const holdMs = Number.isFinite(flyover.pathHoldMs) ? flyover.pathHoldMs : FLYOVER.PATH_HOLD_MS;
-      const holdU = holdMs > 0 ? clamp(1 - (flyover.holdUntil - now) / holdMs, 0, 1) : 1;
-      const dH = ((arrivalBrg - fromHeading + 540) % 360) - 180;
-      return { point: destPt, bearing: normaliseHeading(fromHeading + dH * holdU), range: flyover.pathRange, tilt: FLYOVER.PATH_TILT };
-    }
-    const u = (now - flyover.pathStartMs) / flyover.pathDurMs;
-    if (u >= 1) { flyover = null; return null; }
-    const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
-    const m = lerp(flyover.total, clamp(puck.progressM, 0, flyover.total), e);
-    const at = pointAtMetres(activeRoutePath, routeCum, m);
-    const look = clamp(flyover.total * 0.1, 200, 800);
-    const behind = pointAtMetres(activeRoutePath, routeCum, Math.max(m - look, 0)).point;
-    const ahead = pointAtMetres(activeRoutePath, routeCum, Math.min(m + look, flyover.total)).point;
-    const degenerate = Math.abs(ahead.lat - behind.lat) + Math.abs(ahead.lng - behind.lng) < 1e-7;
-    return {
-      point: at.point,
-      bearing: degenerate ? at.bearing : bearingDegrees(behind, ahead),
-      range: flyover.pathRange,
-      tilt: FLYOVER.PATH_TILT
-    };
+    flyover = null;
+    return null;
   }
 
   function flyoverFrame(now){
@@ -9779,7 +9900,6 @@
     }
     const car = { lat: puck.lat, lng: puck.lng };
     const fly = flyoverFrame(now) || skipFlyFrame(now);
-    const destIntro = !!(fly && flyover && flyover.kind === "destPath" && flyover.phase !== "alongPath");
     const info = (!fly && infoLevel > 0) ? navInfoPreview(view, tgtRange, tiltTarget) : null;
     if (fly) {
       tgtRange = fly.range;
@@ -9836,17 +9956,23 @@
     const travelHeading = view.headingUp && (cam.latched || puck.engaged) && Number.isFinite(puck.heading)
       ? puck.heading
       : cam.heading;
-    if (view.headingUp && !fly && !(info && info.overhead) && !(cam.rejoinLift && cam.rejoinPhase !== "descend")) {
+    if (fly && fly.chase) {
+      const fov = cam.fov >= 5 ? cam.fov : view.fov;
+      const lookTarget = lookAheadForFraction(tgtRange, tiltTarget, fov, fracY);
+      lookM = Number.isFinite(lookTarget) ? Math.max(0, lookTarget) : 0;
+    } else if (view.headingUp && !fly && !(info && info.overhead) && !(cam.rejoinLift && cam.rejoinPhase !== "descend")) {
       const lookLive = lookAheadForFraction(cam.range, cam.tilt, cam.fov, fracY);
       const lookTarget = lookAheadForFraction(tgtRange, tiltTarget, view.fov, fracY);
       lookM = lerp(lookLive, lookTarget, flight);
     }
     let aim = fly ? fly.point : (info && info.aim ? info.aim : (lookM > 0 ? lookAhead(car, travelHeading, lookM) : car));
+    if (fly && fly.chase && lookM > 0) aim = lookAhead(fly.point, fly.bearing, lookM);
     if (!fly && cam.rejoinLift && cam.rejoinPhase === "rise" && cam.rejoinFrom) {
       aim = cam.rejoinFrom;
       lookM = 0;
     }
-    if (!fly) {
+    if (!fly || fly.chase) {
+      const head = fly && fly.chase ? fly.bearing : travelHeading;
       const dx = carScreenX() - 0.5;
       if (Math.abs(dx) > 0.02) {
         // Shift by the width at the car, not at the look-ahead point. Using the
@@ -9860,7 +9986,7 @@
         // A wide inset used to walk the aim off the left side of the road. A couple
         // of metres still clears a thin rail without leaving the lane.
         const shift = clamp(dx * 2 * halfWAtCar, -2.5, 2.5);
-        aim = lookAhead(aim, travelHeading - 90, shift);
+        aim = lookAhead(aim, head - 90, shift);
       }
     }
 
@@ -9891,20 +10017,34 @@
     // Camera heading tracks the road closely. The chase orbit sits a long way behind
     // the look point, so a few degrees of lag puts the camera beside the lane.
     const db = ((headingTarget - cam.heading + 540) % 360) - 180;
-    const brgTau = FOLLOW.BRG_TAU_STILL + (FOLLOW.BRG_TAU_TURN - FOLLOW.BRG_TAU_STILL) * Math.min(Math.abs(db) / FOLLOW.BRG_TURN_DEG, 1);
+    const gentle = !!(fly && fly.gentle);
+    const brgTau = gentle
+      ? 0.45
+      : FOLLOW.BRG_TAU_STILL + (FOLLOW.BRG_TAU_TURN - FOLLOW.BRG_TAU_STILL) * Math.min(Math.abs(db) / FOLLOW.BRG_TURN_DEG, 1);
     // Rate cap: real corners peak well under it; it tames the half-circle swings of a
     // view switch (heading-up -> north-up) or a re-center after the user spun the map.
-    const maxTurn = FOLLOW.BRG_MAX_RATE * dtEase;
+    // A few degrees of kink stays still. A real change in the road's heading still turns the camera.
+    const maxRate = !gentle
+      ? FOLLOW.BRG_MAX_RATE
+      : (Math.abs(db) < 8 ? 0 : 80);
+    const maxTurn = maxRate * dtEase;
     cam.heading = normaliseHeading(cam.heading + clamp(db * easeK(dtEase, brgTau + extra), -maxTurn, maxTurn));
     cam.tilt += (tiltTarget - cam.tilt) * easeK(dtEase, FOLLOW.TILT_TAU + extraZoom);
     cam.range += (tgtRange - cam.range) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
     cam.fov += (view.fov - cam.fov) * easeK(dtEase, FOLLOW.RANGE_TAU + extraZoom);
-    if (destIntro) {
+    if (fly && fly.snap) {
       cam.lat = aim.lat;
       cam.lng = aim.lng;
       cam.heading = headingTarget;
       cam.tilt = tiltTarget;
       cam.range = tgtRange;
+    } else if (fly && fly.lockPose) {
+      cam.lat = aim.lat;
+      cam.lng = aim.lng;
+      cam.tilt = tiltTarget;
+      cam.range = tgtRange;
+      // Preview heading is already eased. Apply it directly so a turn glides instead of popping.
+      if (fly.gentle) cam.heading = headingTarget;
     }
 
     const center = { lat: cam.lat, lng: cam.lng };
@@ -12068,6 +12208,13 @@
     event.preventDefault();
     event.stopPropagation();
     startNavCardTest();
+  });
+  document.getElementById("flyPreviewBtn").addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (window.__aaSetDebugOverlay) window.__aaSetDebugOverlay(false);
+    hideChrome();
+    startFlyPreviewTest();
   });
   document.getElementById("viewSelectBtn").addEventListener("click", event => {
     event.preventDefault();
