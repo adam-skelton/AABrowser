@@ -2953,22 +2953,45 @@
     const query = '[out:json][timeout:8];way["highway"~"^(residential|unclassified|living_street|tertiary)$"]["access"!="private"]["service"!="driveway"](around:160,' + lat + "," + lng + ");out geom tags;";
     try {
       const json = await overpassJson(query, 12000, OVERPASS_MIRRORS.slice(0, 2));
-      let best = null, bestD = 160, bestName = "";
+      const byRoad = new Map();
       (json.elements || []).forEach(el => {
         const tags = el.tags || {};
         if (isNoParkingLane(tags)) return;
-        const hw = String(tags.highway || "");
         const name = String(tags.name || "").trim();
-        (el.geometry || []).forEach(g => {
-          if (!g || !Number.isFinite(g.lat) || !Number.isFinite(g.lon)) return;
-          const p = { lat: g.lat, lng: g.lon };
-          const d = distanceMetres(dest, p);
-          if (d < bestD) { bestD = d; best = p; bestName = name; }
-        });
-        if (!best && hw) return;
+        const key = name || ("way-" + el.id);
+        const geom = el.geometry || [];
+        let point = null, bestD = Infinity;
+        for (let i = 1; i < geom.length; i++) {
+          const a = geom[i - 1], b = geom[i];
+          if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
+          const pr = projectOnSegment(dest, { lat: a.lat, lng: a.lon }, { lat: b.lat, lng: b.lon });
+          const d = distanceMetres(dest, pr.point);
+          if (d < bestD) { bestD = d; point = pr.point; }
+        }
+        if (!point || bestD > 160) return;
+        const prev = byRoad.get(key);
+        if (!prev || bestD < prev.d) byRoad.set(key, { point: point, d: bestD, name: name });
       });
-      if (!best) return null;
-      const walkM = distanceMetres(dest, best);
+      const candidates = Array.from(byRoad.values()).sort((a, b) => a.d - b.d).slice(0, 4);
+      if (!candidates.length) return null;
+      // A straight-line nearest kerb can sit behind houses. Keep the road whose
+      // actual walk is shortest, and stop once a further road cannot beat it.
+      let chosen = null;
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        if (chosen && c.d > chosen.walkM + 20) break;
+        let walked = null;
+        try { walked = await walkAccessFrom(c.point, dest, { skipGoogle: true }); } catch (err) {}
+        const walkM = walked && Number.isFinite(walked.walkM) ? walked.walkM : c.d;
+        const path = walked && walked.path && walked.path.length >= 2 ? walked.path : null;
+        if (!chosen || walkM + 25 < chosen.walkM) {
+          chosen = { point: c.point, name: c.name, walkM: walkM, path: path };
+        }
+      }
+      if (!chosen) return null;
+      const best = chosen.point;
+      const bestName = chosen.name;
+      const walkM = chosen.walkM;
       return {
         id: "street-near-" + best.lat.toFixed(5) + "," + best.lng.toFixed(5),
         name: bestName ? bestName + " street parking" : "Street parking",
@@ -2981,6 +3004,7 @@
         parkKind: "street",
         busyRoad: false,
         walkM,
+        walkPath: chosen.path,
         score: 500 - walkM,
         parking: { fee: "", capacity: 0, access: "", type: "street", line: formatDistance(walkM) + " walk · Street" },
         description: "Street parking",
@@ -3550,7 +3574,11 @@
       return Object.assign({}, c, w);
     }));
     let best = { kind: "drive-end", lat: driveEnd.lat, lng: driveEnd.lng, walkM: current.walkM, path: current.path };
+    const endD = distanceMetres(driveEnd, dest);
     scored.forEach(c => {
+      // A shorter-looking walk can be a stop further from the place. Keep the
+      // closer curb unless the other one is actually nearer too.
+      if (distanceMetres(c, dest) > endD + 25) return;
       if (c.walkM + 40 < best.walkM && c.walkM < best.walkM * 0.82) best = c;
     });
     if (best.kind === "drive-end") return { walk: snapWalkToDriveEnd(driveEnd, current.path), walkM: current.walkM, drive: null, access: null };
@@ -3997,7 +4025,7 @@
     if (willReroute) suppressParkingApproach = true;
     if (!(opts && opts.skipReroute)) drawParkingApproach(activeRoutePath);
     if (lot && target && !destIsSamePlace(target, lot)) {
-      if (!(opts && opts.skipWalk)) drawParkingWalk(lot, target);
+      if (!(opts && opts.skipWalk)) drawParkingWalk(lot, target, lot.walkPath);
       if (willReroute) rerouteDriveToParking(lot, target);
     } else {
       parkingNear.walkId += 1;
@@ -5577,20 +5605,27 @@
     const total = cum[cum.length - 1] || 0;
     if (total < 40) return { path: drivePath, walk: walkPath, trimmedM: 0 };
     // The walk often starts at a side lot, leaves the road, then comes back to the
-    // entrance further along the drive. A continuous suffix misses that gap, so
-    // the car parks past the front and the dotted line walks back down the road.
+    // entrance further along the drive. Stop at the overlap nearest the place.
+    // The first overlap can be a long way back along the same road, which parks
+    // short of the entrance.
     const nearM = 28;
     const minM = Math.max(0, total - 700);
+    const goal = walkPath[walkPath.length - 1];
     let cutM = total;
+    let cutD = Infinity;
     for (let i = 0; i < walkPath.length; i++) {
       const p = walkPath[i];
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) continue;
+      const goalD = distanceMetres(p, goal);
       for (let j = 1; j < drivePath.length; j++) {
         if (cum[j] < minM || cum[j - 1] > total - 8) continue;
         const pr = projectOnSegment(p, drivePath[j - 1], drivePath[j]);
         if (distanceMetres(p, pr.point) > nearM) continue;
         const along = cum[j - 1] + pr.t * (cum[j] - cum[j - 1]);
-        if (along < cutM) cutM = along;
+        if (goalD + 8 < cutD || (goalD <= cutD + 8 && along > cutM)) {
+          cutD = Math.min(cutD, goalD);
+          cutM = along;
+        }
       }
     }
     const trimmedM = total - cutM;
