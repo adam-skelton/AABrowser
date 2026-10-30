@@ -750,8 +750,8 @@
   const CAR_REF_RANGE = 88;
   const CAR_REF_FOV = 42;
   const CAR_REF_TILT = 70;
-  const FREE_REF_TILT = 83;   // free follow: halfway back down from the raised chase
-  const FREE_REF_RANGE = 56;  // free follow base orbit, tighter than before
+  const FREE_REF_TILT = 80;   // free follow: a bit flatter so more road behind the car stays in frame
+  const FREE_REF_RANGE = 72;  // free follow base orbit, pulled back from the tight chase
   const FREE_REF_FOV = 47;    // free follow: a little wider than the nav chase view
   const CAR_BASE_SCALE = CAR_TARGET_WIDTH_M / CAR_WIDTH_M;
   const MODEL_ALTITUDE_MODE = "CLAMP_TO_GROUND";
@@ -795,7 +795,7 @@
   // ---------------------------------------------------------------------------
   const FOLLOW = {
     CAR_SCREEN_Y: 0.60,     // heading-up: car sits above the ETA pill (0 = top, 1 = bottom)
-    FREE_CAR_SCREEN_Y: 0.84, // free follow: car higher than the old low chase, so the aim is not so far up the road
+    FREE_CAR_SCREEN_Y: 0.70, // free follow: car up from the bottom so the road behind stays on screen
     POS_TAU: 0.25,          // camera position ease time-constant (s)
     BRG_TAU_STILL: 0.35,    // camera heading. The orbit is far behind the car, so a slower lag sits the eye beside the road
     BRG_TAU_TURN: 0.28,    // ...and through a genuine turn
@@ -828,7 +828,7 @@
     TELEPORT_M: 250,        // a fix this far from the drawn car snaps instead of gliding
     ZOOM_TAU: 2.0,          // ease between speed-band zoom levels (a band step must not pump the view)
     MIN_DRIVE_RANGE: 125,   // moving extra-zoom-in must not dive inside this on follow / re-center
-    MIN_FREE_RANGE: 238,    // free follow distance, halfway back from the higher orbit
+    MIN_FREE_RANGE: 320,    // free follow distance, further behind the car than the old tight chase
     STILL_ENTER_MPS: 1.1,   // ~4 km/h: parked (blue-dot framing only; the camera range stays put)
     STILL_EXIT_MPS: 2.6,    // ~9 km/h: rolling again
     LATCH_MPS: 2.5,         // heading-up latches onto the car's course only above this speed (compass doesn't spin when parked)
@@ -869,7 +869,7 @@
   const ZOOM_PLUS_FACTOR = 1.25;
   const ZOOM_PLUS_STEP = Math.log(ZOOM_PLUS_FACTOR) / Math.log(2);
   const FOLLOW_ZOOM_IN_CLICKS_NAV = 1;   // nav follow (e.g. 50 km/h) a step closer than the band table
-  const FOLLOW_ZOOM_IN_CLICKS_FREE = 4;  // free follow sits a step closer than before
+  const FOLLOW_ZOOM_IN_CLICKS_FREE = 3;  // free follow: one click further out than the old tight chase
   let sessionZoomClicks = 0;             // debug +/- on top of both; lasts this page load only
   const SESSION_ZOOM_MIN = -6;
   const SESSION_ZOOM_MAX = 6;
@@ -2280,9 +2280,9 @@
   const explore = { mode: false, title: "", places: [], markers: [], selected: null, overview: null, kmlCache: null, labelBucket: null, mapId: "" };
   let exploreYouMarker = null;
   const YOU_HERE_ICON = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">' +
-    '<circle cx="20" cy="20" r="16" fill="#1A73E8" fill-opacity=".22"/>' +
-    '<circle cx="20" cy="20" r="8" fill="#1A73E8" stroke="#fff" stroke-width="3"/>' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">' +
+    '<circle cx="24" cy="24" r="20" fill="#1A73E8" fill-opacity=".22"/>' +
+    '<circle cx="24" cy="24" r="10" fill="#1A73E8" stroke="#fff" stroke-width="3.5"/>' +
     "</svg>"
   );
 
@@ -4877,18 +4877,19 @@
     return range;
   }
 
-  // Free follow and navigation draw the chase view. Everywhere else, a stopped
-  // car gets a blue dot. A widened free-follow view still gets one too.
+  // Free follow and navigation draw the chase view. Zoomed-out free-cam (up
+  // arrow or pinch) and a detached map get the Google-style blue dot.
   let freeZoomDot = null;
   function freeZoomDotWanted(){
     if (isNavigating() || explore.mode || carInspect) return false;
+    if (!(puck.fix || currentGpsPoint)) return false;
     noteFollowStill(speedKalman.speed || 0);
-    if (!following && followStill) return true;
     if (infoLevel > 0) return true;
     if (cam.userRange != null && cam.userRange > freeFollowRange() * 1.2) return true;
-    if (!following && map3d) {
+    if (!following) return true;
+    if (map3d) {
       const range = Number(map3d.range) || 0;
-      return range > freeFollowRange() * 1.2;
+      if (range > freeFollowRange() * 1.35) return true;
     }
     return false;
   }
@@ -4900,28 +4901,30 @@
   }
 
   function syncFreeZoomDot(){
-    if (!freeZoomDotWanted() || !map3d || !Marker3DElement) {
+    const Ctor = Marker3DInteractiveElement || Marker3DElement;
+    if (!freeZoomDotWanted() || !map3d || !Ctor) {
       clearFreeZoomDot();
       return;
     }
-    const pos = exploreYouPoint();
-    if (!pos) return;
+    const here = exploreYouPoint();
+    if (!here) return;
+    const pos = { lat: here.lat, lng: here.lng, altitude: 0 };
     if (!freeZoomDot) {
       try {
-        freeZoomDot = new Marker3DElement({
+        freeZoomDot = new Ctor({
           position: pos,
           altitudeMode: "CLAMP_TO_GROUND",
-          anchorLeft: "-50%",
-          anchorTop: "-50%",
           sizePreserved: true,
           drawsWhenOccluded: true
         });
+        try { freeZoomDot.anchorLeft = "-50%"; freeZoomDot.anchorTop = "-50%"; } catch (err) {}
         const img = document.createElement("img");
         img.src = YOU_HERE_ICON;
-        img.width = 40;
-        img.height = 40;
+        img.width = 48;
+        img.height = 48;
         img.alt = "Current location";
-        img.style.cssText = "display:block";
+        img.draggable = false;
+        img.style.cssText = "display:block;width:48px;height:48px;pointer-events:none";
         const template = document.createElement("template");
         template.content.append(img);
         freeZoomDot.append(template);
@@ -4935,6 +4938,174 @@
     try { freeZoomDot.anchorLeft = "-50%"; freeZoomDot.anchorTop = "-50%"; } catch (err) {}
     try { freeZoomDot.position = pos; } catch (err) {}
     if (!freeZoomDot.parentElement) map3d.append(freeZoomDot);
+  }
+
+  let roadOverlayLines = [];
+  let roadOverlayGen = 0;
+  let roadOverlayKey = "";
+  let roadOverlayTimer = 0;
+  const ROAD_OVERLAY_HW = "motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link";
+  const ROAD_OVERLAY_MAJOR = /^(motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link)$/;
+  const ROAD_OVERLAY_RADIUS_M = 1000;
+  const ROAD_OVERLAY_MAX_LINES = 220;
+  function roadOverlayWanted(){
+    if (explore.mode || carInspect || destPreview) return false;
+    return infoLevel > 0;
+  }
+  function clearRoadOverlay(){
+    roadOverlayGen += 1;
+    roadOverlayKey = "";
+    if (roadOverlayTimer) {
+      window.clearTimeout(roadOverlayTimer);
+      roadOverlayTimer = 0;
+    }
+    (roadOverlayLines || []).forEach(line => { try { line.remove(); } catch (err) {} });
+    roadOverlayLines = [];
+  }
+  function roadOverlayCar(){
+    if (puck.fix && Number.isFinite(puck.lat) && Number.isFinite(puck.lng)) return { lat: puck.lat, lng: puck.lng };
+    if (currentGpsPoint && Number.isFinite(currentGpsPoint.lat)) return { lat: currentGpsPoint.lat, lng: currentGpsPoint.lng };
+    return null;
+  }
+  function roadPtKey(p){
+    return p.lat.toFixed(5) + "," + p.lng.toFixed(5);
+  }
+  function simplifyRoadPts(pts){
+    if (!pts || pts.length <= 3) return pts || [];
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      if (distanceMetres(out[out.length - 1], pts[i]) >= 12) out.push(pts[i]);
+    }
+    const last = pts[pts.length - 1];
+    if (distanceMetres(out[out.length - 1], last) > 2) out.push(last);
+    return out.length >= 2 ? out : pts;
+  }
+  function mergeRoadChains(ways){
+    const items = (ways || []).map(w => ({ pts: w.pts, hw: w.highway, used: false }));
+    const byEnd = new Map();
+    const add = (key, i) => {
+      const list = byEnd.get(key);
+      if (list) list.push(i);
+      else byEnd.set(key, [i]);
+    };
+    items.forEach((it, i) => {
+      add(roadPtKey(it.pts[0]), i);
+      add(roadPtKey(it.pts[it.pts.length - 1]), i);
+    });
+    const same = (a, b) => Math.abs(a.lat - b.lat) + Math.abs(a.lng - b.lng) < 1.2e-6;
+    const take = key => {
+      const list = byEnd.get(key);
+      if (!list) return -1;
+      for (let k = 0; k < list.length; k++) {
+        const i = list[k];
+        if (!items[i].used) return i;
+      }
+      return -1;
+    };
+    const chains = [];
+    items.forEach((it, start) => {
+      if (it.used) return;
+      it.used = true;
+      let pts = it.pts.slice();
+      for (;;) {
+        const n = take(roadPtKey(pts[pts.length - 1]));
+        if (n < 0) break;
+        const other = items[n];
+        other.used = true;
+        const end = pts[pts.length - 1];
+        if (same(other.pts[0], end)) pts = pts.concat(other.pts.slice(1));
+        else pts = pts.concat(other.pts.slice().reverse().slice(1));
+      }
+      for (;;) {
+        const n = take(roadPtKey(pts[0]));
+        if (n < 0) break;
+        const other = items[n];
+        other.used = true;
+        const head = pts[0];
+        if (same(other.pts[other.pts.length - 1], head)) pts = other.pts.slice(0, -1).concat(pts);
+        else pts = other.pts.slice().reverse().slice(0, -1).concat(pts);
+      }
+      chains.push({ highway: it.hw, pts });
+    });
+    return chains;
+  }
+  function appendRoadOverlayLine(pts, big){
+    if (!pts || pts.length < 2) return;
+    try {
+      const line = new Polyline3DElement({
+        path: pts.map(p => ({ lat: p.lat, lng: p.lng })),
+        strokeColor: "#00C853",
+        strokeWidth: big ? 7.5 : 5.6,
+        altitudeMode: MODEL_ALTITUDE_MODE,
+        drawsOccludedSegments: true,
+        zIndex: big ? 3 : 2
+      });
+      map3d.append(line);
+      roadOverlayLines.push(line);
+    } catch (err) {}
+  }
+  function paintRoadOverlay(ways){
+    if (!map3d || typeof Polyline3DElement === "undefined") return;
+    (roadOverlayLines || []).forEach(line => { try { line.remove(); } catch (err) {} });
+    roadOverlayLines = [];
+    const chains = mergeRoadChains(ways);
+    chains.sort((a, b) => {
+      const am = ROAD_OVERLAY_MAJOR.test(a.highway) ? 0 : 1;
+      const bm = ROAD_OVERLAY_MAJOR.test(b.highway) ? 0 : 1;
+      return am - bm || b.pts.length - a.pts.length;
+    });
+    chains.slice(0, ROAD_OVERLAY_MAX_LINES).forEach(way => {
+      const pts = simplifyRoadPts(way.pts);
+      if (!pts || pts.length < 2) return;
+      appendRoadOverlayLine(pts, ROAD_OVERLAY_MAJOR.test(String(way.highway || "")));
+    });
+  }
+  async function loadRoadOverlay(center, gen){
+    if (!center || !Number.isFinite(center.lat)) return;
+    const query = "[out:json][timeout:8];way[\"highway\"~\"^(" + ROAD_OVERLAY_HW + ")$\"][\"area\"!=\"yes\"](around:" + ROAD_OVERLAY_RADIUS_M + "," + center.lat.toFixed(5) + "," + center.lng.toFixed(5) + ");out geom;";
+    try {
+      const json = await overpassJson(query, 9000, OVERPASS_MIRRORS.slice(0, 1));
+      if (gen !== roadOverlayGen || !roadOverlayWanted()) return;
+      const ways = [];
+      (json && json.elements || []).forEach(el => {
+        if (!el || el.type !== "way" || !el.geometry || el.geometry.length < 2) return;
+        const hw = String((el.tags && el.tags.highway) || "");
+        const pts = [];
+        el.geometry.forEach(g => {
+          if (g && Number.isFinite(g.lat) && Number.isFinite(g.lon)) pts.push({ lat: g.lat, lng: g.lon });
+        });
+        if (pts.length >= 2) ways.push({ highway: hw, pts });
+      });
+      paintRoadOverlay(ways);
+    } catch (err) {}
+  }
+  let roadOverlayTickMs = 0;
+  function syncRoadOverlay(force){
+    if (!roadOverlayWanted()) {
+      if (roadOverlayLines.length || roadOverlayKey) clearRoadOverlay();
+      return;
+    }
+    const here = roadOverlayCar();
+    if (!here) return;
+    const key = here.lat.toFixed(3) + "," + here.lng.toFixed(3);
+    if (!force && key === roadOverlayKey) return;
+    roadOverlayKey = key;
+    if (roadOverlayTimer) window.clearTimeout(roadOverlayTimer);
+    const gen = roadOverlayGen;
+    roadOverlayTimer = window.setTimeout(() => {
+      roadOverlayTimer = 0;
+      if (gen !== roadOverlayGen || !roadOverlayWanted()) return;
+      loadRoadOverlay(here, gen);
+    }, force ? 40 : 400);
+  }
+  function tickRoadOverlay(now){
+    if (!roadOverlayWanted()) {
+      if (roadOverlayLines.length || roadOverlayKey) clearRoadOverlay();
+      return;
+    }
+    if (roadOverlayLines.length && now - roadOverlayTickMs < 4000) return;
+    roadOverlayTickMs = now;
+    syncRoadOverlay(false);
   }
 
   function clearExploreYou(){
@@ -9505,7 +9676,11 @@
     } else if (carInspect) {
       applyCarInspectCamera(dtEase, now);
     } else if (following && mapRevealDone) applyFollowCamera(dtEase, now);
-    else cam.seeded = false; // re-attach eases in from wherever the user left the camera
+    else {
+      cam.seeded = false; // re-attach eases in from wherever the user left the camera
+      syncFreeZoomDot();
+    }
+    tickRoadOverlay(now);
     updateSpeedLimitBadge();
     updateNavHud();
     updateTurnCue();
@@ -12436,7 +12611,7 @@
   function infoUiAvailable(){
     if (!(puck.fix || currentGpsPoint)) return false;
     if (isNavigating()) return true;
-    return freeHudMoving();
+    return freeHudMoving() || infoLevel > 0;
   }
 
   function updateNavInfoButton(){
@@ -12482,6 +12657,7 @@
     clearManeuverMarkers();
     updateRecenterButton();
     syncFreeZoomDot();
+    syncRoadOverlay();
   }
 
   function onNavMapTap(){
@@ -12558,6 +12734,7 @@
     updateRecenterButton();
     armNavInfoIdle();
     syncFreeZoomDot();
+    syncRoadOverlay(true);
   }
   window.__aaInjectGps = function(fix){
     if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return;
@@ -12615,6 +12792,9 @@
     mapDetailToken += 1;
     mapDetailHoldUntil = 0;
     mapDetailStop = true;
+    try {
+      if (map3d && typeof map3d.stopCameraAnimation === "function") map3d.stopCameraAnimation();
+    } catch (err) {}
   }
 
   function sameMapCenter(next){
