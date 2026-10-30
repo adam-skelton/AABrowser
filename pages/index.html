@@ -4901,7 +4901,7 @@
   }
 
   function syncFreeZoomDot(){
-    const Ctor = Marker3DInteractiveElement || Marker3DElement;
+    const Ctor = Marker3DElement;
     if (!freeZoomDotWanted() || !map3d || !Ctor) {
       clearFreeZoomDot();
       return;
@@ -12792,9 +12792,13 @@
     mapDetailToken += 1;
     mapDetailHoldUntil = 0;
     mapDetailStop = true;
+  }
+  function releaseMapGestures(){
+    if (!map3d) return;
     try {
-      if (map3d && typeof map3d.stopCameraAnimation === "function") map3d.stopCameraAnimation();
+      if (typeof map3d.stopCameraAnimation === "function") map3d.stopCameraAnimation();
     } catch (err) {}
+    try { map3d.gestureHandling = "GREEDY"; } catch (err) {}
   }
 
   function sameMapCenter(next){
@@ -12840,25 +12844,15 @@
     };
   }
 
-  function flyMapDetail(cam, ms){
+  function flyMapDetail(cam){
     if (!map3d || !cam) return;
-    const endCamera = {
-      center: { lat: cam.lat, lng: cam.lng, altitude: cam.altitude },
-      heading: cam.heading,
-      tilt: cam.tilt,
-      range: cam.range,
-      roll: cam.roll
-    };
-    if (typeof map3d.flyCameraTo === "function") {
-      try {
-        map3d.flyCameraTo({ endCamera, durationMillis: ms });
-        return;
-      } catch (err) {}
-    }
-    map3d.center = endCamera.center;
+    // A direct nudge, not flyCameraTo. That animation disables dragging and the
+    // second pass (a few seconds after load) was leaving it disabled.
+    map3d.center = { lat: cam.lat, lng: cam.lng, altitude: cam.altitude };
     map3d.heading = cam.heading;
     map3d.tilt = cam.tilt;
     map3d.range = cam.range;
+    try { map3d.gestureHandling = "GREEDY"; } catch (err) {}
   }
 
   function syncFollowCamFromMap(){
@@ -12896,16 +12890,19 @@
       tilt: home.tilt,
       range: home.range * 1.02,
       roll: home.roll
-    }, 320);
+    });
     window.setTimeout(() => {
       if (token !== mapDetailToken || !map3d) return;
-      flyMapDetail(home, 320);
+      flyMapDetail(home);
       mapDetailHoldUntil = performance.now() + 340 + quietMs;
     }, returnAt);
     window.setTimeout(() => {
       if (token !== mapDetailToken) return;
       syncFollowCamFromMap();
       mapDetailHoldUntil = 0;
+      // flyCameraTo swallows drags until the animation is explicitly finished.
+      // The second pass lands a few seconds after load, which is when panning died.
+      releaseMapGestures();
     }, returnAt + 340 + quietMs);
     return true;
   }
