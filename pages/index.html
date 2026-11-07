@@ -24,10 +24,10 @@
     #map:focus,#map:focus-visible,gmp-map-3d:focus,gmp-map-3d:focus-visible {outline:none}
     #topPanel {position:absolute; z-index:20; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:grid; gap:8px; pointer-events:none}
     #searchRow,#buttonRow,#carDebugBtn {pointer-events:auto}
-    #searchRow {display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:8px; align-items:stretch}
-    #searchRow.has-query {grid-template-columns:minmax(0,1fr) 44px 48px}
-    #searchRow.has-start {grid-template-columns:minmax(0,1fr) 48px 48px}
-    #searchRow.has-query.has-start {grid-template-columns:minmax(0,1fr) 44px 48px 48px}
+    #searchRow {display:grid; grid-template-columns:48px minmax(0,1fr); gap:8px; align-items:stretch}
+    #searchRow.has-query {grid-template-columns:48px minmax(0,1fr) 44px}
+    #searchRow.has-start {grid-template-columns:48px minmax(0,1fr) 48px}
+    #searchRow.has-query.has-start {grid-template-columns:48px minmax(0,1fr) 44px 48px}
     #searchHost {position:relative; min-width:0; min-height:44px; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 2px 10px rgba(0,0,0,.24); overflow:hidden}
     #searchHost gmp-place-autocomplete {width:100%; min-height:44px; display:block; border:0; border-radius:12px; background:transparent; overflow:hidden}
     #searchHost gmp-place-autocomplete::part(input),
@@ -46,7 +46,17 @@
     #zoomMod span {min-width:8.6em; text-align:center; font-size:14px; font-weight:750; font-variant-numeric:tabular-nums; letter-spacing:-.2px}
     html.aa-car #zoomMod,body.aa-car #zoomMod {background:#2E3134; color:#fff}
     #searchRow,#buttonRow,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
-    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    #recentRow {pointer-events:auto; display:flex; justify-content:flex-start}
+    #recentBtn {min-height:40px; padding:0 16px; border-radius:12px; background:rgba(255,255,255,.96); color:#1A73E8; font-weight:750}
+    #recentList {display:none; pointer-events:auto; max-width:min(640px,100%); max-height:min(52vh,420px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
+    #recentList.open {display:block}
+    #recentList .recent-empty {padding:14px 16px; font-weight:650; color:#3C4043}
+    #recentList .recent-row {display:flex; align-items:center; gap:8px; border-top:1px solid rgba(0,0,0,.08)}
+    #recentList .recent-row:first-child {border-top:0}
+    #recentList .recent-go {flex:1; min-width:0; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
+    #recentList .recent-go .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
+    #recentList .recent-x {flex:0 0 auto; width:44px; min-height:44px; margin-right:6px; padding:0; border-radius:50%; background:transparent; box-shadow:none; color:#5F6368; font-size:22px; line-height:1}
+    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults,body.chrome-hidden #recentRow,body.chrome-hidden #recentList {opacity:0; pointer-events:none; transform:translateY(-10px)}
     #searchResults {display:none; pointer-events:auto; justify-self:stretch; max-width:min(640px,100%); max-height:min(62vh,480px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
     #searchResults.open {display:block}
     #searchResults button {display:block; width:100%; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
@@ -139,13 +149,13 @@
     html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
     #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); z-index:35; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
-    #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); align-items:flex-start; gap:10px; pointer-events:none}
+    #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); width:max-content; max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); flex-direction:column; align-items:flex-end; gap:10px; pointer-events:none}
     body.navigating #navHud {display:flex}
     body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
-    html.aa-car #navHud,body.aa-car #navHud {left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left)))}
+    html.aa-car #navHud,body.aa-car #navHud {left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)))}
     html.aa-split #navHud,body.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     html.aa-car.aa-split #navHud,body.aa-car.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
-    #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-start; gap:6px; min-height:0; padding:10px 12px 11px; margin-top:12px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
+    #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-end; gap:6px; min-height:0; padding:10px 12px 11px; margin-top:12px; border-radius:16px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
     #navLanes.visible {display:flex !important}
     body:not(.chrome-hidden) #navLanes,
     body:not(.chrome-hidden) #navLanes.visible {display:none !important}
@@ -155,8 +165,8 @@
     .nav-lane svg path[fill="none"] {fill:none; stroke:#fff}
     .nav-lane svg path.lane-dim {fill:rgba(255,255,255,.38); stroke:rgba(255,255,255,.38)}
     .nav-lane svg path.lane-dim[fill="none"] {fill:none; stroke:rgba(255,255,255,.38)}
-    #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(480px, calc(100% - 160px)); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
-    html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(520px, calc(100% - 116px))}
+    #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(520px, 100%); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
+    html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(560px, 100%)}
     #navBanner.visible {display:grid !important; gap:8px}
     #navBanner:focus,#navBanner:active,#navBanner:focus-visible,#navPrimary:active {outline:none; box-shadow:none; filter:none; transform:none}
     body.nav-browsing #navBanner,
@@ -170,14 +180,14 @@
     #flyStreet {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(16px, env(safe-area-inset-top))); left:50%; transform:translateX(-50%); max-width:min(560px, calc(100% - 48px)); padding:10px 18px; border-radius:16px; background:rgba(28,28,30,.78); color:#fff; font-size:20px; font-weight:700; letter-spacing:-.2px; text-align:center; pointer-events:none; box-shadow:0 4px 16px rgba(0,0,0,.28); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     body.fly-street #flyStreet {display:block}
     body:not(.chrome-hidden) #flyStreet {top:calc(var(--aa-inset-top) + max(70px, env(safe-area-inset-top) + 60px))}
-    #navPrimary {display:flex; align-items:center; gap:10px; min-height:88px; padding:10px 22px 10px 10px; border-radius:18px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28); outline:none; -webkit-tap-highlight-color:transparent}
-    #navIconWrap {position:relative; width:74px; height:74px; flex:0 0 auto}
+    #navPrimary {display:flex; align-items:center; gap:12px; min-height:104px; padding:12px 26px 12px 12px; border-radius:20px; background:#1E8E3E; color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.28); outline:none; -webkit-tap-highlight-color:transparent}
+    #navIconWrap {position:relative; width:86px; height:86px; flex:0 0 auto}
     #navIcon, #navClock {position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
-    #navIcon svg {width:66px; height:66px; display:block; overflow:visible; color:#fff}
+    #navIcon svg {width:78px; height:78px; display:block; overflow:visible; color:#fff}
     #navIcon svg path {fill:currentColor}
     #navIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navPrimaryCopy {min-width:0; flex:1; display:flex; flex-direction:column; gap:1px}
-    #navPrimaryDist {font-size:26px; font-weight:800; letter-spacing:-.4px; line-height:1.05; font-variant-numeric:tabular-nums}
+    #navPrimaryDist {font-size:31px; font-weight:800; letter-spacing:-.4px; line-height:1.05; font-variant-numeric:tabular-nums}
     #navClock {display:none}
     #navClock.visible {display:flex !important}
     #navIconWrap.clock {width:auto; display:flex; align-items:center; gap:0}
@@ -188,13 +198,13 @@
     #navClockNum {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#1C1C1E; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
     #navPrimary {height:auto; overflow:visible}
     #navBanner {height:auto; overflow:visible}
-    #navPrimaryText {font-size:16px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:normal; overflow:visible}
-    #navThen {display:none; flex-direction:column; align-items:flex-start; gap:3px; width:max-content; padding:8px 16px 9px 14px; border-radius:16px; background:#1E8E3E; color:#fff; font-size:18px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
+    #navPrimaryText {font-size:19px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:normal; overflow:visible}
+    #navThen {display:none; flex-direction:column; align-items:flex-start; gap:4px; width:max-content; padding:10px 18px 11px 16px; border-radius:18px; background:#1E8E3E; color:#fff; font-size:21px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
     #navThen.visible {display:flex !important}
-    #navThenTop {display:flex; align-items:center; gap:10px}
-    #navThenDist {font-size:18px; font-weight:750; letter-spacing:-.2px; line-height:1.1; font-variant-numeric:tabular-nums; opacity:.94}
-    #navThenIcon {width:34px; height:34px; display:flex}
-    #navThenIcon svg {width:34px; height:34px; display:block; overflow:visible; color:#fff}
+    #navThenTop {display:flex; align-items:center; gap:12px}
+    #navThenDist {font-size:21px; font-weight:750; letter-spacing:-.2px; line-height:1.1; font-variant-numeric:tabular-nums; opacity:.94}
+    #navThenIcon {width:42px; height:42px; display:flex}
+    #navThenIcon svg {width:42px; height:42px; display:block; overflow:visible; color:#fff}
     #navThenIcon svg path {fill:currentColor}
     #navThenIcon svg path[fill="none"] {fill:none; stroke:currentColor}
     #navEtaBar {display:none; position:relative; z-index:34; left:auto; right:auto; bottom:auto; width:max-content; max-width:100%; min-width:0; min-height:48px; padding:8px 24px 8px 15px; border-radius:38px; background:rgba(32,33,36,.96); color:#fff; align-items:center; justify-content:center; gap:16px; box-shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.06); pointer-events:auto; box-sizing:border-box; flex:0 0 auto; -webkit-font-smoothing:antialiased}
@@ -319,6 +329,11 @@
     #routeGo.counting #routeGoProgress {opacity:1}
     #routeGoLabel {position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px; font-size:16px; font-weight:700; letter-spacing:.1px}
     #routeGoLabel svg {width:18px; height:18px; display:block}
+    #routeGoSpin {display:none; position:absolute; z-index:2; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; border:3px solid rgba(255,255,255,.35); border-top-color:#fff; animation:routeGoSpin .7s linear infinite}
+    #routeGo.busy #routeGoSpin {display:block}
+    #routeGo.busy #routeGoLabel {visibility:hidden}
+    #routeGo.busy {cursor:default}
+    @keyframes routeGoSpin {to {transform:rotate(360deg)}}
     #status {display:none}
     #chromeWake {position:absolute; top:0; left:0; right:0; height:max(80px,calc(env(safe-area-inset-top) + 68px)); z-index:25; pointer-events:none}
     body.chrome-hidden #chromeWake {pointer-events:auto}
@@ -365,7 +380,7 @@
     #carModelHost model-viewer {width:100%; height:100%; --poster-color:transparent; touch-action:none}
     #carModelHint {padding:8px 14px; font-size:13px; font-weight:600; color:rgba(255,255,255,.7); text-align:center}
     #carModelClose {position:absolute; top:10px; right:10px; z-index:2; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#3C4043; color:#fff; box-shadow:none; font-size:24px; line-height:1}
-    @media (max-width:580px){#searchRow{grid-template-columns:minmax(0,1fr) 48px}#searchRow.has-query{grid-template-columns:minmax(0,1fr) 44px 48px}#searchRow.has-start{grid-template-columns:minmax(0,1fr) 48px 48px}#searchRow.has-query.has-start{grid-template-columns:minmax(0,1fr) 44px 48px 48px}button,select{font-size:14px}}
+    @media (max-width:580px){#searchRow{grid-template-columns:48px minmax(0,1fr)}#searchRow.has-query{grid-template-columns:48px minmax(0,1fr) 44px}#searchRow.has-start{grid-template-columns:48px minmax(0,1fr) 48px}#searchRow.has-query.has-start{grid-template-columns:48px minmax(0,1fr) 44px 48px}button,select{font-size:14px}}
   </style>
   <script>
     try { if (window.Car) document.documentElement.classList.add("native-boot"); } catch (e) {}
@@ -429,14 +444,6 @@
   </button>
   <div id="topPanel">
     <div id="searchRow">
-      <div id="searchHost"></div>
-      <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
-      <button id="startPlaceBtn" type="button" hidden aria-label="Navigate back to where you started">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" fill-rule="evenodd" d="M14.2 3.2 21.4 9.2V21H8.2V9.2L14.2 3.2zm-2 17.8v-6.2h4.2V21h-4.2z"/>
-          <path fill="currentColor" d="M6.7 6.1 4.4 3.5v2.1H3.6a3.4 3.4 0 1 0 0 6.8h2.2V11H3.6a2 2 0 1 1 0-4h.8v2.1L6.7 6.1z"/>
-        </svg>
-      </button>
       <button id="mapsBrowseBtn" type="button" aria-label="Maps">
         <svg viewBox="-4 -4 100.3 140.3" aria-hidden="true">
           <path fill="#1A73E8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
@@ -446,7 +453,19 @@
           <path fill="#34A853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.4 14.5 6.8 23.1 12.8 23.1s3.4-8.7 12.8-23.2"/>
         </svg>
       </button>
+      <div id="searchHost"></div>
+      <button id="searchClear" type="button" hidden aria-label="Clear search">&times;</button>
+      <button id="startPlaceBtn" type="button" hidden aria-label="Navigate back to where you started">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" d="M14.2 3.2 21.4 9.2V21H8.2V9.2L14.2 3.2zm-2 17.8v-6.2h4.2V21h-4.2z"/>
+          <path fill="currentColor" d="M6.7 6.1 4.4 3.5v2.1H3.6a3.4 3.4 0 1 0 0 6.8h2.2V11H3.6a2 2 0 1 1 0-4h.8v2.1L6.7 6.1z"/>
+        </svg>
+      </button>
     </div>
+    <div id="recentRow">
+      <button id="recentBtn" type="button" aria-expanded="false">Recents</button>
+    </div>
+    <div id="recentList" hidden></div>
     <div id="searchResults" hidden></div>
     <div id="buttonRow">
       <button id="debugClose" type="button" aria-label="Close debug">&times;</button>
@@ -611,6 +630,7 @@
     </button>
     <button id="routeGo" type="button">
       <span id="routeGoProgress" aria-hidden="true"></span>
+      <span id="routeGoSpin" aria-hidden="true"></span>
       <span id="routeGoLabel">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.5L4.6 20.2l.8.8L12 18l6.6 3 .8-.8z"/></svg>
         Start
@@ -1860,6 +1880,7 @@
   }
 
   function pushSearchSuggestions(query, items){
+    setRecentListOpen(false);
     renderSearchDropdown(items);
     try {
       if (window.Car && typeof Car.onSearchSuggestions === "function") {
@@ -1960,6 +1981,94 @@
     box.innerHTML = "";
     chromeLocked = false;
     closeAaSearchBar();
+  }
+
+  const RECENT_KEY = "aaRecentPlaces";
+  const RECENT_MAX = 16;
+  let recentListOpen = false;
+
+  function readRecents(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+      return Array.isArray(raw) ? raw.filter(p => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.name) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function writeRecents(list){
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify((list || []).slice(0, RECENT_MAX))); } catch (err) {}
+  }
+
+  function recentKey(place){
+    const id = usablePlaceId(place && place.placeId);
+    if (id) return "id:" + id;
+    return "ll:" + Number(place.lat).toFixed(4) + "," + Number(place.lng).toFixed(4);
+  }
+
+  function rememberRecentPlace(place){
+    if (!place || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lng))) return;
+    if (isFuelStop(place)) return;
+    const name = String(place.name || "").trim();
+    if (!name) return;
+    const entry = {
+      name: name,
+      address: place.address || "",
+      lat: Number(place.lat),
+      lng: Number(place.lng),
+      placeId: usablePlaceId(place.placeId) || ""
+    };
+    const key = recentKey(entry);
+    writeRecents([entry].concat(readRecents().filter(p => recentKey(p) !== key)));
+    if (recentListOpen) renderRecents();
+  }
+
+  function removeRecentPlace(index){
+    const items = readRecents();
+    if (index < 0 || index >= items.length) return;
+    items.splice(index, 1);
+    writeRecents(items);
+    renderRecents();
+  }
+
+  function renderRecents(){
+    const list = document.getElementById("recentList");
+    if (!list) return;
+    const items = readRecents();
+    if (!items.length) {
+      list.innerHTML = '<div class="recent-empty">No recent places</div>';
+      return;
+    }
+    list.innerHTML = items.map((p, i) => {
+      const sub = p.address ? `<span class="sub">${escapeHtml(p.address)}</span>` : "";
+      return `<div class="recent-row"><button type="button" class="recent-go" data-recent="${i}">${escapeHtml(p.name)}${sub}</button><button type="button" class="recent-x" data-recent-x="${i}" aria-label="Remove ${escapeHtml(p.name)}">×</button></div>`;
+    }).join("");
+  }
+
+  function setRecentListOpen(open){
+    recentListOpen = !!open;
+    const list = document.getElementById("recentList");
+    const btn = document.getElementById("recentBtn");
+    if (list) {
+      list.hidden = !recentListOpen;
+      list.classList.toggle("open", recentListOpen);
+      if (recentListOpen) renderRecents();
+    }
+    if (btn) btn.setAttribute("aria-expanded", recentListOpen ? "true" : "false");
+  }
+
+  async function goRecentPlace(place){
+    if (!place) return;
+    setRecentListOpen(false);
+    setAutocompleteValue(place.name || "");
+    const dest = {
+      name: place.name,
+      address: place.address || "",
+      lat: Number(place.lat),
+      lng: Number(place.lng),
+      placeId: place.placeId || ""
+    };
+    await calculateRoute(getRouteOrigin(), dest, dest.name);
   }
 
   const START_PLACE_KEY = "aaStartSuburb";
@@ -4877,8 +4986,8 @@
     return range;
   }
 
-  // Free follow and navigation draw the chase view. Zoomed-out free-cam (up
-  // arrow or pinch) and a detached map get the Google-style blue dot.
+  // Free follow and navigation draw the chase view. The blue dot is only for a
+  // zoomed-out free camera (up arrow or pinch). It is removed once the chase view returns.
   let freeZoomDot = null;
   function freeZoomDotWanted(){
     if (isNavigating() || explore.mode || carInspect) return false;
@@ -4886,7 +4995,6 @@
     noteFollowStill(speedKalman.speed || 0);
     if (infoLevel > 0) return true;
     if (cam.userRange != null && cam.userRange > freeFollowRange() * 1.2) return true;
-    if (!following) return true;
     if (map3d) {
       const range = Number(map3d.range) || 0;
       if (range > freeFollowRange() * 1.35) return true;
@@ -4896,8 +5004,15 @@
 
   function clearFreeZoomDot(){
     if (!freeZoomDot) return;
-    try { freeZoomDot.remove(); } catch (err) {}
+    const dot = freeZoomDot;
     freeZoomDot = null;
+    try { dot.position = null; } catch (err) {}
+    try { dot.hidden = true; } catch (err) {}
+    try { dot.remove(); } catch (err) {}
+    try {
+      const parent = dot.parentNode || dot.parentElement;
+      if (parent && typeof parent.removeChild === "function") parent.removeChild(dot);
+    } catch (err) {}
   }
 
   function syncFreeZoomDot(){
@@ -6516,9 +6631,83 @@
   }
   window.__aaClearTripCache = clearTripCache;
 
+  // Parking, the walk, and the private-road trim used to block the first line.
+  // Draw Google's drive as soon as it returns, then settle those in the background.
+  async function refineSettledRoute(gen, originPt, dest, specDest, first, parkingP){
+    try {
+      try { await parkingP; } catch (err) {}
+      if (gen !== routeGen) return;
+      const driveTo = await pickDriveDestination(dest);
+      if (gen !== routeGen) return;
+      let routed = first;
+      if (!routed || !routed.path || !sameDriveTarget(specDest, driveTo)) {
+        try {
+          const again = await requestRoute(originPt, driveTo, true, { skipTrim: true });
+          if (again && again.path && again.path.length >= 2) routed = again;
+        } catch (err) {}
+      }
+      if (gen !== routeGen || !routed || !routed.path || routed.path.length < 2) return;
+      activeDriveTo = driveTo;
+      let useRoute = routed.route;
+      let usePath = routed.path;
+      let useIntervals = routed.intervals;
+      let useWalk = null;
+      const stop = { lat: driveTo.lat, lng: driveTo.lng };
+      let refined = null;
+      try {
+        refined = await refineDriveByWalk(originPt, dest, [stop, { lat: stop.lat + 0.00002, lng: stop.lng }]);
+        const arrived = usePath[usePath.length - 1];
+        if (arrived && distanceMetres(arrived, stop) > 35) {
+          refined = await refineDriveByWalk(originPt, dest, usePath);
+        }
+      } catch (err) {}
+      if (gen !== routeGen) return;
+      if (refined && refined.drive && refined.drive.path) {
+        useRoute = refined.drive.route;
+        usePath = refined.drive.path;
+        useIntervals = refined.drive.intervals;
+        if (refined.access) activeDriveTo = refined.access;
+        useWalk = refined.walk || null;
+      } else if (refined && refined.walk) {
+        useWalk = refined.walk;
+      }
+      if (!useWalk || useWalk.length < 2) {
+        try {
+          const w = await walkAccessFrom(usePath[usePath.length - 1], dest);
+          useWalk = w && w.path;
+        } catch (err) {}
+      }
+      if (gen !== routeGen) return;
+      try {
+        const trimmed = await Promise.race([
+          trimPrivateRoadTail(usePath),
+          new Promise(resolve => setTimeout(() => resolve(usePath), 2500))
+        ]);
+        if (trimmed && trimmed.length >= 2 && trimmed.length !== usePath.length) {
+          usePath = trimmed;
+          useIntervals = routeTrafficIntervals(useRoute, usePath);
+        }
+      } catch (err) {}
+      if (gen !== routeGen) return;
+      const overlap = keepDriveToParkingLot(parkingNear.selected)
+        ? { path: usePath, walk: useWalk, trimmedM: 0 }
+        : trimDriveWalkOverlap(usePath, useWalk);
+      usePath = overlap.path || usePath;
+      useWalk = overlap.walk || useWalk;
+      if (overlap.trimmedM > 0) {
+        useIntervals = routeTrafficIntervals(useRoute, usePath);
+        snapStreetParkingToDriveEnd(usePath[usePath.length - 1], dest);
+      }
+      adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
+    } catch (err) {
+      console.warn("Route refine failed", err);
+    }
+  }
+
   async function calculateRoute(origin, destination, destinationName, opts){
     stopDemo();
     if (!RouteClass || !map3d) return;
+    setRecentListOpen(false);
     setMessage(`Calculating route to ${destinationName}...`);
 
     let routeSettled = false;
@@ -6586,17 +6775,37 @@
         name: destination.name,
         placeId: usablePlaceId(destination.placeId)
       };
-      // The drive to the place runs while parking is looked up. It is drawn only
-      // when that place is still the stop. A moved stop gets one later request.
-      const speculativeP = settle
-        ? requestRoute(originPt, specDest, true).catch(err => {
-          console.warn("Early drive failed", err);
-          return null;
-        })
-        : null;
+      if (!noCard) setRouteCalculating(true);
       if (settle) {
         try { removeRouteLines(); } catch (err) {}
-        try { await parkingP; } catch (err) {}
+        let routed = null;
+        const quickDest = { lat: specDest.lat, lng: specDest.lng, name: specDest.name };
+        try {
+          routed = await requestRoute(originPt, quickDest, true, { skipTrim: true });
+        } catch (err) {
+          console.warn("Early drive failed", err);
+        }
+        if (gen !== routeGen) {
+          if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
+          return;
+        }
+        if (!routed || !routed.path || routed.path.length < 2) {
+          routed = await requestRoute(originPt, quickDest, true, { skipTrim: true });
+        }
+        if (gen !== routeGen) {
+          if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
+          return;
+        }
+        activeDriveTo = specDest;
+        adoptRoute(routed.route, routed.path, routed.intervals, dest, false, null);
+        routeSettled = true;
+        setRouteCalculating(false);
+        if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, routed.route && routed.route.distanceMeters, { keepPreview: true });
+        else if (!noCard) maybeStartRouteCountdown();
+        if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
+        const refineP = refineSettledRoute(gen, originPt, dest, specDest, routed, parkingP);
+        if (opts && opts.waitRefine) await refineP;
+        return;
       }
       if (gen !== routeGen) {
         if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
@@ -6608,14 +6817,7 @@
         return;
       }
       activeDriveTo = driveTo;
-      let routeP = (speculativeP && sameDriveTarget(specDest, driveTo)) ? speculativeP : null;
-      if (!routeP) routeP = requestRoute(originPt, driveTo, true, { skipTrim: fast });
-      // Compare other stops while this drive is still being calculated.
-      const stop = { lat: driveTo.lat, lng: driveTo.lng };
-      const refineP = settle
-        ? refineDriveByWalk(originPt, destination, [stop, { lat: stop.lat + 0.00002, lng: stop.lng }])
-        : null;
-      let routed = await routeP;
+      let routed = await requestRoute(originPt, driveTo, true, { skipTrim: fast });
       if (!routed || !routed.path || routed.path.length < 2) {
         routed = await requestRoute(originPt, driveTo, true, { skipTrim: fast });
       }
@@ -6623,53 +6825,18 @@
         if (!noCard && (!opts || opts.preview !== false)) maybeStartRouteCountdown();
         return;
       }
-      let useRoute = routed.route;
-      let usePath = routed.path;
-      let useIntervals = routed.intervals;
-      let useWalk = null;
-      if (settle) {
-        let refined = await refineP;
-        const arrived = usePath[usePath.length - 1];
-        if (arrived && distanceMetres(arrived, stop) > 35) {
-          refined = await refineDriveByWalk(originPt, destination, usePath);
-        }
-        if (gen !== routeGen) return;
-        if (refined && refined.drive && refined.drive.path) {
-          useRoute = refined.drive.route;
-          usePath = refined.drive.path;
-          useIntervals = refined.drive.intervals;
-          if (refined.access) activeDriveTo = refined.access;
-          useWalk = refined.walk || null;
-        } else if (refined && refined.walk) {
-          useWalk = refined.walk;
-        }
-        if (!useWalk || useWalk.length < 2) {
-          try {
-            const w = await walkAccessFrom(usePath[usePath.length - 1], destination);
-            useWalk = w && w.path;
-          } catch (err) {}
-        }
-        if (gen !== routeGen) return;
-        const overlap = keepDriveToParkingLot(parkingNear.selected)
-          ? { path: usePath, walk: useWalk, trimmedM: 0 }
-          : trimDriveWalkOverlap(usePath, useWalk);
-        usePath = overlap.path || usePath;
-        useWalk = overlap.walk || useWalk;
-        if (overlap.trimmedM > 0) {
-          useIntervals = routeTrafficIntervals(useRoute, usePath);
-          snapStreetParkingToDriveEnd(usePath[usePath.length - 1], dest);
-        }
-      }
-      adoptRoute(useRoute, usePath, useIntervals, dest, false, useWalk);
+      adoptRoute(routed.route, routed.path, routed.intervals, dest, false, null);
       routeSettled = true;
-      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, useRoute && useRoute.distanceMeters, { keepPreview: true });
+      setRouteCalculating(false);
+      if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, routed.route && routed.route.distanceMeters, { keepPreview: true });
       else if (!noCard) maybeStartRouteCountdown();
       if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
-      if (fast) parkingP.catch(() => {});
+      parkingP.catch(() => {});
     } catch (err) {
       console.error(err);
       setMessage("Route request failed. Check that Routes API is enabled for this key. " + (err?.message || String(err)));
     } finally {
+      setRouteCalculating(false);
       if (!routeSettled) {
         parkingNear.holdAltDrive = false;
         parkingNear.altDrivePending = false;
@@ -7222,7 +7389,7 @@
     const keys = [...new Set((dirs && dirs.length ? dirs : ["through"]).map(laneDirKey))];
     keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
     const set = new Set(keys.slice(0, 2));
-    const sw = 'fill="none" stroke="currentColor" stroke-width="' + ((set.size && !set.has("through") && (set.has("left") || set.has("right"))) ? "4.2" : "3.3") + '" stroke-linecap="round" stroke-linejoin="round"';
+    const sw = 'fill="none" stroke="currentColor" stroke-width="' + ((set.size && !set.has("through") && (set.has("left") || set.has("right"))) ? "5.8" : "4.8") + '" stroke-linecap="round" stroke-linejoin="round"';
     const through = set.has("through");
     const left = set.has("left") || set.has("slight_left");
     const right = set.has("right") || set.has("slight_right");
@@ -8052,7 +8219,7 @@
       banner.hidden = false;
       banner.classList.add("visible");
       const place = (activeDestination && activeDestination.name) || "Destination";
-      if (distEl && distEl.textContent !== "You've arrived") distEl.textContent = "You've arrived";
+      if (distEl && distEl.textContent !== "You've reached your destination") distEl.textContent = "You've reached your destination";
       if (text && text.textContent !== place) text.textContent = place;
       if (icon && icon.dataset.maneuver !== "arrived") {
         icon.dataset.maneuver = "arrived";
@@ -8071,7 +8238,7 @@
       const iconKey = turn;
       if (icon && icon.dataset.maneuver !== iconKey) {
         icon.dataset.maneuver = iconKey;
-        icon.innerHTML = maneuverIconSvg(turn, 66);
+        icon.innerHTML = maneuverIconSvg(turn, 78);
       }
       const nextTurn = next ? hudManeuver(next) : "";
       const nextIsStraightRound = !!(next && maneuverFamily(nextTurn) === "straight" && isRoundaboutMention(next.maneuver, next.instructions));
@@ -8080,7 +8247,7 @@
         thenEl.classList.add("visible");
         if (thenIcon.dataset.maneuver !== nextTurn) {
           thenIcon.dataset.maneuver = nextTurn;
-          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 34);
+          thenIcon.innerHTML = maneuverIconSvg(nextTurn, 42);
         }
         const thenDist = document.getElementById("navThenDist");
         const nextLabel = formatTurnDistance(Math.max(0, next.m - progressM)).replace(" ", "");
@@ -8681,7 +8848,11 @@
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
     setMapLabels(true);
     if (!opts || opts.flyover !== false) startFlyover({ fromPreview });
-    if (activeDestination) traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
+    if (activeDestination) {
+      traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
+      rememberRecentPlace(activeDestination);
+    }
+    setRecentListOpen(false);
     syncCarLod();
     updateRecenterButton();
     updateSpeedLimitBadge();
@@ -10310,6 +10481,17 @@
     if (routeGoEl) routeGoEl.classList.remove("counting");
   }
 
+  function setRouteCalculating(on){
+    if (!routeGoEl) return;
+    routeGoEl.classList.toggle("busy", !!on);
+    if (on) {
+      routeGoEl.setAttribute("aria-busy", "true");
+      cancelStartCountdown();
+    } else {
+      routeGoEl.removeAttribute("aria-busy");
+    }
+  }
+
   // User is inspecting the card / parking / map: keep Start idle until they tap it.
   function holdStartCountdown(){
     startHeldByUser = true;
@@ -10340,6 +10522,7 @@
   }
 
   async function pressRouteGo(){
+    if (routeGoEl && routeGoEl.classList.contains("busy")) return;
     if (explore.mode && activeDestination && !(activeRoutePath && activeRoutePath.length >= 2)) {
       await calculateRoute(getRouteOrigin(), activeDestination, activeDestination.name, { preview: false });
       if (startHeldByUser || isNavigating()) return;
@@ -13162,6 +13345,37 @@
       goToStartPlace();
     });
   }
+  const recentBtn = document.getElementById("recentBtn");
+  if (recentBtn) {
+    recentBtn.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      showChrome();
+      hideSearchDropdown();
+      setRecentListOpen(!recentListOpen);
+    });
+  }
+  const recentList = document.getElementById("recentList");
+  if (recentList) {
+    recentList.addEventListener("click", event => {
+      const removeBtn = event.target && event.target.closest && event.target.closest("[data-recent-x]");
+      if (removeBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        removeRecentPlace(Number(removeBtn.getAttribute("data-recent-x")));
+        return;
+      }
+      const goBtn = event.target && event.target.closest && event.target.closest("[data-recent]");
+      if (!goBtn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const place = readRecents()[Number(goBtn.getAttribute("data-recent"))];
+      goRecentPlace(place).catch(err => {
+        console.error(err);
+        setMessage("Could not route to that destination.");
+      });
+    });
+  }
   const mapsBrowseBtn = document.getElementById("mapsBrowseBtn");
   if (mapsBrowseBtn) {
     mapsBrowseBtn.addEventListener("click", event => {
@@ -13289,7 +13503,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recentRow, #recentList, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
@@ -13756,13 +13970,13 @@
     const remainEl = document.getElementById("navEtaRemain");
     const clockEl = document.getElementById("navEtaClock");
     if (banner) { banner.hidden = false; banner.classList.add("visible"); }
-    if (icon) icon.innerHTML = maneuverIconSvg("TURN_RIGHT", 66);
+    if (icon) icon.innerHTML = maneuverIconSvg("TURN_RIGHT", 78);
     if (distEl) distEl.textContent = "250 m";
     if (text) text.textContent = "W 5th Ave";
     if (thenEl && thenIcon) {
       thenEl.hidden = false;
       thenEl.classList.add("visible");
-      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 34);
+      thenIcon.innerHTML = maneuverIconSvg("TURN_LEFT", 42);
       const thenDist = document.getElementById("navThenDist");
       if (thenDist) thenDist.textContent = "180m";
     }
