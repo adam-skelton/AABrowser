@@ -6777,6 +6777,8 @@
       adoptRoute(useRoute, usePath, useIntervals, dest, isNavigating(), useWalk);
     } catch (err) {
       console.warn("Route refine failed", err);
+    } finally {
+      releaseParkingSettle(gen);
     }
   }
 
@@ -6816,6 +6818,7 @@
         updateRecenterButton();
       }
       const gen = ++routeGen;
+      parkingSettleGen = 0;
       const fuelStop = isFuelStop(dest);
       if (fuelStop) clearParkingOverlay();
       const fast = !!(opts && opts.refineWalk === false);
@@ -6873,12 +6876,12 @@
           return;
         }
         activeDriveTo = specDest;
+        parkingSettleGen = gen;
         adoptRoute(routed.route, routed.path, routed.intervals, dest, false, null);
         routeSettled = true;
         setRouteCalculating(false);
         if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, routed.route && routed.route.distanceMeters, { keepPreview: true });
-        else if (!noCard) maybeStartRouteCountdown();
-        if (!noCard) setMessage("Route ready. Tap Start, or wait for the countdown.");
+        if (!noCard) setMessage("Finding parking...");
         const refineP = refineSettledRoute(gen, originPt, dest, specDest, routed, parkingP);
         if (opts && opts.waitRefine) await refineP;
         return;
@@ -10736,7 +10739,23 @@
     ensureFollowTicker();
   }
 
+  let parkingSettleGen = 0;
+  function parkingSettlePending(){
+    return parkingSettleGen !== 0 && parkingSettleGen === routeGen;
+  }
+  function releaseParkingSettle(gen){
+    if (gen !== parkingSettleGen) return;
+    parkingSettleGen = 0;
+    if (gen !== routeGen || isNavigating()) return;
+    if (document.body.classList.contains("suppress-route-card")) return;
+    maybeStartRouteCountdown();
+    if (document.body.classList.contains("has-route") && !startHeldByUser) {
+      setMessage("Route ready. Tap Start, or wait for the countdown.");
+    }
+  }
+
   function maybeStartRouteCountdown(){
+    if (parkingSettlePending()) return;
     if (startHeldByUser || isNavigating()) return;
     if (document.body.classList.contains("suppress-route-card")) return;
     if (!document.body.classList.contains("has-route")) return;
