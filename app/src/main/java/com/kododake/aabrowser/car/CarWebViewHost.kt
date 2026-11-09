@@ -762,8 +762,18 @@ class CarWebViewHost(
         val right = rightPx.toFloat() / w
         val bottom = bottomPx.toFloat() / h
         val chromeTop = chromeTopPx.toFloat() / h
+        val stable = stableArea
+        val extraRight = if (stable != null && stable.width() >= 48 && stable.height() >= 48) {
+            ((w - area.right) - (w - stable.right)).coerceAtLeast(0)
+        } else 0
+        val extraTop = if (stable != null && stable.width() >= 48 && stable.height() >= 48) {
+            (area.top - stable.top).coerceAtLeast(0)
+        } else 0
+        // Transient host chrome (the search pin after a tap) sits at the end of the bar.
+        // A right-edge occlusion is used as-is. A top bar reserves one action of room.
+        val searchRoomPx = if (extraRight >= 24) extraRight else if (extraTop >= 24) 96 else 0
         evaluateOrQueue(
-            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom,chromeTop:$chromeTop});"
+            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom,chromeTop:$chromeTop,searchRoom:$searchRoomPx});"
         )
         webView?.invalidate()
     }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Immersive Navigation</title>
   <style>
-    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#24548f; background-image:radial-gradient(circle farthest-corner at 50% 50%, #8ebcf2 0%, #3f74b8 42%, #24548f 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px}
+    html, body {width:100%; height:100%; margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#24548f; background-image:radial-gradient(circle farthest-corner at 50% 50%, #8ebcf2 0%, #3f74b8 42%, #24548f 100%); overflow:hidden; --aa-inset-left:0px; --aa-inset-top:0px; --aa-inset-right:0px; --aa-inset-bottom:0px; --aa-search-room:0px}
     #map {position:absolute; top:0; left:0; width:100%; height:108.696%; z-index:1; transform:translateZ(0); background:#24548f}
     #mapLoader {position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box; overflow:visible; background-color:#24548f; background-image:radial-gradient(circle farthest-corner at 50% 50%, #8ebcf2 0%, #3f74b8 42%, #24548f 100%); padding:var(--aa-inset-top) var(--aa-inset-right) var(--aa-inset-bottom) var(--aa-inset-left); gap:22px; transition:opacity .2s ease, visibility .2s ease; pointer-events:none}
     html.native-boot #mapLoader .gmaps-pin, html.native-boot #mapLoader .gmaps-shadow {visibility:hidden}
@@ -111,7 +111,7 @@
     #parkDialogList button.selected .park-check {visibility:visible}
     #parkDialogClose {position:absolute; top:10px; right:10px; width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; background:#F1F3F4; color:#3C4043; box-shadow:none; font-size:22px; line-height:1}
     body.parking-move, body.parking-move gmp-map-3d {cursor:crosshair}
-    #parkMoveBanner {display:none; position:absolute; z-index:39; left:50%; top:calc(var(--aa-inset-top) + max(18px,env(safe-area-inset-top))); transform:translateX(-50%); align-items:center; gap:12px; min-height:68px; max-width:calc(100% - 32px); padding:0 8px 0 14px; border-radius:34px; background:#E37400; color:#fff; font-size:18px; font-weight:750; letter-spacing:-.2px; box-shadow:0 6px 22px rgba(0,0,0,.42); pointer-events:none; white-space:nowrap}
+    #parkMoveBanner {display:none; position:absolute; z-index:39; left:50%; top:calc(var(--aa-inset-top) + max(18px,env(safe-area-inset-top))); transform:translateX(-50%); align-items:center; gap:12px; min-height:68px; max-width:calc(100% - 32px); padding:0 8px 0 14px; border-radius:34px; background:#E37400; color:#fff; font-size:18px; font-weight:750; letter-spacing:-.2px; box-shadow:0 6px 22px rgba(0,0,0,.42); pointer-events:auto; white-space:nowrap}
     body.parking-move #parkMoveBanner,html.parking-move #parkMoveBanner {display:flex}
     #parkMoveBadge {flex:0 0 auto; width:40px; height:40px; border-radius:50%; background:#fff; color:#E37400; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800}
     #parkMoveCancel {pointer-events:auto; flex:0 0 auto; width:44px; height:44px; min-height:44px; padding:0; border-radius:50%; background:rgba(255,255,255,.22); color:#fff; box-shadow:none; display:flex; align-items:center; justify-content:center}
@@ -146,13 +146,14 @@
     html.has-recenter.has-info #navBottomCluster,body.has-recenter.has-info #navBottomCluster {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 256px)}
     #speedLimitBadge {display:none; position:absolute; left:calc(var(--aa-inset-left) + max(16px,env(safe-area-inset-left))); bottom:calc(var(--aa-inset-bottom) + max(16px,env(safe-area-inset-bottom))); z-index:35; width:76px; height:76px; box-sizing:border-box; border-radius:50%; background:#fff; border:7px solid #D93838; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#111; font-variant-numeric:tabular-nums; box-shadow:0 2px 8px rgba(0,0,0,.45); pointer-events:none}
     #speedLimitBadge.visible {display:flex}
-    #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); width:max-content; max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); flex-direction:row; align-items:flex-end; justify-content:flex-end; gap:8px; pointer-events:none}
+    #navHud {display:none; position:absolute; z-index:34; top:calc(var(--aa-inset-top) + max(10px,env(safe-area-inset-top))); left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right))); width:max-content; max-width:min(560px, calc(100% - var(--aa-inset-left) - var(--aa-inset-right) - 32px)); flex-direction:row; align-items:flex-start; justify-content:flex-end; gap:8px; pointer-events:none; transition:right .2s ease}
     body.navigating #navHud {display:flex}
-    body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px))}
-    html.aa-car #navHud,body.aa-car #navHud {left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)))}
+    body:not(.chrome-hidden) #navHud {top:calc(var(--aa-inset-top) + max(62px,env(safe-area-inset-top) + 52px)); right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
+    html.aa-car #navHud,body.aa-car #navHud {left:auto; right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + var(--aa-search-room, 0px))}
+    html.aa-car.aa-search-open #navHud,body.aa-car.aa-search-open #navHud {right:calc(var(--aa-inset-right) + max(16px,env(safe-area-inset-right)) + 88px)}
     html.aa-split #navHud,body.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
     html.aa-car.aa-split #navHud,body.aa-car.aa-split #navHud {top:calc(var(--aa-inset-top) + 22px)}
-    #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; order:0; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-end; gap:6px; min-height:0; padding:8px 10px 8px; margin-top:0; border-radius:14px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
+    #navLanes {display:none; position:relative; z-index:34; top:auto; left:auto; right:auto; order:0; flex:0 0 auto; width:max-content; max-width:min(280px,42vw); justify-content:flex-end; align-items:flex-end; align-self:flex-start; gap:6px; min-height:0; padding:8px 10px 8px; margin-top:0; border-radius:14px; background:rgba(28,28,30,.62); box-shadow:0 4px 18px rgba(0,0,0,.28); overflow:hidden; pointer-events:none}
     #navLanes.visible {display:flex !important}
     body:not(.chrome-hidden) #navLanes,
     body:not(.chrome-hidden) #navLanes.visible {display:none !important}
@@ -164,7 +165,7 @@
     .nav-lane svg path.lane-dim[fill="none"] {fill:none; stroke:rgba(255,255,255,.38)}
     #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(520px, 100%); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
     html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(560px, 100%)}
-    #navBanner.visible {display:flex !important; flex-direction:row; align-items:center; justify-content:flex-end; order:1; gap:8px; width:max-content; max-width:100%}
+    #navBanner.visible {display:flex !important; flex-direction:row; align-items:flex-start; justify-content:flex-end; order:1; gap:8px; width:max-content; max-width:100%}
     #navBanner:focus,#navBanner:active,#navBanner:focus-visible,#navPrimary:active {outline:none; box-shadow:none; filter:none; transform:none}
     body.nav-browsing #navBanner,
     body.nav-browsing #navBanner.visible,
@@ -217,6 +218,8 @@
     #navExit svg {width:28px; height:28px; display:block}
     #navEtaCopy {flex:0 1 auto; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; text-align:center}
     #navEtaRemain {white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:24px; font-weight:800; letter-spacing:-.3px; line-height:1.08; color:#81C995; font-variant-numeric:tabular-nums}
+    #navEtaRemain.traffic-slow {color:#F6C344}
+    #navEtaRemain.traffic-jam {color:#FF8A80}
     #navEtaMeta {display:flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; overflow:hidden; font-size:17px; font-weight:650; line-height:1.15; color:rgba(255,255,255,.82); font-variant-numeric:tabular-nums}
     #navEtaSep {display:none; flex:0 0 auto; opacity:.55; font-weight:700; line-height:1}
     #navEtaSep.visible {display:inline}
@@ -4183,6 +4186,7 @@
     lot.lng = lng;
     lot.dragged = true;
     lot.walkM = distanceMetres(dest, lot);
+    if (destPreview && !isNavigating()) destPreview.lot = { lat: lat, lng: lng };
     setParkingMoveArmed(false);
     updateParkingRow();
     if (!destIsSamePlace(dest, lot)) drawParkingWalk(lot, dest);
@@ -4267,13 +4271,21 @@
     return Math.hypot(event.clientX - s.x, event.clientY - s.y) < radius;
   }
 
+  // How far a relocate click may land. A tap on the tilted horizon used to
+  // throw the pin kilometres away and the camera pulled back to fit it.
+  function parkingMoveReachM(){
+    const range = Math.max(80, Number(map3d && map3d.range) || 300);
+    return Math.max(420, range * 1.6);
+  }
+
   // One tap picks the pin up. Swipes then pan the map. The next tap drops it.
+  // The marker and the map both report that tap; only that pair is ignored.
   // Dash clicks often never reach the 3D marker, so the same path runs from
   // the head-unit click coordinates.
   function handleParkingSurfaceTap(x, y, target){
     const now = performance.now();
-    if (now - parkingTapMs < 520 && Math.hypot(x - parkingTapX, y - parkingTapY) < 36) return true;
-    if (hitAltParkingPin({ clientX: x, clientY: y })) {
+    if (now - parkingTapMs < 130 && Math.hypot(x - parkingTapX, y - parkingTapY) < 56) return true;
+    if (!parkingMoveArmed && hitAltParkingPin({ clientX: x, clientY: y })) {
       const alt = parkingNear.alternate;
       parkingTapMs = now;
       parkingTapX = x;
@@ -4294,7 +4306,13 @@
       return true;
     }
     const p = groundPointFromScreen(x, y);
-    if (p) placeParkingAt(p.lat, p.lng);
+    const pin = parkingPinLatLng(parkingNear.selected);
+    const tooFar = !!(p && pin && distanceMetres(p, pin) > parkingMoveReachM());
+    if (!p || tooFar) {
+      setParkingMoveArmed(false);
+      return true;
+    }
+    placeParkingAt(p.lat, p.lng);
     return true;
   }
 
@@ -6222,8 +6240,9 @@
   }
 
   const ROUTE_FIELDS = ["path", "distanceMeters", "durationMillis", "staticDurationMillis", "legs"];
-  // "speedPaths" is the JS library's shorthand that also populates travelAdvisory.speedReadingIntervals.
-  const ROUTE_TRAFFIC_FIELDS = ["speedPaths"];
+  // speedPaths is the traffic-coloured grouping. travelAdvisory carries the same
+  // stretches as polyline indexes. Either one is enough to paint the line.
+  const ROUTE_TRAFFIC_FIELDS = ["speedPaths", "travelAdvisory"];
   const ROUTE_NAV_EXTRAS = ["HTML_FORMATTED_NAVIGATION_INSTRUCTIONS"];
 
   function isPrivateDriveWay(tags){
@@ -6392,6 +6411,7 @@
   // is requested first; if the loaded API build rejects it, retry for a plain route.
   async function requestRoute(origin, destination, wantTraffic = true, opts){
     const placeId = usablePlaceId(destination && destination.placeId);
+    const trafficOnly = !!(opts && opts.trafficOnly);
     const request = {
       origin,
       destination: placeId ? { placeId: placeId } : { lat: destination.lat, lng: destination.lng },
@@ -6401,12 +6421,16 @@
       units: google.maps.UnitSystem.METRIC,
       fields: wantTraffic ? ROUTE_FIELDS.concat(ROUTE_TRAFFIC_FIELDS) : ROUTE_FIELDS
     };
-    if (wantTraffic) request.extraComputations = ["TRAFFIC_ON_POLYLINE"].concat(ROUTE_NAV_EXTRAS);
+    if (wantTraffic) request.extraComputations = trafficOnly ? ["TRAFFIC_ON_POLYLINE"] : ["TRAFFIC_ON_POLYLINE"].concat(ROUTE_NAV_EXTRAS);
     else request.extraComputations = ROUTE_NAV_EXTRAS.slice();
     let result;
     try {
       result = await RouteClass.computeRoutes(request);
     } catch (err) {
+      if (wantTraffic && !trafficOnly) {
+        console.warn("Traffic route failed, retrying without nav extras", err);
+        return requestRoute(origin, destination, true, Object.assign({}, opts, { trafficOnly: true }));
+      }
       if (wantTraffic) {
         console.warn("Traffic-on-polyline request failed, retrying without traffic", err);
         return requestRoute(origin, destination, false, opts);
@@ -6810,6 +6834,7 @@
           _aaFromCache: true
         };
         adoptRoute(stub, path, cachedDrive.intervals, dest, false, unpackPts(cachedDrive.walk));
+        refreshRouteTraffic(gen, originPt, dest, path);
         routeSettled = true;
         if (!noCard && (!opts || opts.preview !== false)) showRoutePreview(origin, dest, stub.distanceMeters, { keepPreview: true });
         else if (!noCard) maybeStartRouteCountdown();
@@ -6906,22 +6931,206 @@
   let routeLines = [];        // one Polyline3DElement per traffic interval (the whole route)
   let routeDoneLine = null;   // grey overlay from the route start to the car
   let routeDoneUpdatedM = -Infinity;
+  let routeIntervals = [];    // traffic stretches on activeRoutePath, by vertex index
   const ROUTE_DONE_STEP_M = 4;
 
-  // Routes API speedReadingIntervals -> [{start, end, speed}] over `path` indices; a route
-  // without traffic data (or a plain retry) is one NORMAL interval.
-  function routeTrafficIntervals(route, path){
-    const raw = route && route.travelAdvisory && route.travelAdvisory.speedReadingIntervals;
+  function speedName(speed){
+    if (speed == null) return "NORMAL";
+    if (typeof speed === "object") {
+      if (speed.speed) return speedName(speed.speed);
+      const named = speed.value || speed.name || speed.id;
+      if (named) return speedName(named);
+    }
+    const s = String(speed).toUpperCase();
+    if (s.indexOf("JAM") >= 0) return "TRAFFIC_JAM";
+    if (s.indexOf("SLOW") >= 0) return "SLOW";
+    return "NORMAL";
+  }
+
+  function latLngOf(point){
+    if (!point) return null;
+    const lat = typeof point.lat === "function" ? point.lat() : point.lat;
+    const lng = typeof point.lng === "function" ? point.lng() : point.lng;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat: lat, lng: lng };
+  }
+
+  function routeSpeedGroups(route){
+    if (!route) return [];
+    if (Array.isArray(route.speedPaths) && route.speedPaths.length) return route.speedPaths;
+    const groups = [];
+    const legs = route.legs || [];
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i];
+      if (leg && Array.isArray(leg.speedPaths)) groups.push.apply(groups, leg.speedPaths);
+    }
+    return groups;
+  }
+
+  // speedPaths points are the route vertices, grouped by speed. Match them back
+  // onto `path` (a trim of that polyline keeps the same vertices).
+  function intervalsFromSpeedPaths(route, path){
+    const groups = routeSpeedGroups(route);
+    if (!groups.length || !path || path.length < 2) return [];
+    const last = path.length - 1;
+    const keys = new Map();
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      const key = p.lat.toFixed(5) + "," + p.lng.toFixed(5);
+      if (!keys.has(key)) keys.set(key, i);
+    }
+    const findForward = (point, from) => {
+      const target = latLngOf(point);
+      if (!target) return -1;
+      const key = target.lat.toFixed(5) + "," + target.lng.toFixed(5);
+      const keyed = keys.get(key);
+      if (keyed != null && keyed >= from) return keyed;
+      let best = -1, bestD = 40;
+      for (let i = Math.max(0, from); i <= last; i++) {
+        const d = distanceMetres(target, path[i]);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+          if (d < 4) return i;
+        } else if (best >= 0 && i > best + 12) break;
+      }
+      return best;
+    };
     const out = [];
+    let cursor = 0;
+    for (let g = 0; g < groups.length; g++) {
+      const pts = Array.from(groups[g].path || []);
+      if (pts.length < 2) continue;
+      let start = findForward(pts[0], cursor);
+      if (start < 0) start = cursor;
+      let end = findForward(pts[pts.length - 1], start);
+      if (end < 0) end = last;
+      start = clamp(start, 0, last);
+      end = clamp(end, 0, last);
+      if (end <= start) continue;
+      out.push({ start: start, end: end, speed: speedName(groups[g].speed) });
+      cursor = end;
+    }
+    return out;
+  }
+
+  // [{start, end, speed}] over `path` indices. A route without traffic data is one
+  // NORMAL interval, which draws as the solid blue line.
+  function routeTrafficIntervals(route, path){
+    const last = path && path.length ? path.length - 1 : 0;
+    if (!path || path.length < 2) return [{ start: 0, end: last, speed: "NORMAL" }];
+    const raw = route && route.travelAdvisory && route.travelAdvisory.speedReadingIntervals;
+    const fromIdx = [];
     if (Array.isArray(raw)) {
-      for (const iv of raw) {
-        const s = Number(iv.startPolylinePointIndex), e = Number(iv.endPolylinePointIndex);
-        if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
-        out.push({ start: clamp(Math.round(s), 0, path.length - 1), end: clamp(Math.round(e), 0, path.length - 1), speed: String(iv.speed || "NORMAL") });
+      for (let i = 0; i < raw.length; i++) {
+        const iv = raw[i];
+        let s = Number(iv.startPolylinePointIndex);
+        let e = Number(iv.endPolylinePointIndex);
+        if (!Number.isFinite(s)) s = 0;
+        if (!Number.isFinite(e) || e <= s) continue;
+        s = clamp(Math.round(s), 0, last);
+        e = clamp(Math.round(e), 0, last);
+        if (e <= s) continue;
+        fromIdx.push({ start: s, end: e, speed: speedName(iv.speed) });
       }
     }
-    if (!out.length) out.push({ start: 0, end: path.length - 1, speed: "NORMAL" });
+    const fromSpeed = fromIdx.length ? fromIdx : intervalsFromSpeedPaths(route, path);
+    return coverTrafficIntervals(fromSpeed.length ? fromSpeed : [{ start: 0, end: last, speed: "NORMAL" }], last);
+  }
+
+  // Keep the painted line continuous: a hole between traffic stretches is free-flow blue.
+  function coverTrafficIntervals(intervals, last){
+    const sorted = intervals.slice().sort((a, b) => a.start - b.start || a.end - b.end);
+    const out = [];
+    let cursor = 0;
+    for (let i = 0; i < sorted.length; i++) {
+      const iv = sorted[i];
+      const start = clamp(iv.start, 0, last);
+      const end = clamp(iv.end, 0, last);
+      if (start > cursor) out.push({ start: cursor, end: start, speed: "NORMAL" });
+      const from = Math.max(start, cursor);
+      if (end > from) out.push({ start: from, end: end, speed: speedName(iv.speed) });
+      cursor = Math.max(cursor, end);
+    }
+    if (cursor < last) out.push({ start: cursor, end: last, speed: "NORMAL" });
+    return out.filter(iv => iv.end > iv.start);
+  }
+
+  // A cached drive was saved before speedPaths was read, so its intervals are one
+  // blue stretch. Pull live traffic and repaint without replacing the line geometry.
+  function refreshRouteTraffic(gen, originPt, dest, basePath){
+    const target = { lat: dest.lat, lng: dest.lng, name: dest.name };
+    requestRoute(originPt, target, true, { skipTrim: true, trafficOnly: true }).then(routed => {
+      if (gen !== routeGen || !routed || !routed.path || !routed.intervals) return;
+      if (!activeRoutePath || activeRoutePath.length < 2) return;
+      const painted = intervalsOntoPath(routed.intervals, routed.path, basePath);
+      if (!painted.length || gen !== routeGen) return;
+      drawRoute(activeRoutePath, painted);
+    }).catch(err => {
+      console.warn("Traffic refresh failed", err);
+    });
+  }
+
+  function intervalsOntoPath(intervals, srcPath, dstPath){
+    if (!srcPath || !dstPath || srcPath.length < 2 || dstPath.length < 2 || !intervals || !intervals.length) return [];
+    const sameEnds = distanceMetres(srcPath[0], dstPath[0]) < 80 && distanceMetres(srcPath[srcPath.length - 1], dstPath[dstPath.length - 1]) < 80;
+    if (!sameEnds) return [];
+    if (srcPath.length === dstPath.length) return intervals;
+    const srcCum = cumulativeLengths(srcPath);
+    const dstCum = cumulativeLengths(dstPath);
+    const srcTotal = srcCum[srcCum.length - 1] || 1;
+    const dstTotal = dstCum[dstCum.length - 1] || 1;
+    if (Math.abs(srcTotal - dstTotal) / srcTotal > 0.25) return [];
+    const at = metres => {
+      const d = clamp(metres, 0, dstTotal);
+      let lo = 1, hi = dstPath.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (dstCum[mid] < d) lo = mid + 1; else hi = mid;
+      }
+      return lo;
+    };
+    const out = [];
+    for (let i = 0; i < intervals.length; i++) {
+      const iv = intervals[i];
+      const a = at((srcCum[Math.min(iv.start, srcCum.length - 1)] || 0) / srcTotal * dstTotal);
+      const b = at((srcCum[Math.min(iv.end, srcCum.length - 1)] || 0) / srcTotal * dstTotal);
+      if (b > a) out.push({ start: a, end: b, speed: iv.speed });
+    }
     return out;
+  }
+
+  // Colour for the time still ahead. A short jam does not repaint the whole
+  // estimate; a real stretch of red does. Yellow needs only some slow road.
+  function remainingTrafficTone(progressM){
+    const path = activeRoutePath;
+    const cum = routeCum;
+    if (!path || path.length < 2 || !cum || cum.length !== path.length) return "NORMAL";
+    const total = cum[cum.length - 1] || 0;
+    const here = clamp(Number(progressM) || 0, 0, total);
+    const remain = total - here;
+    if (remain < 40) return "NORMAL";
+    const ivs = routeIntervals.length ? routeIntervals : [{ start: 0, end: path.length - 1, speed: "NORMAL" }];
+    let slow = 0, jam = 0;
+    for (let i = 0; i < ivs.length; i++) {
+      const iv = ivs[i];
+      const a = cum[clamp(iv.start, 0, cum.length - 1)] || 0;
+      const b = cum[clamp(iv.end, 0, cum.length - 1)] || 0;
+      const len = Math.max(0, b - Math.max(a, here));
+      const speed = speedName(iv.speed);
+      if (speed === "TRAFFIC_JAM") jam += len;
+      else if (speed === "SLOW") slow += len;
+    }
+    if (jam >= 200 || (jam >= 100 && jam / remain >= 0.12)) return "TRAFFIC_JAM";
+    if (slow >= 80 || (slow >= 40 && slow / remain >= 0.08)) return "SLOW";
+    return "NORMAL";
+  }
+
+  function paintEtaTraffic(el, progressM, arrived){
+    if (!el) return;
+    const tone = arrived ? "NORMAL" : remainingTrafficTone(progressM);
+    el.classList.toggle("traffic-slow", tone === "SLOW");
+    el.classList.toggle("traffic-jam", tone === "TRAFFIC_JAM");
   }
 
   function routeStrokeWidth(range){
@@ -6958,7 +7167,8 @@
 
   function drawRoute(path, intervals){
     removeRouteLines();
-    for (const iv of intervals || [{ start: 0, end: path.length - 1, speed: "NORMAL" }]) {
+    routeIntervals = intervals && intervals.length ? intervals : [{ start: 0, end: Math.max(0, path.length - 1), speed: "NORMAL" }];
+    for (const iv of routeIntervals) {
       const seg = path.slice(iv.start, iv.end + 1);
       if (seg.length < 2) continue;
       const line = makeRouteLine(seg, ROUTE_COLOURS[iv.speed] || ROUTE_COLOURS.NORMAL, 20);
@@ -8123,6 +8333,8 @@
     if (banner) { banner.hidden = true; banner.classList.remove("visible"); }
     if (thenEl) { thenEl.hidden = true; thenEl.classList.remove("visible"); }
     if (eta) { eta.hidden = true; eta.classList.remove("visible"); }
+    const remainEl = document.getElementById("navEtaRemain");
+    if (remainEl) remainEl.classList.remove("traffic-slow", "traffic-jam");
     const sepEl = document.getElementById("navEtaSep");
     if (sepEl) { sepEl.hidden = true; sepEl.classList.remove("visible"); }
     if (clock) { clock.hidden = true; clock.classList.remove("visible"); }
@@ -8218,7 +8430,10 @@
     const targetM = metresToNavTarget(remainM);
     document.body.classList.toggle("nav-arrived", arrived);
     document.documentElement.classList.toggle("nav-arrived", arrived);
-    if (remainEl) remainEl.textContent = arrived ? "Arrived" : formatDuration(remainMs);
+    if (remainEl) {
+      remainEl.textContent = arrived ? "Arrived" : formatDuration(remainMs);
+      paintEtaTraffic(remainEl, progressM, arrived);
+    }
     if (etaDistEl) etaDistEl.textContent = formatDistance(arrived ? targetM : remainM);
     if (clockEl) clockEl.textContent = formatTime(eta);
     const sepEl = document.getElementById("navEtaSep");
@@ -10444,7 +10659,12 @@
     const lot = destPreview && destPreview.lot;
     if (!dest || !lot || !Number.isFinite(lot.lat)) return DEST_PREVIEW.RANGE;
     const span = Math.max(distanceMetres(dest, lot), 40);
-    return clamp(span * 2.7, DEST_PREVIEW.RANGE, 2800);
+    const fit = clamp(span * 2.7, DEST_PREVIEW.RANGE, 2800);
+    if (map3d && performance.now() - parkingPlacedAt < 2200) {
+      const current = numOr(map3d.range, fit);
+      return Math.min(fit, Math.max(DEST_PREVIEW.RANGE, current * 1.2));
+    }
+    return fit;
   }
 
   function destPreviewTilt(){
@@ -12774,6 +12994,9 @@
       root.style.setProperty("--aa-inset-right", Math.round(viewSafe.right) + "px");
       root.style.setProperty("--aa-inset-bottom", Math.round(viewSafe.bottom) + "px");
       root.style.setProperty("--aa-chrome-top", Math.round(Math.max(0, chromeTop)) + "px");
+      let searchRoom = Number(area.searchRoom) || 0;
+      if (searchRoom > 0 && searchRoom <= 1) searchRoom *= w;
+      root.style.setProperty("--aa-search-room", Math.round(Math.max(0, searchRoom)) + "px");
     };
     apply(document.documentElement);
     apply(document.body);
@@ -13487,6 +13710,14 @@
       if (event.target === descDialog) closeDescriptionDialog();
     });
   }
+  const parkMoveBanner = document.getElementById("parkMoveBanner");
+  if (parkMoveBanner) {
+    parkMoveBanner.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      setParkingMoveArmed(false);
+    });
+  }
   const parkMoveCancel = document.getElementById("parkMoveCancel");
   if (parkMoveCancel) {
     parkMoveCancel.addEventListener("click", event => {
@@ -13495,6 +13726,12 @@
       setParkingMoveArmed(false);
     });
   }
+  window.addEventListener("dblclick", event => {
+    if (parkingMoveArmed || performance.now() - parkingTapMs < 700) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
   const routeParkingBtn = document.getElementById("routeParking");
   if (routeParkingBtn) {
     routeParkingBtn.addEventListener("click", event => {
@@ -13548,7 +13785,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveBanner, #parkMoveCancel, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;
@@ -13677,15 +13914,16 @@
     }
     holdStartCountdown();
     closeAaSearchBar();
+    const parkingGesture = parkingMoveArmed || hitParkingPin(event);
     if (flyover && isNavigating()) {
       skipNavFlyover();
       mapDragStart = null;
       return;
     }
-    releaseMapFromRoutePreview();
+    if (!parkingGesture) releaseMapFromRoutePreview();
     noteMapPointerDown(event);
     mapDragStart = { x: event.clientX, y: event.clientY, panned: false, car: tapHitsCar(event), held: false };
-    if (hitParkingPin(event) || parkingMoveArmed) cancelMapHold();
+    if (parkingGesture) cancelMapHold();
     else armMapHold(event);
   }, { capture:true, passive:true });
   window.addEventListener("pointermove", event => {
@@ -13741,6 +13979,7 @@
       return;
     }
     if (handleParkingSurfaceTap(event.clientX, event.clientY, event.target)) {
+      event.stopPropagation();
       scheduleRestoreRouteCard();
       return;
     }
