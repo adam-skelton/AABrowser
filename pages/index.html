@@ -246,11 +246,7 @@
     .host-row .host-label {flex:0 0 38%; font-size:14px; font-weight:700}
     .host-row .host-value {flex:1; min-width:0; font-size:13px; font-weight:500; color:rgba(255,255,255,.72); word-break:break-word}
     .host-row button {flex:0 0 auto; min-height:40px; background:#1A73E8; color:#fff; box-shadow:none; font-size:14px}
-    html.aa-car:not(.aa-search-open) #searchRow,body.aa-car:not(.aa-search-open) #searchRow {display:block; position:fixed; z-index:42; top:calc(var(--aa-chrome-top, 0px) + 10px); left:calc(var(--aa-inset-left) + 10px); right:auto; width:56px; height:56px; pointer-events:none; background:none; box-shadow:none}
-    html.aa-car:not(.aa-search-open) #searchRow > :not(#mapsBrowseBtn),body.aa-car:not(.aa-search-open) #searchRow > :not(#mapsBrowseBtn) {display:none !important}
-    html.aa-car:not(.aa-search-open) #mapsBrowseBtn,body.aa-car:not(.aa-search-open) #mapsBrowseBtn {pointer-events:auto; width:56px; height:56px; min-height:56px}
-    html.aa-car.chrome-hidden #searchRow,body.aa-car.chrome-hidden #searchRow {opacity:1; transform:none}
-    html.aa-car.chrome-hidden:not(.aa-search-open) #mapsBrowseBtn,body.aa-car.chrome-hidden:not(.aa-search-open) #mapsBrowseBtn {pointer-events:auto}
+    html.aa-car #searchRow,body.aa-car #searchRow {display:none}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
     html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
