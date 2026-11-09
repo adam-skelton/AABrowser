@@ -46,17 +46,7 @@
     #zoomMod span {min-width:8.6em; text-align:center; font-size:14px; font-weight:750; font-variant-numeric:tabular-nums; letter-spacing:-.2px}
     html.aa-car #zoomMod,body.aa-car #zoomMod {background:#2E3134; color:#fff}
     #searchRow,#buttonRow,#searchResults,#status {transition:opacity .4s ease, transform .4s ease}
-    #recentRow {pointer-events:auto; display:flex; justify-content:flex-start}
-    #recentBtn {min-height:40px; padding:0 16px; border-radius:12px; background:rgba(255,255,255,.96); color:#1A73E8; font-weight:750}
-    #recentList {display:none; pointer-events:auto; max-width:min(640px,100%); max-height:min(52vh,420px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
-    #recentList.open {display:block}
-    #recentList .recent-empty {padding:14px 16px; font-weight:650; color:#3C4043}
-    #recentList .recent-row {display:flex; align-items:center; gap:8px; border-top:1px solid rgba(0,0,0,.08)}
-    #recentList .recent-row:first-child {border-top:0}
-    #recentList .recent-go {flex:1; min-width:0; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
-    #recentList .recent-go .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
-    #recentList .recent-x {flex:0 0 auto; width:44px; min-height:44px; margin-right:6px; padding:0; border-radius:50%; background:transparent; box-shadow:none; color:#5F6368; font-size:22px; line-height:1}
-    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults,body.chrome-hidden #recentRow,body.chrome-hidden #recentList {opacity:0; pointer-events:none; transform:translateY(-10px)}
+    body.chrome-hidden #searchRow,body.chrome-hidden #buttonRow,body.chrome-hidden #searchResults {opacity:0; pointer-events:none; transform:translateY(-10px)}
     #searchResults {display:none; pointer-events:auto; justify-self:stretch; max-width:min(640px,100%); max-height:min(62vh,480px); overflow:auto; border-radius:12px; background:rgba(255,255,255,.98); box-shadow:0 8px 24px rgba(0,0,0,.28)}
     #searchResults.open {display:block}
     #searchResults button {display:block; width:100%; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
@@ -67,6 +57,13 @@
     #searchResults .search-ico {flex:0 0 auto; width:36px; height:36px; border-radius:11px; background:#E8F0FE; color:#1A73E8; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(26,115,232,.15)}
     #searchResults .search-ico svg {width:20px; height:20px; display:block}
     #searchResults .search-hit-copy > span:first-child {font-weight:700; letter-spacing:-.1px}
+    #searchResults .search-recent {display:flex; align-items:center; gap:4px}
+    #searchResults .search-recent + .search-recent,
+    #searchResults .search-recent + button,
+    #searchResults button + .search-recent {border-top:1px solid rgba(0,0,0,.08)}
+    #searchResults .search-recent .recent-go {flex:1; min-width:0; min-height:52px; border:0; border-radius:0; box-shadow:none; text-align:left; padding:10px 14px; background:transparent}
+    #searchResults .search-recent .recent-go .sub {display:block; font-size:13px; font-weight:500; opacity:.62; margin-top:2px}
+    #searchResults .recent-x {flex:0 0 auto; width:44px; min-height:44px; margin-right:6px; padding:0; border-radius:50%; background:transparent; box-shadow:none; color:#5F6368; font-size:22px; line-height:1}
     #mapsBrowseBtn {width:48px; min-height:44px; padding:0; border-radius:12px; background:rgba(255,255,255,.96); color:#1A73E8; display:flex; align-items:center; justify-content:center}
     #mapsBrowseBtn svg {width:26px; height:34px; display:block; filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
     #exploreBack {display:none; position:absolute; z-index:36; top:calc(var(--aa-inset-top) + max(12px,env(safe-area-inset-top))); left:calc(var(--aa-inset-left) + max(12px,env(safe-area-inset-left))); width:48px; height:48px; min-height:48px; padding:0; border-radius:50%; background:#2E3134; color:#fff; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -167,7 +164,7 @@
     .nav-lane svg path.lane-dim[fill="none"] {fill:none; stroke:rgba(255,255,255,.38)}
     #navBanner {display:none; position:relative; z-index:34; top:auto; left:auto; max-width:min(520px, 100%); pointer-events:auto; cursor:pointer; outline:none; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none}
     html.aa-car #navBanner,body.aa-car #navBanner {max-width:min(560px, 100%)}
-    #navBanner.visible {display:grid !important; gap:8px}
+    #navBanner.visible {display:flex !important; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:8px; width:max-content; max-width:100%}
     #navBanner:focus,#navBanner:active,#navBanner:focus-visible,#navPrimary:active {outline:none; box-shadow:none; filter:none; transform:none}
     body.nav-browsing #navBanner,
     body.nav-browsing #navBanner.visible,
@@ -199,7 +196,10 @@
     #navPrimary {height:auto; overflow:visible}
     #navBanner {height:auto; overflow:visible}
     #navPrimaryText {font-size:19px; font-weight:650; line-height:1.2; letter-spacing:-.1px; opacity:.95; white-space:normal; overflow:visible}
-    #navThen {display:none; flex-direction:column; align-items:flex-start; gap:4px; width:max-content; padding:10px 18px 11px 16px; border-radius:18px; background:#1E8E3E; color:#fff; font-size:21px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
+    #navThen {display:none; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; width:max-content; padding:10px 18px 11px 16px; border-radius:18px; background:#1E8E3E; color:#fff; font-size:21px; font-weight:700; box-shadow:0 3px 12px rgba(0,0,0,.22)}
+    body.nav-arrived #navPrimary,html.nav-arrived #navPrimary {width:max-content; padding-right:18px}
+    body.nav-arrived #navPrimaryCopy,html.nav-arrived #navPrimaryCopy {flex:0 0 auto}
+    body.nav-arrived #navPrimaryDist,html.nav-arrived #navPrimaryDist {font-size:17px; letter-spacing:-.2px; white-space:nowrap}
     #navThen.visible {display:flex !important}
     #navThenTop {display:flex; align-items:center; gap:12px}
     #navThenDist {font-size:21px; font-weight:750; letter-spacing:-.2px; line-height:1.1; font-variant-numeric:tabular-nums; opacity:.94}
@@ -246,7 +246,11 @@
     .host-row .host-label {flex:0 0 38%; font-size:14px; font-weight:700}
     .host-row .host-value {flex:1; min-width:0; font-size:13px; font-weight:500; color:rgba(255,255,255,.72); word-break:break-word}
     .host-row button {flex:0 0 auto; min-height:40px; background:#1A73E8; color:#fff; box-shadow:none; font-size:14px}
-    html.aa-car #searchRow,body.aa-car #searchRow {display:none}
+    html.aa-car:not(.aa-search-open) #searchRow,body.aa-car:not(.aa-search-open) #searchRow {display:block; position:fixed; z-index:42; top:calc(var(--aa-chrome-top, 0px) + 10px); left:calc(var(--aa-inset-left) + 10px); right:auto; width:56px; height:56px; pointer-events:none; background:none; box-shadow:none}
+    html.aa-car:not(.aa-search-open) #searchRow > :not(#mapsBrowseBtn),body.aa-car:not(.aa-search-open) #searchRow > :not(#mapsBrowseBtn) {display:none !important}
+    html.aa-car:not(.aa-search-open) #mapsBrowseBtn,body.aa-car:not(.aa-search-open) #mapsBrowseBtn {pointer-events:auto; width:56px; height:56px; min-height:56px}
+    html.aa-car.chrome-hidden #searchRow,body.aa-car.chrome-hidden #searchRow {opacity:1; transform:none}
+    html.aa-car.chrome-hidden:not(.aa-search-open) #mapsBrowseBtn,body.aa-car.chrome-hidden:not(.aa-search-open) #mapsBrowseBtn {pointer-events:auto}
     html.aa-car #searchResults,body.aa-car #searchResults {display:none !important}
     html.aa-car.aa-search-open #searchRow,body.aa-car.aa-search-open #searchRow {display:grid; position:fixed; top:calc(var(--aa-inset-top) + 12px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40}
     html.aa-car.aa-search-open #searchResults.open,body.aa-car.aa-search-open #searchResults.open {display:block !important; position:fixed; top:calc(var(--aa-inset-top) + 64px); left:calc(var(--aa-inset-left) + 12px); right:calc(var(--aa-inset-right) + 12px); z-index:40; max-height:min(52vh,420px)}
@@ -462,10 +466,6 @@
         </svg>
       </button>
     </div>
-    <div id="recentRow">
-      <button id="recentBtn" type="button" aria-expanded="false">Recents</button>
-    </div>
-    <div id="recentList" hidden></div>
     <div id="searchResults" hidden></div>
     <div id="buttonRow">
       <button id="debugClose" type="button" aria-label="Close debug">&times;</button>
@@ -1554,7 +1554,7 @@
       });
       userCar.addEventListener("gmp-click", event => {
         try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
-        if (!gestureWasTap()) return;
+        if (!gestureWasTap() || !tapHitsCar(event)) return;
         startCarInspect();
       });
       map3d.append(userCar);
@@ -1754,7 +1754,7 @@
           el.__aaFrame = frame;
           el.addEventListener("gmp-click", event => {
             try { if (event && event.stopPropagation) event.stopPropagation(); } catch (err) {}
-            if (!gestureWasTap()) return;
+            if (!gestureWasTap() || !tapHitsCar(event)) return;
             startCarInspect();
           });
           el.addEventListener("gmp-error", () => {
@@ -1880,7 +1880,6 @@
   }
 
   function pushSearchSuggestions(query, items){
-    setRecentListOpen(false);
     renderSearchDropdown(items);
     try {
       if (window.Car && typeof Car.onSearchSuggestions === "function") {
@@ -1895,6 +1894,8 @@
 
   // Material glyphs (24x24) for the browse catalog and the matching explore pins on the map.
   const CATALOG_ICON_PATHS = {
+    recents: "M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.06 4.94l-1.42 1.42A9 9 0 1 0 13 3zM12 8v5l4.28 2.54.72-1.21-3.5-2.08V8z",
+    start: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
     custom: "M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM10 5.47l4 1.4v11.66l-4-1.4V5.47zm-5 .99l3-1.01v11.7l-3 1.16V6.46zm14 11.08l-3 1.01V6.86l3-1.16v11.84z",
     gas_station: "M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z",
     restaurant: "M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z",
@@ -1931,6 +1932,40 @@
       return;
     }
     hits.forEach(item => {
+      if (item.removable) {
+        const row = document.createElement("div");
+        row.className = "search-recent";
+        const go = document.createElement("button");
+        go.type = "button";
+        go.className = "recent-go";
+        const title = document.createElement("span");
+        title.textContent = item.title || "Recent place";
+        go.append(title);
+        if (item.subtitle) {
+          const sub = document.createElement("span");
+          sub.className = "sub";
+          sub.textContent = item.subtitle;
+          go.append(sub);
+        }
+        go.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          pickSearchResult(item.placeId, item.title);
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "recent-x";
+        remove.setAttribute("aria-label", "Remove " + (item.title || "place"));
+        remove.textContent = "×";
+        remove.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          pickSearchResult("__recentx:" + item.recentIndex, item.title);
+        });
+        row.append(go, remove);
+        box.append(row);
+        return;
+      }
       const button = document.createElement("button");
       button.type = "button";
       const isMaps = String(item.placeId || "").startsWith("__map");
@@ -1985,7 +2020,6 @@
 
   const RECENT_KEY = "aaRecentPlaces";
   const RECENT_MAX = 16;
-  let recentListOpen = false;
 
   function readRecents(){
     try {
@@ -2020,7 +2054,6 @@
     };
     const key = recentKey(entry);
     writeRecents([entry].concat(readRecents().filter(p => recentKey(p) !== key)));
-    if (recentListOpen) renderRecents();
   }
 
   function removeRecentPlace(index){
@@ -2028,38 +2061,27 @@
     if (index < 0 || index >= items.length) return;
     items.splice(index, 1);
     writeRecents(items);
-    renderRecents();
   }
 
-  function renderRecents(){
-    const list = document.getElementById("recentList");
-    if (!list) return;
-    const items = readRecents();
-    if (!items.length) {
-      list.innerHTML = '<div class="recent-empty">No recent places</div>';
-      return;
+  function showRecentSuggestions(){
+    const items = [{ placeId: "__map:catalog", title: "All places", subtitle: "Petrol, parking, and more", color: "#1A73E8" }];
+    readRecents().forEach((place, index) => {
+      items.push({
+        placeId: "__recent:" + index,
+        title: place.name,
+        subtitle: place.address || "Recent place",
+        removable: true,
+        recentIndex: index
+      });
+    });
+    if (items.length === 1) {
+      items.push({ placeId: "__recent:empty", title: "No recent places", subtitle: "Start a trip to add one" });
     }
-    list.innerHTML = items.map((p, i) => {
-      const sub = p.address ? `<span class="sub">${escapeHtml(p.address)}</span>` : "";
-      return `<div class="recent-row"><button type="button" class="recent-go" data-recent="${i}">${escapeHtml(p.name)}${sub}</button><button type="button" class="recent-x" data-recent-x="${i}" aria-label="Remove ${escapeHtml(p.name)}">×</button></div>`;
-    }).join("");
-  }
-
-  function setRecentListOpen(open){
-    recentListOpen = !!open;
-    const list = document.getElementById("recentList");
-    const btn = document.getElementById("recentBtn");
-    if (list) {
-      list.hidden = !recentListOpen;
-      list.classList.toggle("open", recentListOpen);
-      if (recentListOpen) renderRecents();
-    }
-    if (btn) btn.setAttribute("aria-expanded", recentListOpen ? "true" : "false");
+    pushSearchSuggestions("", items);
   }
 
   async function goRecentPlace(place){
     if (!place) return;
-    setRecentListOpen(false);
     setAutocompleteValue(place.name || "");
     const dest = {
       name: place.name,
@@ -2191,6 +2213,20 @@
     return areaLookup;
   }
 
+  function saveStartPlace(lat, lng, suburb){
+    if (readStartPlace()) return;
+    const data = {
+      day: startDayKey(),
+      name: (suburb && suburb.name) || "Starting point",
+      lat: lat,
+      lng: lng,
+      names: (suburb && suburb.names) || []
+    };
+    try { localStorage.setItem(START_PLACE_KEY, JSON.stringify(data)); } catch (err) {}
+    startButtonSynced = true;
+    syncStartPlaceButton(data);
+  }
+
   function noteTripStart(lat, lng, speed, accuracy){
     if (isDemoRunning()) return;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -2203,28 +2239,15 @@
       }
       return;
     }
-    const moving = (Number(speed) || 0) >= 2.2;
-    if (startLookupBusy) return;
-    if (!moving && (areaLookup || Date.now() - startLookupAt < 20000)) return;
+    if (startLookupBusy || Date.now() - startLookupAt < 8000) return;
     startLookupAt = Date.now();
     startLookupBusy = true;
     lookupArea(lat, lng).then(area => {
-      if (!area || !area.suburb) return;
-      if (!moving || readStartPlace()) return;
-      const suburb = area.suburb;
-      const data = {
-        day: startDayKey(),
-        name: suburb.name,
-        lat: suburb.lat,
-        lng: suburb.lng,
-        names: suburb.names || [suburb.name]
-      };
-      try { localStorage.setItem(START_PLACE_KEY, JSON.stringify(data)); } catch (err) {}
-      startButtonSynced = true;
-      syncStartPlaceButton(data);
+      if (readStartPlace()) return;
+      saveStartPlace(lat, lng, area && area.suburb);
     }).catch(err => {
       console.warn("Start suburb lookup failed", err);
-      startLookupAt = 0;
+      if (!readStartPlace()) saveStartPlace(lat, lng, null);
     }).finally(() => {
       startLookupBusy = false;
     });
@@ -2324,6 +2347,31 @@
   async function pickSearchResult(placeId, fallbackName){
     const id = String(placeId || "").trim();
     const label = String(fallbackName || "").trim();
+    if (id === "__map:recents") {
+      showRecentSuggestions();
+      return;
+    }
+    if (id === "__map:catalog") {
+      pushSearchSuggestions("", mapsCatalogItems());
+      return;
+    }
+    if (id === "__recent:empty") return;
+    if (id.startsWith("__recentx:")) {
+      removeRecentPlace(Number(id.slice("__recentx:".length)));
+      showRecentSuggestions();
+      return;
+    }
+    if (id.startsWith("__recent:")) {
+      const place = readRecents()[Number(id.slice("__recent:".length))];
+      hideSearchDropdown();
+      if (place) await goRecentPlace(place);
+      return;
+    }
+    if (id === "__map:start") {
+      hideSearchDropdown();
+      await goToStartPlace();
+      return;
+    }
     if (id === "__map:debug") {
       hideSearchDropdown();
       closeAaSearchBar();
@@ -2408,6 +2456,11 @@
 
   function mapsCatalogItems(){
     const items = [];
+    const start = readStartPlace();
+    if (start && start.name) {
+      items.push({ placeId: "__map:start", title: start.name, subtitle: "Starting Location", color: "#137333" });
+    }
+    items.push({ placeId: "__map:recents", title: "Recents", subtitle: "Places you have navigated to", color: "#1A73E8" });
     if (customMapConfigured()) {
       items.push({ placeId: "__map:custom", title: customMapTitle(), subtitle: "Saved map", color: "#0F9D58" });
     }
@@ -6707,7 +6760,6 @@
   async function calculateRoute(origin, destination, destinationName, opts){
     stopDemo();
     if (!RouteClass || !map3d) return;
-    setRecentListOpen(false);
     setMessage(`Calculating route to ${destinationName}...`);
 
     let routeSettled = false;
@@ -8846,13 +8898,13 @@
     // Synthetic re-injection of the current point: carry the modelled speed so it isn't
     // read as "zero metres since the last fix" and briefly stall the car / zoom.
     applyGpsFix({ lat: here.lat, lng: here.lng }, heading, speedKalman.seeded ? { speed: speedKalman.speed } : undefined);
-    setMapLabels(true);
+    setMapLabels(false);
     if (!opts || opts.flyover !== false) startFlyover({ fromPreview });
+    syncFlyoverLabels();
     if (activeDestination) {
       traceRec.dest = { name: activeDestination.name, lat: activeDestination.lat, lng: activeDestination.lng };
       rememberRecentPlace(activeDestination);
     }
-    setRecentListOpen(false);
     syncCarLod();
     updateRecenterButton();
     updateSpeedLimitBadge();
@@ -9813,6 +9865,7 @@
     followLastMs = now;
     const dtEase = Math.min(dtRaw, FOLLOW.MAX_EASE_DT);
     if (!map3d) return;
+    syncFlyoverLabels();
     spinCarWheels(dtRaw);
     if (exploreFly) applyExploreOverviewCamera(dtEase, now);
     else if (destPreview) applyDestPreviewCamera(dtEase, now);
@@ -10351,20 +10404,18 @@
     if (!car || !Number.isFinite(car.lat)) return false;
     const w = Math.max(1, viewSafe.width || window.innerWidth || 1);
     const h = Math.max(1, viewSafe.height || window.innerHeight || 1);
-    const slop = Math.max(150, Math.min(w, h) * 0.2);
+    const radius = Math.max(54, Math.min(78, Math.min(w, h) * 0.07));
     const x = Number(event.clientX);
     const y = Number(event.clientY);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     if (carInspect) {
-      return Math.hypot(x - w * 0.5, y - h * 0.5) < slop * 1.5;
+      return Math.hypot(x - w * 0.5, y - h * 0.5) < radius * 2.1;
     }
     if (!following) return false;
     const cx = carScreenX() * w;
-    const cy = carScreenY() * h - slop * 0.42;
-    const rx = slop;
-    const ry = slop * 1.45;
-    const dx = (x - cx) / rx;
-    const dy = (y - cy) / ry;
+    const cy = carScreenY() * h - radius * 0.28;
+    const dx = (x - cx) / radius;
+    const dy = (y - cy) / (radius * 1.12);
     return dx * dx + dy * dy < 1;
   }
 
@@ -11129,6 +11180,21 @@
     }
     const btn = document.getElementById("labelsBtn");
     if (btn) btn.textContent = `Labels: ${labelsOn ? "ON" : "OFF"}`;
+    if (flyover && flyover.kind === "destPath") syncFlyoverLabels(true);
+  }
+
+  // Place names and suburb labels for the route flyover only. The drive view
+  // goes back to the plain satellite picture when the sweep finishes.
+  let flyoverLabelsShown = false;
+  function syncFlyoverLabels(force){
+    const on = !!(flyover && flyover.kind === "destPath");
+    if (!force && on === flyoverLabelsShown) return;
+    flyoverLabelsShown = on;
+    if (!map3d) return;
+    try {
+      if ((on || labelsOn) && GOOGLE_MAPS_MAP_ID) map3d.mapId = GOOGLE_MAPS_MAP_ID;
+      map3d.mode = (on || labelsOn) ? "HYBRID" : "SATELLITE";
+    } catch (err) {}
   }
 
   function setView(mode){
@@ -12698,12 +12764,17 @@
     viewSafe.bottom = clamp(bottom, 0, h * 0.45);
     viewSafe.width = w;
     viewSafe.height = h;
+    let chromeTop = Number(area.chromeTop);
+    if (Number.isFinite(chromeTop)) {
+      if (chromeTop <= 1) chromeTop *= h;
+    } else chromeTop = 0;
     const apply = (root) => {
       if (!root || !root.style) return;
       root.style.setProperty("--aa-inset-left", Math.round(viewSafe.left) + "px");
       root.style.setProperty("--aa-inset-top", Math.round(viewSafe.top) + "px");
       root.style.setProperty("--aa-inset-right", Math.round(viewSafe.right) + "px");
       root.style.setProperty("--aa-inset-bottom", Math.round(viewSafe.bottom) + "px");
+      root.style.setProperty("--aa-chrome-top", Math.round(Math.max(0, chromeTop)) + "px");
     };
     apply(document.documentElement);
     apply(document.body);
@@ -12746,6 +12817,7 @@
   function skipNavFlyover(){
     if (!flyover) return false;
     flyover = null;
+    syncFlyoverLabels();
     if (isNavigating()) attachFollow("drive");
     updateNavHud();
     return true;
@@ -12753,6 +12825,7 @@
 
   function markUserPanned(fromTouch){
     flyover = null;
+    syncFlyoverLabels();
     holdStartCountdown();
     stopDestPreview();
     stopCarInspect();
@@ -13345,42 +13418,15 @@
       goToStartPlace();
     });
   }
-  const recentBtn = document.getElementById("recentBtn");
-  if (recentBtn) {
-    recentBtn.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      showChrome();
-      hideSearchDropdown();
-      setRecentListOpen(!recentListOpen);
-    });
-  }
-  const recentList = document.getElementById("recentList");
-  if (recentList) {
-    recentList.addEventListener("click", event => {
-      const removeBtn = event.target && event.target.closest && event.target.closest("[data-recent-x]");
-      if (removeBtn) {
-        event.preventDefault();
-        event.stopPropagation();
-        removeRecentPlace(Number(removeBtn.getAttribute("data-recent-x")));
-        return;
-      }
-      const goBtn = event.target && event.target.closest && event.target.closest("[data-recent]");
-      if (!goBtn) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const place = readRecents()[Number(goBtn.getAttribute("data-recent"))];
-      goRecentPlace(place).catch(err => {
-        console.error(err);
-        setMessage("Could not route to that destination.");
-      });
-    });
-  }
   const mapsBrowseBtn = document.getElementById("mapsBrowseBtn");
   if (mapsBrowseBtn) {
     mapsBrowseBtn.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
+      if (isAndroidAuto()) {
+        if (typeof window.__aaRequestSearch === "function") window.__aaRequestSearch();
+        return;
+      }
       showChrome();
       pushSearchSuggestions("", mapsCatalogItems());
     });
@@ -13503,7 +13549,7 @@
   }
 
   function isChromeUiTarget(target){
-    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #recentRow, #recentList, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
+    return !!(target && target.closest && target.closest("#topPanel, #chromeWake, #searchResults, #searchClear, #startPlaceBtn, #recenterBtn, #infoBtn, #compassBtn, #speedLimitBadge, #navBottomCluster, #navHud, #buttonRow, #carDebugBtn, #routeCard, #routeGo, #routeParking, #routeBack, #routeClose, #routeTitleRow, #viewSpecPanel, #carApiHud, #viewPicker, #carModelOverlay, #traceOverlay, #hostProbeOverlay, #exploreBack, #carInspectClose, #descDialog, #parkDialog, #parkMoveCancel, #mapsBrowseBtn"));
   }
 
   let mapDragStart = null;

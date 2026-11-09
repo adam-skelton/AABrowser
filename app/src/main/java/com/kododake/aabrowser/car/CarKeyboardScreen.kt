@@ -386,6 +386,13 @@ class CarKeyboardScreen(
         return rest.take(room - 1) + debug
     }
 
+    private fun keepsSearchOpen(placeId: String): Boolean {
+        return placeId == "__map:recents" ||
+            placeId == "__map:catalog" ||
+            placeId == "__recent:empty" ||
+            placeId.startsWith("__recentx:")
+    }
+
     private fun suggestionList(): ItemList {
         val builder = ItemList.Builder()
         var room = listLimit()
@@ -417,9 +424,25 @@ class CarKeyboardScreen(
             val subtitle = clipRowText(hit.subtitle)
             if (subtitle.isNotBlank()) row.addText(subtitle)
             runCatching { row.setImage(suggestionIcon(hit.placeId), Row.IMAGE_TYPE_ICON) }
+            if (hit.placeId.startsWith("__recent:") && hit.placeId != "__recent:empty" && carContext.carAppApiLevel >= 6) {
+                val index = hit.placeId.removePrefix("__recent:")
+                row.addAction(
+                    Action.Builder()
+                        .setTitle(carContext.getString(R.string.car_recent_remove))
+                        .setIcon(
+                            CarIcon.Builder(
+                                IconCompat.createWithResource(carContext, R.drawable.ic_row_close)
+                            ).build()
+                        )
+                        .setOnClickListener {
+                            webHost.chooseSearchSuggestion("__recentx:$index", hit.title)
+                        }
+                        .build()
+                )
+            }
             row.setOnClickListener {
                 webHost.chooseSearchSuggestion(hit.placeId, hit.title)
-                screenManager.pop()
+                if (!keepsSearchOpen(hit.placeId)) screenManager.pop()
             }
             builder.addItem(row.build())
         }
@@ -433,7 +456,9 @@ class CarKeyboardScreen(
     private fun suggestionIcon(placeId: String): CarIcon {
         val category = placeId.removePrefix("__map:").takeIf { placeId.startsWith("__map:") }
         val (res, color) = when (category) {
-            "custom" -> R.drawable.ic_cat_map to 0xFF0F9D58
+            "custom", "catalog" -> R.drawable.ic_cat_map to 0xFF0F9D58
+            "recents" -> R.drawable.ic_cat_recent to 0xFF1A73E8
+            "start" -> R.drawable.ic_cat_home to 0xFF137333
             "gas_station" -> R.drawable.ic_cat_fuel to 0xFFF9AB00
             "restaurant" -> R.drawable.ic_cat_restaurant to 0xFFEA4335
             "cafe" -> R.drawable.ic_cat_cafe to 0xFFA142F4

@@ -121,6 +121,7 @@
     <string name="car_action_reload">Reload</string>
     <string name="car_action_keyboard">Keyboard</string>
     <string name="car_action_search">Search</string>
+    <string name="car_recent_remove">Remove</string>
     <string name="car_action_debug">Debug</string>
     <string name="car_keyboard_hint">Search destination</string>
     <string name="car_keyboard_empty">Tap Search to list matching places, then choose one.</string>

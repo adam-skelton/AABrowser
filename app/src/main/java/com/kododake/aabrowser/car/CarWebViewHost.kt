@@ -749,6 +749,7 @@ class CarWebViewHost(
         val rightPx = (w - area.right).coerceIn(0, w)
         val bottomPx = (h - area.bottom).coerceIn(0, h)
         val topPx = 0
+        val chromeTopPx = area.top.coerceIn(0, h)
         val overlay = bootOverlay
         if (overlay != null) {
             val bouncePx = (28f * overlay.resources.displayMetrics.density).toInt()
@@ -760,8 +761,9 @@ class CarWebViewHost(
         val top = topPx.toFloat() / h
         val right = rightPx.toFloat() / w
         val bottom = bottomPx.toFloat() / h
+        val chromeTop = chromeTopPx.toFloat() / h
         evaluateOrQueue(
-            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom});"
+            "window.__aaSetVisibleArea&&window.__aaSetVisibleArea({left:$left,top:$top,right:$right,bottom:$bottom,chromeTop:$chromeTop});"
         )
         webView?.invalidate()
     }
